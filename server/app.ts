@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { timingSafeEqual } from 'node:crypto';
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import staticFiles from "@fastify/static";
@@ -14,6 +15,7 @@ import { Importer } from "./importer.js";
 import { AccountReader, type AccountSource } from "./account.js";
 import { Refresh } from "./refresh.js";
 import { officialPrices, pricingSource, pricingCheckedAt } from "./pricing.js";
+import { dataRoot, packageRoot, autostartStatus, setAutostart } from './runtime.js';
 
 export async function createApp(
   options: {
@@ -23,11 +25,23 @@ export async function createApp(
     logger?: boolean;
     accountReader?: AccountSource;
     exampleData?: boolean;
+    managed?: { token: string; version: string; shutdown: () => Promise<void> };
   } = {},
 ) {
   const app = Fastify({ logger: options.logger ?? false });
+  if (options.managed) {
+    const managed = options.managed;
+    app.post<{ Params: { action: string } }>('/_control/:action', async (req, reply) => {
+      const received = Buffer.from(req.headers.authorization || '');
+      const expected = Buffer.from(`Bearer ${managed.token}`);
+      if (req.headers.origin || received.length !== expected.length || !timingSafeEqual(received, expected)) return reply.code(403).send({ error: 'Forbidden' });
+      if (!['identity', 'stop'].includes(req.params.action)) return reply.code(404).send({ error: 'Not found' });
+      if (req.params.action === 'stop') setTimeout(() => { void managed.shutdown(); }, 50);
+      return { pid: process.pid, version: managed.version };
+    });
+  }
   const store = new Store(
-    options.database || path.resolve("data/usage.sqlite"),
+    options.database || path.join(dataRoot, "usage.sqlite"),
   );
   const queries = new Queries(store);
   const refresh = new Refresh(
@@ -153,6 +167,16 @@ export async function createApp(
     };
   };
   app.get("/openapi.json", async () => app.swagger());
+  app.get('/api/system/autostart', async () => wrap(autostartStatus(), 'settings'));
+  app.post<{ Body: { enabled: boolean } }>('/api/system/autostart', {
+    schema: { body: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }) },
+  }, async (req, reply) => {
+    if (req.headers.origin !== `http://${req.headers.host}` || req.headers['sec-fetch-site'] === 'cross-site') {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: '需要同源设置页面操作。' } });
+    }
+    try { return wrap(setAutostart(req.body.enabled), 'settings'); }
+    catch (error) { throw Object.assign(new Error(error instanceof Error ? error.message : 'Windows 启动项操作失败。'), { statusCode: 400 }); }
+  });
   app.get(
     "/api/pricing",
     {
@@ -529,7 +553,7 @@ export async function createApp(
       );
     },
   );
-  const web = path.resolve("dist/web");
+  const web = path.join(packageRoot, "dist/web");
   if (existsSync(path.join(web, "index.html"))) {
     await app.register(staticFiles, { root: web, prefix: "/" });
     app.setNotFoundHandler((req, reply) =>

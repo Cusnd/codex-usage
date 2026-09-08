@@ -1,5 +1,7 @@
 # Codex 用量图录设计
 
+首页、任务工具栏和设置分组的最新布局与实测结果见 [2026-09-08 布局重设计验收](layout-2026-09-08/README.md)。
+
 当前设计、连续视图、交互口径及复现方式见 [ATLAS 设计说明](atlas/README.md)。
 
 - [项目视图](atlas/project-desktop.png)

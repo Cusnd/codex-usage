@@ -35,10 +35,10 @@ store.saveSettings({
   costEnabled: false,
 });
 const projectNames = [
-  "codex_detailed_usage",
-  "agents_docs",
-  "linear_algebra",
-  "personal-life",
+  "codex-usage",
+  "demo-api",
+  "sample-notes",
+  "playground",
 ];
 const projects = projectNames.map((name) => `c:\\design\\${name}`);
 const projectTotals = [48_600_000, 35_200_000, 21_410_000, 14_000_000];
@@ -101,12 +101,12 @@ store.transaction(() => {
       const title =
         project === 0
           ? [
-              "用量分析界面设计",
-              "本地记录导入",
-              "统计查询与 API",
-              "筛选与统计口径校验",
+              "Build usage dashboard",
+              "Import session records",
+              "Review query API",
+              "Validate token totals",
             ][local]
-          : `${["", "文档协议整理", "线性代数学习", "个人计划回顾"][project]} · ${local + 1}`;
+          : `${["", "接口与文档", "学习笔记", "示例项目"][project]} · ${local + 1}`;
       store.run(
         "INSERT INTO threads(id,project,title,title_updated_at) VALUES(?,?,?,?)",
         [id, projects[project], title, "2026-09-08T04:00:00Z"],
@@ -181,6 +181,20 @@ store.transaction(() => {
     }
   }
 });
+// Two direct children and one nested child, reusing the existing usage records.
+for (const [child, parent] of [[2, 1], [3, 1], [4, 2]]) {
+  store.run("UPDATE threads SET subagent_parent_id=? WHERE id=?", [
+    `example-session-${String(parent).padStart(2, "0")}`,
+    `example-session-${String(child).padStart(2, "0")}`,
+  ]);
+}
+const team = queries.agents("example-session-01")!;
+assert.equal(team.self.totalTokens, "18200000");
+assert.equal(team.subagents.totalTokens, "30400000");
+assert.equal(team.team.totalTokens, "48600000");
+assert.equal(BigInt(team.team.totalTokens), BigInt(team.self.totalTokens) + BigInt(team.subagents.totalTokens));
+assert.deepEqual(team.agents.map(({ depth }) => depth), [0, 1, 2, 1]);
+assert.equal(team.agents.reduce((sum, agent) => sum + BigInt(agent.usage.totalTokens), 0n), BigInt(team.team.totalTokens));
 assert.equal(queries.summary().totalTokens, "119210000");
 assert.equal(queries.summary().threadCount, 28);
 assert.equal(queries.summary().turnCount, 92);
@@ -196,9 +210,10 @@ assert.deepEqual(
   queries.trend({}, "day").map((r) => Number(r.totalTokens)),
   daily,
 );
-await app.listen({ host: "127.0.0.1", port: 8766 });
+const previewPort = Number(process.env.CODEX_USAGE_PREVIEW_PORT || 8766);
+await app.listen({ host: "127.0.0.1", port: previewPort });
 console.log(
-  "Design dataset verified: 119.21M / 28 Sessions / 92 Turns. Preview: http://127.0.0.1:8766/analysis?range=custom&from=2026-09-02T04:00:00Z&to=2026-09-09T04:00:00Z",
+  `Design dataset verified: 119.21M / 28 Sessions / 92 Turns. Preview: http://127.0.0.1:${previewPort}/analysis?range=custom&from=2026-09-02T04:00:00Z&to=2026-09-09T04:00:00Z`,
 );
 const close = async () => {
   await app.close();

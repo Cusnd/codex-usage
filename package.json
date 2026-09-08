@@ -1,6 +1,6 @@
 {
   "name": "codex-detailed-usage",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,7 +12,8 @@
     "start": "node dist/server/index.js",
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "package:smoke": "node scripts/package-smoke.mjs"
   },
   "dependencies": {
     "@fastify/static": "^10.1.3",
@@ -38,5 +39,23 @@
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vite": "^7.1.7"
-  }
+  },
+  "bin": {
+    "codex-usage": "bin/codex-usage.mjs"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cusnd/codex-usage.git"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "skills/",
+    "docs/INSTALL_FOR_AGENTS.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md",
+    "scripts/shell-link.ps1"
+  ]
 }

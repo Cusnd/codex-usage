@@ -635,7 +635,7 @@ main {
 }
 .table-scroll {
   overflow-x: auto;
-  margin: 0 -19px;
+  margin: 0;
   scrollbar-width: thin;
 }
 table {
@@ -1341,7 +1341,7 @@ footer {
     margin-bottom: 15px;
   }
   .table-scroll {
-    margin: 0 -16px;
+    margin: 0;
   }
   th,
   td {

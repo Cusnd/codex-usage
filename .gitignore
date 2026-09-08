@@ -13,3 +13,7 @@ artifacts/
 *.db-*
 *.pem
 *.key
+output/
+.playwright-cli/
+release-artifacts/
+.wrangler/

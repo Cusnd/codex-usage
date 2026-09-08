@@ -45,6 +45,7 @@ import type {
   TurnRow,
 } from "../shared/contracts";
 import { bucketRange, bucketTimes } from "../shared/time-range";
+import { readTrendParent, selectedBrushIndices } from "./trend-range";
 import { Workspace, useData, useRange } from "./workspace";
 import {
   ErrorBox,
@@ -66,6 +67,7 @@ import {
 } from "./Usage";
 import { ComparisonSection } from "./Comparison";
 import { AgentUsagePanel } from "./AgentUsage";
+import { useActiveRule, useArrival } from "./motion";
 
 type Group = "project" | "model" | "effort";
 type View = Group | "session" | "turn";
@@ -232,11 +234,15 @@ function RangeControls() {
 function TrendWorkspace() {
   const r = useRange();
   const patch = useUrlPatch();
-  const bucket = r.search.get("bucket") === "hour" ? "hour" : "day";
+  const bucket = r.bucket;
   const collapsed = r.search.get("trend") === "collapsed";
+  const parent = readTrendParent(r.search.get("parentRange"));
+  // Keep the brush's complete domain while the page queries the selected window.
+  const domain = { from: parent?.from || r.filters.from!, to: parent?.to || r.filters.to! };
+  const trendFilters = { ...r.filters, ...domain };
   const trend = useData<TrendRow[]>(
     "local/trend",
-    { ...r.filters, bucket },
+    { ...trendFilters, bucket },
     !collapsed,
   );
   const summary = useData<Metrics>("local/summary", r.filters);
@@ -249,8 +255,8 @@ function TrendWorkspace() {
       ]),
     );
     const continuous = bucketTimes(
-      r.filters.from!,
-      r.filters.to!,
+      domain.from,
+      domain.to,
       r.timezone,
       bucket,
     );
@@ -270,10 +276,11 @@ function TrendWorkspace() {
         hasRecords: Boolean(row),
       };
     });
-  }, [trend.data, r.filters.from, r.filters.to, r.timezone, bucket]);
+  }, [trend.data, domain.from, domain.to, r.timezone, bucket]);
+  const selection = selectedBrushIndices(points.map(p => p.time), bucket, r.timezone, r.filters.from!, r.filters.to!);
   const selectRange = (from: string, to: string, hourly: boolean) => {
-    const parent =
-      r.search.get("parentRange") ||
+    const savedParent =
+      (parent ? JSON.stringify(parent) : null) ||
       JSON.stringify({
         range: r.range,
         from: r.filters.from,
@@ -285,7 +292,7 @@ function TrendWorkspace() {
       from,
       to,
       bucket: hourly ? "hour" : bucket,
-      parentRange: parent,
+      parentRange: savedParent,
     });
   };
   const drillDay = (at: string) => {
@@ -299,42 +306,30 @@ function TrendWorkspace() {
     );
     if (next) selectRange(next.from, next.to, true);
   };
+  const restore = () => {
+    brush.current = null;
+    if (!parent) return patch({ parentRange: undefined });
+    r.update({
+      range: parent.range,
+      from: parent.range === "custom" ? parent.from : undefined,
+      to: parent.range === "custom" ? parent.to : undefined,
+      bucket: parent.bucket,
+      parentRange: undefined,
+    });
+  };
   const commitBrush = (
     range: { startIndex?: number; endIndex?: number } | null,
   ) => {
     if (!range || !points.length) return;
-    const first = range.startIndex ?? 0,
-      last = range.endIndex ?? points.length - 1;
-    if (first === 0 && last === points.length - 1) return;
-    const left = bucketRange(
-      points[first]?.time,
-      bucket,
-      r.timezone,
-      r.filters.from!,
-      r.filters.to!,
-    );
-    const right = bucketRange(
-      points[last]?.time,
-      bucket,
-      r.timezone,
-      r.filters.from!,
-      r.filters.to!,
-    );
-    if (left && right) selectRange(left.from, right.to, false);
-  };
-  const restore = () => {
-    try {
-      const old = JSON.parse(r.search.get("parentRange")!);
-      r.update({
-        range: "custom",
-        from: old.from,
-        to: old.to,
-        bucket: old.bucket,
-        parentRange: undefined,
-      });
-    } catch {
-      patch({ parentRange: undefined });
+    const first = range.startIndex ?? 0;
+    const last = range.endIndex ?? points.length - 1;
+    if (first === 0 && last === points.length - 1) {
+      if (parent) restore();
+      return;
     }
+    const left = bucketRange(points[first]?.time, bucket, r.timezone, domain.from, domain.to);
+    const right = bucketRange(points[last]?.time, bucket, r.timezone, domain.from, domain.to);
+    if (left && right) selectRange(left.from, right.to, false);
   };
   return (
     <section className="atlas-time">
@@ -408,13 +403,9 @@ function TrendWorkspace() {
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    key={`${r.filters.from}/${r.range === "custom" ? r.filters.to : "live"}/${bucket}`}
+                    key={`${domain.from}/${parent || r.range === "custom" ? domain.to : "live"}/${bucket}`}
                     data={points}
                     margin={{ left: 0, right: 12, top: 8, bottom: 5 }}
-                    onClick={(event) => {
-                      if (event?.activeLabel != null)
-                        drillDay(String(event.activeLabel));
-                    }}
                   >
                     <CartesianGrid vertical={false} stroke="#dfe1e4" />
                     <XAxis
@@ -479,6 +470,11 @@ function TrendWorkspace() {
                     />
                     <Bar
                       dataKey="value"
+                      onClick={(entry) => {
+                        const point = entry as unknown as { time?: string; payload?: { time?: string } };
+                        const at = point.time || point.payload?.time;
+                        if (at) drillDay(at);
+                      }}
                       fill="#2944be"
                       maxBarSize={64}
                       isAnimationActive={false}
@@ -486,6 +482,8 @@ function TrendWorkspace() {
                     {points.length > 1 && (
                       <Brush
                         dataKey="time"
+                        startIndex={selection.startIndex}
+                        endIndex={selection.endIndex}
                         height={18}
                         travellerWidth={8}
                         stroke="#2944be"
@@ -507,6 +505,12 @@ function TrendWorkspace() {
                     )}
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+            {parent && (
+              <div className="atlas-brush-reset">
+                <small>已缩小范围，可拖动两端重新展开</small>
+                <button className="text-button" onClick={restore}>恢复完整范围</button>
               </div>
             )}
           </div>
@@ -554,24 +558,28 @@ function SessionList({
   });
   return (
     <section className={directory ? "session-directory" : "session-ledger"}>
-      <div className="atlas-section-bar">
-        <h2>Sessions</h2>
+      <div className="session-tools">
+        {directory && (
+          <div className="atlas-section-bar">
+            <h2>Sessions</h2>
+          </div>
+        )}
+        <SearchField />
+        <label className="checkbox low-cache">
+          <input
+            type="checkbox"
+            checked={search.get("lowCache") === "1"}
+            onChange={(e) =>
+              patch({
+                lowCache: e.target.checked ? "1" : undefined,
+                sessionOffset: undefined,
+              })
+            }
+          />
+          缓存读取占比低于 20%
+        </label>
         <SortChoice />
       </div>
-      <SearchField />
-      <label className="checkbox low-cache">
-        <input
-          type="checkbox"
-          checked={search.get("lowCache") === "1"}
-          onChange={(e) =>
-            patch({
-              lowCache: e.target.checked ? "1" : undefined,
-              sessionOffset: undefined,
-            })
-          }
-        />
-        缓存读取占比低于 20%
-      </label>
       <ErrorBox error={q.error} />
       <Loading
         isLoading={q.isPending}
@@ -633,6 +641,7 @@ function SessionList({
                   <td>
                     <button
                       className="text-button session-name"
+                      title={sessionTitle(row)}
                       onClick={() => onSelect(row.id)}
                     >
                       {sessionTitle(row)}
@@ -836,11 +845,7 @@ export function TurnTable({
                       aria-expanded={expanded === turnKey(row)}
                       onClick={() => expand(row)}
                     >
-                      {expanded === turnKey(row) ? (
-                        <ChevronDown size={16} />
-                      ) : (
-                        <ChevronRight size={16} />
-                      )}
+                      <ChevronRight size={16} />
                     </button>
                   </td>
                 </tr>
@@ -922,6 +927,7 @@ function SessionPanel({
   const detail = useData<ThreadDetail>(
     `local/threads/${encodeURIComponent(id)}`,
   );
+  const panelMotion = useArrival<HTMLDivElement>(id, 6, !!detail.data);
   const summary = useData<Metrics>("local/summary", {
     ...filters,
     threadId: id,
@@ -938,7 +944,7 @@ function SessionPanel({
     ? sessionTitle(detail.data.data.thread)
     : shortId(id);
   return (
-    <div className="session-panel">
+    <div className="session-panel" ref={panelMotion}>
       {onBack && (
         <button className="text-button back-to-directory" onClick={onBack}>
           <ArrowLeft size={15} />
@@ -1011,7 +1017,16 @@ function SessionPanel({
               to={`/threads/${encodeURIComponent(row.id)}`}
               state={{ from: location.pathname + location.search }}
             >
-              {{ subagent: "子 agent", subagent_parent: "父 agent", fork: "Fork 任务", fork_parent: "Fork 来源", unknown: "关系待识别" }[row.relation]} · {projectName(row.project)} · {shortId(row.id)}
+              {
+                {
+                  subagent: "子 agent",
+                  subagent_parent: "父 agent",
+                  fork: "Fork 任务",
+                  fork_parent: "Fork 来源",
+                  unknown: "关系待识别",
+                }[row.relation]
+              }{" "}
+              · {projectName(row.project)} · {shortId(row.id)}
             </Link>
           ))}
         </details>
@@ -1067,6 +1082,7 @@ function GroupWorkspace({ view }: { view: Group }) {
   );
   const session = r.search.get("session") || undefined;
   const label = dimensions.find(([id]) => id === view)![1];
+  const detailMotion = useArrival<HTMLDivElement>(selected || "", 6);
   return (
     <div
       className={
@@ -1132,7 +1148,7 @@ function GroupWorkspace({ view }: { view: Group }) {
           limit={20}
         />
       </section>
-      <div className="atlas-detail">
+      <div className="atlas-detail" ref={detailMotion}>
         {key === undefined ? (
           <div className="atlas-empty">
             <span>从一个{label}开始</span>
@@ -1224,6 +1240,7 @@ export function AtlasAnalysis() {
     : "project";
   const session = r.search.get("session") || undefined;
   const [compare, setCompare] = useState(false);
+  const tabMotion = useActiveRule<HTMLDivElement>(view);
   return (
     <div className="atlas-page">
       <div className="atlas-page-heading">
@@ -1232,7 +1249,7 @@ export function AtlasAnalysis() {
       </div>
       <ActiveScope />
       <TrendWorkspace />
-      <div className="atlas-tabs" role="group" aria-label="分析入口">
+      <div className="atlas-tabs motion-rule" ref={tabMotion} role="group" aria-label="分析入口">
         {dimensions.map(([value, label]) => (
           <button
             key={value}

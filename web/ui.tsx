@@ -1,5 +1,5 @@
 import { UsageBreakdown } from "./Usage";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { DateTime } from "luxon";
@@ -55,7 +55,7 @@ export function Loading({
   empty?: boolean;
 }) {
   return isLoading ? (
-    <div className="empty">正在读取用量…</div>
+    <div className="empty loading-state" role="status">正在读取用量…</div>
   ) : empty ? (
     <div className="empty">
       这个范围内还没有可统计记录。可以调整时间范围或刷新本地记录。
@@ -85,6 +85,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
     to: r.filters.to,
   });
   const [customOpen, setCustomOpen] = useState(false);
+  const advanced = useRef<HTMLDetailsElement>(null);
   const [draftFrom, setDraftFrom] = useState(""),
     [draftTo, setDraftTo] = useState(""),
     [error, setError] = useState("");
@@ -136,11 +137,10 @@ export function FilterBar({ local = true }: { local?: boolean }) {
       (k) => r.filters[k] || r.filters.unknown === k,
     );
   return (
-    <div className="filter-surface">
+    <div className="filter-surface compact-filters">
       <div className="filter-bar">
         <div className="field range-field">
-          <span className="field-label">时间范围</span>
-          <div className="segmented">
+          <div className="segmented" role="group" aria-label="时间范围">
             {[
               ["today", "今天"],
               ["7", "最近 7 天"],
@@ -168,54 +168,105 @@ export function FilterBar({ local = true }: { local?: boolean }) {
             </button>
           </div>
         </div>
-        {local &&
-          (["project", "model", "effort"] as const).map((key, index) => {
-            const name = ["项目", "模型", "推理强度"][index];
-            const values =
-              options.data?.data[
-                (["projects", "models", "efforts"] as const)[index]
-              ] || [];
-            return (
-              <div className="field" key={key}>
-                <span className="field-label">{name}</span>
-                <Choice
-                  label={name}
-                  value={
-                    r.filters.unknown === key
-                      ? "unknown"
-                      : r.filters[key]
-                        ? "v:" + r.filters[key]
-                        : ""
-                  }
-                  searchable={key !== "effort"}
-                  options={[
-                    { value: "", label: "全部" + name },
-                    ...values.map((v) => ({
-                      value: v === null ? "unknown" : "v:" + v,
-                      label:
-                        v === null
-                          ? "未知"
-                          : key === "project"
-                            ? projectName(v)
-                            : v,
-                      description: key === "project" && v ? v : undefined,
-                    })),
-                  ]}
-                  onChange={(v) => change(key, v)}
-                />
+        {local && (
+          <details
+            className="advanced-filters"
+            ref={advanced}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Escape" &&
+                !event.defaultPrevented &&
+                advanced.current
+              ) {
+                advanced.current.open = false;
+                advanced.current.querySelector("summary")?.focus();
+              }
+            }}
+          >
+            <summary>
+              筛选
+              {active
+                ? ` · ${(["project", "model", "effort"] as const).filter((k) => r.filters[k] || r.filters.unknown === k).length}`
+                : ""}
+            </summary>
+            <div className="advanced-filter-panel">
+              <div className="advanced-filter-heading">
+                <strong>限定统计范围</strong>
+                <button
+                  type="button"
+                  aria-label="关闭筛选"
+                  onClick={() => {
+                    if (advanced.current) {
+                      advanced.current.open = false;
+                      advanced.current.querySelector("summary")?.focus();
+                    }
+                  }}
+                >
+                  <X size={16} />
+                </button>
               </div>
-            );
-          })}
-      </div>
-      <div className="range-description">
-        {DateTime.fromISO(r.filters.from!)
-          .setZone(r.timezone)
-          .toFormat("yyyy-MM-dd HH:mm")}{" "}
-        至{" "}
-        {DateTime.fromISO(r.filters.to!)
-          .setZone(r.timezone)
-          .toFormat("yyyy-MM-dd HH:mm")}{" "}
-        · {r.timezone} · 以此时区重新统计
+              {(["project", "model", "effort"] as const).map((key, index) => {
+                const name = ["项目", "模型", "推理强度"][index];
+                const values =
+                  options.data?.data[
+                    (["projects", "models", "efforts"] as const)[index]
+                  ] || [];
+                return (
+                  <div className="field" key={key}>
+                    <span className="field-label">{name}</span>
+                    <Choice
+                      label={name}
+                      value={
+                        r.filters.unknown === key
+                          ? "unknown"
+                          : r.filters[key]
+                            ? "v:" + r.filters[key]
+                            : ""
+                      }
+                      searchable={key !== "effort"}
+                      options={[
+                        { value: "", label: "全部" + name },
+                        ...values.map((v) => ({
+                          value: v === null ? "unknown" : "v:" + v,
+                          label:
+                            v === null
+                              ? "未知"
+                              : key === "project"
+                                ? projectName(v)
+                                : v,
+                          description: key === "project" && v ? v : undefined,
+                        })),
+                      ]}
+                      onChange={(v) => change(key, v)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        )}
+        <details className="range-summary">
+          <summary>
+            {DateTime.fromISO(r.filters.from!)
+              .setZone(r.timezone)
+              .toFormat("MM-dd")}{" "}
+            —{" "}
+            {DateTime.fromISO(r.filters.to!)
+              .setZone(r.timezone)
+              .toFormat("MM-dd")}
+          </summary>
+          <div className="range-description">
+            {DateTime.fromISO(r.filters.from!)
+              .setZone(r.timezone)
+              .toFormat("yyyy-MM-dd HH:mm")}{" "}
+            至{" "}
+            {DateTime.fromISO(r.filters.to!)
+              .setZone(r.timezone)
+              .toFormat("yyyy-MM-dd HH:mm")}
+            <br />
+            {r.timezone} · 以此时区重新统计
+          </div>
+        </details>
       </div>
       {customOpen && (
         <form className="custom-range-form" onSubmit={applyCustom}>

@@ -29,6 +29,7 @@ export function Choice({
 }) {
   const [open, setOpen] = useState(false),
     [search, setSearch] = useState("");
+  const [opensAbove, setOpensAbove] = useState(false);
   const [position, setPosition] = useState({
     left: 0,
     top: 0,
@@ -68,6 +69,7 @@ export function Choice({
     const below = document.documentElement.clientHeight - rect.bottom - 16,
       above = rect.top - 16;
     const height = Math.min(360, Math.max(below, above));
+    setOpensAbove(below < Math.min(260, above));
     setPosition({
       left: Math.max(12, Math.min(rect.left, viewportWidth - width - 12)),
       top:
@@ -150,6 +152,7 @@ export function Choice({
           <div
             ref={popup}
             className="choice-popup"
+            data-side={opensAbove ? "above" : "below"}
             style={position}
             onKeyDown={(e) => {
               if (e.key === "Escape") {

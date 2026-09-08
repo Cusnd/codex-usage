@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import type { Settings, Status, Filter } from "../shared/contracts";
 import { dataQuery } from "./data-query";
+import { resolveTrendBucket } from "../shared/time-range";
 export const defaultSettings: Settings = {
   localInterval: 60,
   accountInterval: 300,
@@ -24,7 +25,12 @@ export function useData<T>(
   const [search] = useSearchParams();
   return useQuery({
     enabled,
-    ...dataQuery<T>(route, params, settings.timezone, search.get("range") !== "custom"),
+    ...dataQuery<T>(
+      route,
+      params,
+      settings.timezone,
+      search.get("range") !== "custom",
+    ),
   });
 }
 export function useRange() {
@@ -73,14 +79,23 @@ export function useRange() {
       ])
         next.delete(key);
       next.delete("expandedTurn");
-      if ("range" in patch || "from" in patch || "to" in patch)
+      if ("range" in patch || "from" in patch || "to" in patch) {
         next.delete("parentRange");
+        if (!("bucket" in patch)) next.delete("bucket");
+      }
       for (const [k, v] of Object.entries(patch))
         v ? next.set(k, v) : next.delete(k);
       return next;
     });
   return {
     range,
+    bucket: resolveTrendBucket(
+      search.get("bucket"),
+      range,
+      resolved.from,
+      resolved.to,
+      settings.timezone,
+    ),
     filters,
     update,
     search,

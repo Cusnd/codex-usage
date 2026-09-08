@@ -1,0 +1,244 @@
+{
+  "synthetic": true,
+  "timezone": "America/New_York",
+  "summary": {
+    "totalTokens": "119210000",
+    "threadCount": 28,
+    "turnCount": 92
+  },
+  "trend": [
+    {
+      "date": "2026-09-02",
+      "totalTokens": "8200000"
+    },
+    {
+      "date": "2026-09-03",
+      "totalTokens": "12500000"
+    },
+    {
+      "date": "2026-09-04",
+      "totalTokens": "18400000"
+    },
+    {
+      "date": "2026-09-05",
+      "totalTokens": "31400000"
+    },
+    {
+      "date": "2026-09-06",
+      "totalTokens": "16200000"
+    },
+    {
+      "date": "2026-09-07",
+      "totalTokens": "14010000"
+    },
+    {
+      "date": "2026-09-08",
+      "totalTokens": "18500000"
+    }
+  ],
+  "projects": [
+    {
+      "name": "codex-usage",
+      "totalTokens": "48600000",
+      "uncachedInputTokens": "2399869",
+      "cachedInputTokens": "45597468",
+      "outputTokens": "602663",
+      "tasks": [
+        {
+          "title": "Build usage dashboard",
+          "totalTokens": "18200000",
+          "turnCount": 6
+        },
+        {
+          "title": "Import session records",
+          "totalTokens": "12600000",
+          "turnCount": 4
+        },
+        {
+          "title": "Validate token totals",
+          "totalTokens": "9400000",
+          "turnCount": 4
+        },
+        {
+          "title": "Review query API",
+          "totalTokens": "8400000",
+          "turnCount": 4
+        }
+      ]
+    },
+    {
+      "name": "demo-api",
+      "totalTokens": "35200000",
+      "uncachedInputTokens": "1748282",
+      "cachedInputTokens": "33217069",
+      "outputTokens": "234649",
+      "tasks": [
+        {
+          "title": "API & documentation · 1",
+          "totalTokens": "4400000",
+          "turnCount": 4
+        },
+        {
+          "title": "API & documentation · 2",
+          "totalTokens": "4400000",
+          "turnCount": 4
+        },
+        {
+          "title": "API & documentation · 3",
+          "totalTokens": "4400000",
+          "turnCount": 3
+        },
+        {
+          "title": "API & documentation · 4",
+          "totalTokens": "4400000",
+          "turnCount": 3
+        },
+        {
+          "title": "API & documentation · 5",
+          "totalTokens": "4400000",
+          "turnCount": 3
+        },
+        {
+          "title": "API & documentation · 6",
+          "totalTokens": "4400000",
+          "turnCount": 3
+        },
+        {
+          "title": "API & documentation · 7",
+          "totalTokens": "4400000",
+          "turnCount": 3
+        },
+        {
+          "title": "API & documentation · 8",
+          "totalTokens": "4400000",
+          "turnCount": 3
+        }
+      ]
+    },
+    {
+      "name": "sample-notes",
+      "totalTokens": "21410000",
+      "uncachedInputTokens": "1063370",
+      "cachedInputTokens": "20203904",
+      "outputTokens": "142726",
+      "tasks": [
+        {
+          "title": "Learning notes · 1",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        },
+        {
+          "title": "Learning notes · 2",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        },
+        {
+          "title": "Learning notes · 3",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        },
+        {
+          "title": "Learning notes · 4",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        },
+        {
+          "title": "Learning notes · 5",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        },
+        {
+          "title": "Learning notes · 6",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        },
+        {
+          "title": "Learning notes · 7",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        },
+        {
+          "title": "Learning notes · 8",
+          "totalTokens": "2676250",
+          "turnCount": 3
+        }
+      ]
+    },
+    {
+      "name": "playground",
+      "totalTokens": "14000000",
+      "uncachedInputTokens": "695352",
+      "cachedInputTokens": "13211336",
+      "outputTokens": "93312",
+      "tasks": [
+        {
+          "title": "Project experiment · 1",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        },
+        {
+          "title": "Project experiment · 2",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        },
+        {
+          "title": "Project experiment · 3",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        },
+        {
+          "title": "Project experiment · 4",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        },
+        {
+          "title": "Project experiment · 5",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        },
+        {
+          "title": "Project experiment · 6",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        },
+        {
+          "title": "Project experiment · 7",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        },
+        {
+          "title": "Project experiment · 8",
+          "totalTokens": "1750000",
+          "turnCount": 3
+        }
+      ]
+    }
+  ],
+  "team": {
+    "self": "18200000",
+    "subagents": "30400000",
+    "total": "48600000",
+    "agents": [
+      {
+        "title": "Build usage dashboard",
+        "depth": 0,
+        "totalTokens": "18200000"
+      },
+      {
+        "title": "Import session records",
+        "depth": 1,
+        "totalTokens": "12600000"
+      },
+      {
+        "title": "Validate token totals",
+        "depth": 2,
+        "totalTokens": "9400000"
+      },
+      {
+        "title": "Review query API",
+        "depth": 1,
+        "totalTokens": "8400000"
+      }
+    ]
+  }
+}

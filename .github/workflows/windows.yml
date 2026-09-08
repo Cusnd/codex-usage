@@ -27,3 +27,5 @@ jobs:
         working-directory: workspace/中文 project
       - run: npm run smoke
         working-directory: workspace/中文 project
+      - run: npm run package:smoke
+        working-directory: workspace/中文 project
