@@ -73,7 +73,13 @@ To uninstall:
 codex-usage autostart disable
 codex-usage stop
 codex-usage skill uninstall
-npm uninstall --global --prefix "$env:LOCALAPPDATA\CodexUsage\tools" codex-detailed-usage
+$prefix = Join-Path $env:LOCALAPPDATA 'CodexUsage\tools'
+$privateNpm = Join-Path $prefix 'runtime\node-v26.7.0-win-x64\node_modules\npm\bin\npm-cli.js'
+if (Test-Path -LiteralPath $privateNpm) {
+  & (Join-Path $prefix 'node.exe') $privateNpm uninstall --global --prefix $prefix codex-detailed-usage
+} else {
+  npm uninstall --global --prefix $prefix codex-detailed-usage
+}
 ```
 
 For a custom installation prefix, substitute the actual prefix. The user's cache, startup launcher file, logs, managed Skill backups, and optional private Node runtime are retained. Remove retained files or PATH entries only when the user requests full cleanup and after verifying their exact ownership and paths. Never delete the user's Codex source records.

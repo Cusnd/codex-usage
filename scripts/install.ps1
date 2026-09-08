@@ -50,10 +50,12 @@ $packageName = 'codex-detailed-usage-' + $releaseTag.Substring(1) + '.tgz'
 $assetBase = "https://github.com/Cusnd/codex-usage/releases/download/$releaseTag"
 $packageFile = Join-Path $InstallRoot $packageName
 Invoke-WebRequest -UseBasicParsing "$assetBase/$packageName" -OutFile $packageFile
-$sums = (Invoke-WebRequest -UseBasicParsing "$assetBase/SHA256SUMS").Content
+$checksumFile = Join-Path $InstallRoot 'SHA256SUMS'
+Invoke-WebRequest -UseBasicParsing "$assetBase/SHA256SUMS" -OutFile $checksumFile
+$sums = Get-Content -LiteralPath $checksumFile -Raw
 $line = @($sums -split "`n" | Where-Object { $_ -match ('\s+' + [regex]::Escape($packageName) + '\s*$') })
 if ($line.Count -ne 1 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $packageFile).Hash -ine ($line[0].Trim() -split '\s+')[0]) { throw 'Release package checksum mismatch.' }
-& $nodePath $npmCli install --global --prefix $InstallRoot --ignore-scripts $packageFile
+& $nodePath $npmCli install --global --prefix $InstallRoot --ignore-scripts --no-audit --no-fund $packageFile
 if ($LASTEXITCODE -ne 0) { throw 'Package installation failed.' }
 # npm shims prefer node.exe beside themselves. Pin the verified executable so
 # an older system Node earlier in PATH cannot break a successful installation.

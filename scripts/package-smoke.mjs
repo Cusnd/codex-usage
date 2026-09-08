@@ -29,7 +29,7 @@ try {
     assert.ok(manifest.files.every(f => !/(^|\/)(data|output|node_modules|\.env)(\/|$)/.test(f.path)));
     tarball = path.join(root, manifest.filename);
   }
-  await exec(process.execPath, [process.env.npm_execpath, 'install', '--global', '--prefix', prefix, '--ignore-scripts', tarball], { cwd: root, windowsHide: true, timeout: 120000 });
+  await exec(process.execPath, [process.env.npm_execpath, 'install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', tarball], { cwd: root, windowsHide: true, timeout: 300000 });
   cli = path.join(prefix, 'node_modules/codex-detailed-usage/bin/codex-usage.mjs');
   assert.equal((await run('status', '--json')).running, false);
   const both = await Promise.all([run('start', '--json'), run('start', '--json')]);
@@ -81,7 +81,7 @@ try {
   assert.equal((await run('status', '--json')).running, false);
   // Same installed version reinstalled as the upgrade path: data survives.
   const before = await readFile(path.join(env.CODEX_USAGE_DATA_DIR, 'usage.sqlite'));
-  await exec(process.execPath, [process.env.npm_execpath, 'install', '--global', '--prefix', prefix, '--ignore-scripts', tarball], { cwd: root, windowsHide: true, timeout: 120000 });
+  await exec(process.execPath, [process.env.npm_execpath, 'install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', tarball], { cwd: root, windowsHide: true, timeout: 300000 });
   assert.deepEqual(await readFile(path.join(env.CODEX_USAGE_DATA_DIR, 'usage.sqlite')), before);
   const migrationEnv = { ...env, CODEX_USAGE_DATA_DIR: path.join(root, 'migrated') };
   const migrationArgs = [cli, 'migrate', '--from', path.join(env.CODEX_USAGE_DATA_DIR, 'usage.sqlite'), '--json'];
