@@ -1,0 +1,90 @@
+# Codex Usage
+
+**看清 Codex 的用量花在哪里。**
+
+一个在本机运行的 Codex 用量看板。从消耗高峰追到项目、任务，再深入具体轮次；分开查看主 Agent 与子 Agent 的用量，也可以直接让 Agent 帮你查询和分析。
+
+[在线示例](https://codex-usage-showcase.sorenliu.workers.dev) · [开始使用](#开始使用) · [使用指南](docs/USER_GUIDE.zh-CN.md) · [English](README.md)
+
+Windows x64 · 本地优先 · Apache-2.0
+
+安装前可以先体验使用合成数据的[在线产品展示](https://codex-usage-showcase.sorenliu.workers.dev)。查看自己的用量时，请使用本地应用。
+
+![七日用量分析：每日趋势、Token 构成与项目分布](docs/images/analysis.png)
+
+*四个示例项目的一周活动。截图来自真实应用界面，全部使用合成数据；当前界面为中文。*
+
+## 从数字找到具体工作
+
+### 从消耗高峰，一直看到某一轮
+
+先看每日趋势，选中一天查看小时分布，再按项目、模型或推理强度缩小范围。进入任务查看各轮消耗，也能在跨任务轮次列表中寻找用量最高的一轮。切换视图时，筛选条件会跟随保留。
+
+### 看清整个 Agent 团队
+
+一个任务可以把工作交给子 Agent，子 Agent 也可以继续委派。分别查看**当前 Agent、所有子 Agent 和整个团队的合计**，再进入任意 Agent 查看轮次。每一行只展示该 Agent 自身的用量，方便辨认工作究竟发生在哪里。
+
+![Agent 团队明细：当前 Agent、两个直接子 Agent 与一个嵌套子 Agent](docs/images/agent-team.png)
+
+*一个示例任务：当前 Agent 消耗 18.2M Token，后代合计 30.4M，团队合计 48.6M。截图为中文界面，数据均为合成示例。*
+
+### 理解用量为什么变化
+
+对比两个时段，定位哪些项目、模型或任务贡献了用量增幅。拆开非缓存输入、缓存读取与输出，查看消耗构成；需要时，还可以开启 API 参考成本估算。
+
+### 直接问你的 Agent
+
+安装配套 Skill 后，可以在对话里查询同一份本地统计：
+
+> 过去七天，哪些任务消耗的 Token 最多？
+>
+> 这个任务的子 Agent 一共用了多少 Token？
+>
+> 哪些任务的缓存命中占比较低？
+
+Skill 通过 CLI 查询本地服务。回答会保留时间范围、来源和数据缺失说明，便于核对每个数字代表什么。
+
+## 开始使用
+
+**让 Agent 帮你安装。** 把下面这句话交给它：
+
+> 请按照 https://github.com/Cusnd/codex-usage/blob/main/docs/INSTALL_FOR_AGENTS.md 安装 Codex Usage 和配套 Skill，并告诉我如何打开看板。
+
+[安装文档](docs/INSTALL_FOR_AGENTS.md)包含下载校验步骤，需要时会配置用户级 Node 环境。
+
+**已经在 Windows x64 上安装 Node.js 26.7.0 或更新版本？** 从 [Releases](https://github.com/Cusnd/codex-usage/releases/latest) 下载 `.tgz` 与 `SHA256SUMS`，按照[手动安装说明](docs/USER_GUIDE.zh-CN.md#手动安装)核对文件后执行：
+
+```powershell
+npm install --global --ignore-scripts .\codex-detailed-usage-0.1.1.tgz
+codex-usage
+```
+
+示例使用 v0.1.1，实际操作请替换为下载版本的文件名。发布包已包含构建好的网页。请使用**本项目 Release 中的 `codex-detailed-usage`**；npm 上名为 `codex-usage` 的包属于其他项目。
+
+启用 Agent 查询：
+
+```powershell
+codex-usage skill install
+```
+
+如果 Agent 尚未发现刚安装的 Skill，请新开一个任务。首次导入历史记录可能需要几分钟，页面会显示进度。
+
+## 理解你的数据
+
+- **本地历史留在本机。** 工具只读 Codex 原记录，不上传用量历史。缓存保存用量元数据，包括任务标题和项目路径，不保存聊天正文或工具输出。
+- **账户额度单独查看。** 可用的账户功能使用现有 Codex 登录。本机 Token 活动与账户快照的覆盖范围不同，不会相加。
+- **参考成本是估算。** 可选的 API 价格换算不是 ChatGPT 订阅账单；缺失记录或未知单价仍会标注为不完整。
+- **覆盖范围取决于保留的记录。** 结果代表这台电脑上可识别的历史，不是跨设备完整账户账本。
+
+## 继续了解
+
+| 你想了解什么 | 阅读入口 |
+| --- | --- |
+| 筛选、对比、后台启动、升级与排错 | [使用指南](docs/USER_GUIDE.zh-CN.md) |
+| 供 Agent 执行的完整安装步骤 | [Agent 安装指南](docs/INSTALL_FOR_AGENTS.md) |
+| CLI/API、统计口径与数据来源 | [技术参考（英文）](docs/TECHNICAL_REFERENCE.md) |
+| 开发环境与贡献检查 | [贡献指南（英文）](CONTRIBUTING.md) |
+
+发现问题可前往 [Issues](https://github.com/Cusnd/codex-usage/issues)，提供复现步骤和脱敏错误信息。
+
+项目采用 [Apache-2.0](LICENSE) 许可。依赖、字体与归属说明见[第三方声明](THIRD_PARTY_NOTICES.md)。

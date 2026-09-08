@@ -16,3 +16,4 @@ artifacts/
 output/
 .playwright-cli/
 release-artifacts/
+.wrangler/

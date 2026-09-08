@@ -101,10 +101,10 @@ store.transaction(() => {
       const title =
         project === 0
           ? [
-              "用量分析界面设计",
-              "本地记录导入",
-              "统计查询与 API",
-              "筛选与统计口径校验",
+              "Build usage dashboard",
+              "Import session records",
+              "Review query API",
+              "Validate token totals",
             ][local]
           : `${["", "接口与文档", "学习笔记", "示例项目"][project]} · ${local + 1}`;
       store.run(
@@ -181,6 +181,20 @@ store.transaction(() => {
     }
   }
 });
+// Two direct children and one nested child, reusing the existing usage records.
+for (const [child, parent] of [[2, 1], [3, 1], [4, 2]]) {
+  store.run("UPDATE threads SET subagent_parent_id=? WHERE id=?", [
+    `example-session-${String(parent).padStart(2, "0")}`,
+    `example-session-${String(child).padStart(2, "0")}`,
+  ]);
+}
+const team = queries.agents("example-session-01")!;
+assert.equal(team.self.totalTokens, "18200000");
+assert.equal(team.subagents.totalTokens, "30400000");
+assert.equal(team.team.totalTokens, "48600000");
+assert.equal(BigInt(team.team.totalTokens), BigInt(team.self.totalTokens) + BigInt(team.subagents.totalTokens));
+assert.deepEqual(team.agents.map(({ depth }) => depth), [0, 1, 2, 1]);
+assert.equal(team.agents.reduce((sum, agent) => sum + BigInt(agent.usage.totalTokens), 0n), BigInt(team.team.totalTokens));
 assert.equal(queries.summary().totalTokens, "119210000");
 assert.equal(queries.summary().threadCount, 28);
 assert.equal(queries.summary().turnCount, 92);

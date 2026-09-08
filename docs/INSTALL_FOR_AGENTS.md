@@ -1,10 +1,12 @@
-# Install Codex Usage for a user
+# Agent installation guide
+
+[Product overview](../README.md) · [User guide](USER_GUIDE.md) · [Technical reference](TECHNICAL_REFERENCE.md)
 
 Use this procedure when the user asks you to install Codex Usage. Reading this document alone does not authorize installation. Supported release: Windows x64, Node.js >=26.7.0. The application reads local Codex records; it does not invoke a model or upload usage history.
 
-## Install a verified release
+## 1. Inspect the environment and download the installer
 
-Run PowerShell as the current user, without elevation. First inspect `Get-Command codex-usage -ErrorAction SilentlyContinue` and `Get-Command node.exe -ErrorAction SilentlyContinue`. Preserve unrelated installations. Resolve this repository's latest stable release, pin its tag for the installation script, and inspect the downloaded script before running it:
+Run PowerShell as the current user, without elevation. First inspect `Get-Command codex-usage -ErrorAction SilentlyContinue` and `Get-Command node.exe -ErrorAction SilentlyContinue`. Preserve unrelated installations. Resolve this repository's latest stable release, download the installation script from that tag, and inspect it before running it:
 
 ```powershell
 $latest = Invoke-WebRequest -UseBasicParsing 'https://github.com/Cusnd/codex-usage/releases/latest'
@@ -16,7 +18,9 @@ Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/Cusnd/code
 Get-Content -LiteralPath $installer
 ```
 
-After inspecting it, run the downloaded file in a child process:
+## 2. Install the verified release
+
+After inspecting it, run the downloaded file in a child process. The current installer resolves the latest stable package again when it runs; the script tag is fixed by the download above, but the package version is not pinned by an installer argument. For a specific package version, use the [verified manual procedure](USER_GUIDE.md#manual-installation).
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer
@@ -29,7 +33,7 @@ The default npm prefix is `%LOCALAPPDATA%\CodexUsage\tools`. No npm registry pub
 
 For isolated validation, set `CODEX_USAGE_DATA_DIR`, `CODEX_HOME`, `CODEX_BIN` to an intentionally missing executable, and `CODEX_USAGE_STARTUP_DIR` to temporary directories, select an unused `PORT`, and invoke the installer with `-InstallRoot <temporary-prefix> -NoUserPath`. Never enable the real user's startup for a smoke test.
 
-## Verify and install the Skill
+## 3. Verify the service and install the Skill
 
 New terminals inherit the updated user PATH. To continue in the same Agent shell, explicitly invoke `%LOCALAPPDATA%\CodexUsage\tools\codex-usage.cmd` (substitute a custom prefix if used), or reload the user/machine PATH. The installation's Node executable is `tools\node.exe`. Run:
 
@@ -46,9 +50,18 @@ Every command must exit successfully. Confirm that doctor reports Windows x64, `
 
 The Skill is installed under `$CODEX_HOME\skills\codex-usage`, defaulting to `$HOME\.codex\skills\codex-usage`. An unmanaged existing Skill is a conflict: preserve it and report its location. Updates to a managed Skill preserve the old directory in `codex-usage-skill-backups`. A newly installed Skill may require a fresh Agent task to be discovered; do not claim the current task has loaded it automatically.
 
-If Node/npm, downloads, checksums, startup registration, or service identity verification fails, stop that dependent step and report the actual error. Do not substitute a similarly named npm package, remove foreign processes, overwrite another Skill, or bypass integrity checks. Diagnose with `doctor`, `status`, and `%LOCALAPPDATA%\CodexUsage\service.log`; do not print login files or the private instance token.
+### Handle failures at the affected step
 
-## Explain how to use it
+| Failure | Response |
+| --- | --- |
+| Runtime, download, or checksum failure | Stop installation and report the failing check; do not bypass integrity verification or substitute a similarly named npm package. |
+| Service identity or startup failure | Inspect `doctor`, `status`, and the service log; preserve unrelated processes and startup entries. |
+| Unmanaged Skill conflict | Preserve the directory and report its location; do not overwrite it. |
+| Account capability unavailable | Report limits and history status separately; continue verifying local statistics. |
+
+Do not print login files or the private instance token. Logs are under `%LOCALAPPDATA%\CodexUsage` unless the data directory was explicitly changed.
+
+## 4. Hand the installation back to the user
 
 After successful installation, tell the user:
 
@@ -61,7 +74,7 @@ After successful installation, tell the user:
 
 Report the installed version, install path, working local URL, Skill path, actual startup state, import status, and any unavailable account capabilities. Do not equate account limits with local token history or missing data with zero.
 
-## Upgrade, migration and uninstall
+## Upgrade, migrate, or uninstall
 
 For an installation managed by the script, rerun it: it stops the old service, verifies and installs the new package, preserves the data directory, and updates an enabled startup launcher. Reinstall the managed Skill afterward. For other prefixes, stop the existing CLI first and use that prefix explicitly.
 
