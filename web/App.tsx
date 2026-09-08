@@ -539,7 +539,11 @@ export function App() {
   useEffect(() => {
     if (!status) return;
     for (const key of ["local", "accountLimits", "accountHistory"] as const) {
-      const fingerprint = JSON.stringify(status[key]);
+      // Progress belongs in the status bar; refresh statistics after the scan settles.
+      if (key === "local" && status.local.running) continue;
+      const fingerprint = JSON.stringify(key === "local"
+        ? [status.local.updatedAt, status.local.error, status.local.events]
+        : status[key]);
       if (fingerprint !== previous.current[key]) {
         previous.current[key] = fingerprint;
         void client.invalidateQueries({ queryKey: [key === "local" ? "local" : "account"] });
@@ -572,7 +576,6 @@ export function App() {
     setRefreshError("");
     try {
       await mutate("refresh", { source, force: true });
-      setNow(Date.now());
       await client.invalidateQueries({ queryKey: ["status"] });
     } catch (e) {
       setRefreshError((e as Error).message);

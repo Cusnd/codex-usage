@@ -398,7 +398,7 @@ function TrendWorkspace() {
               </div>
             </div>
             <Loading isLoading={trend.isPending} />
-            {!trend.isPending && !trend.error && (
+            {trend.data && (
               <div
                 className="atlas-chart"
                 onKeyUp={() => {
@@ -408,7 +408,7 @@ function TrendWorkspace() {
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    key={`${r.filters.from}/${r.filters.to}/${bucket}`}
+                    key={`${r.filters.from}/${r.range === "custom" ? r.filters.to : "live"}/${bucket}`}
                     data={points}
                     margin={{ left: 0, right: 12, top: 8, bottom: 5 }}
                     onClick={(event) => {

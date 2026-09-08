@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import type { Settings, Status, Filter } from "../shared/contracts";
-import { api } from "./api";
+import { dataQuery } from "./data-query";
 export const defaultSettings: Settings = {
   localInterval: 60,
   accountInterval: 300,
@@ -21,15 +21,10 @@ export function useData<T>(
   enabled = true,
 ) {
   const { settings } = useContext(Workspace);
+  const [search] = useSearchParams();
   return useQuery({
     enabled,
-    queryKey: [
-      route.startsWith("account") ? "account" : "local",
-      route,
-      params,
-      settings.timezone,
-    ],
-    queryFn: ({ signal }) => api<T>(route, params, signal),
+    ...dataQuery<T>(route, params, settings.timezone, search.get("range") !== "custom"),
   });
 }
 export function useRange() {
