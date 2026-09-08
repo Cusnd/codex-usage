@@ -1,0 +1,29 @@
+name: Windows checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: workspace/中文 project
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.7.0
+          cache: npm
+          cache-dependency-path: workspace/中文 project/package-lock.json
+      - run: npm ci
+        working-directory: workspace/中文 project
+      - run: npm run check
+        working-directory: workspace/中文 project
+      - run: npm test
+        working-directory: workspace/中文 project
+      - run: npm run build
+        working-directory: workspace/中文 project
+      - run: npm run smoke
+        working-directory: workspace/中文 project
