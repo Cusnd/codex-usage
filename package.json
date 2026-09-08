@@ -1,0 +1,60 @@
+{
+  "name": "codex-detailed-usage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=26.7.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
+    "start": "node dist/server/index.js",
+    "check": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "package:smoke": "node scripts/package-smoke.mjs"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.3",
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@sinclair/typebox": "^0.34.41",
+    "@tanstack/react-query": "^5.90.0",
+    "fastify": "^5.6.0",
+    "lucide-react": "^1.42.0",
+    "luxon": "^3.7.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1",
+    "recharts": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^26.0.0",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  },
+  "bin": {
+    "codex-usage": "bin/codex-usage.mjs"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cusnd/codex-usage.git"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "skills/",
+    "docs/INSTALL_FOR_AGENTS.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md"
+  ]
+}

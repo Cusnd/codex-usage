@@ -1,0 +1,64 @@
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { readFileSync, mkdirSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+
+const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
+export const packageRoot = existsSync(path.join(sourceRoot, 'package.json')) ? sourceRoot : fileURLToPath(new URL('../../', import.meta.url));
+export const version: string = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')).version;
+export const dataRoot = path.resolve(process.env.CODEX_USAGE_DATA_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local/share'), 'CodexUsage'));
+export const port = Number(process.env.PORT || 8765);
+export const base = `http://127.0.0.1:${port}`;
+export const instanceFile = path.join(dataRoot, 'instance.json');
+export type Instance = { pid: number; token: string; version: string; port: number };
+export function instance(): Instance | null {
+  try { return JSON.parse(readFileSync(instanceFile, 'utf8')); } catch { return null; }
+}
+export function alive(pid: number) { try { process.kill(pid, 0); return true; } catch (e: any) { return e.code === 'EPERM'; } }
+export const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+export async function control(record: Instance, action = 'identity') {
+  if (action === 'stop') await control(record, 'identity');
+  const response = await fetch(`http://127.0.0.1:${record.port}/_control/${action}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${record.token}` }, signal: AbortSignal.timeout(2000),
+  });
+  if (!response.ok) throw new Error('Service identity could not be verified. No process was stopped.');
+  const body = await response.json() as any;
+  if (body.pid !== record.pid || body.version !== record.version) throw new Error('Service identity mismatch.');
+  return body;
+}
+function powershell(script: string) {
+  const prelude = "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); ";
+  try {
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(prelude + script, 'utf16le').toString('base64')], { windowsHide: true, encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  } catch (error: any) {
+    throw new Error('Windows startup operation failed: ' + String(error.stderr || error.code || 'unknown error').slice(0, 600));
+  }
+}
+const ps = (s: string) => "'" + s.replaceAll("'", "''") + "'";
+function startupPath() {
+  if (process.platform !== 'win32') throw new Error('Autostart is supported on Windows only.');
+  return path.join(process.env.CODEX_USAGE_STARTUP_DIR || path.join(process.env.APPDATA!, 'Microsoft/Windows/Start Menu/Programs/Startup'), 'Codex Usage.lnk');
+}
+export function autostartStatus() {
+  if (process.platform !== 'win32') return { supported: false, enabled: false };
+  const shortcut = startupPath();
+  if (!existsSync(shortcut)) return { supported: true, enabled: false };
+  const target = powershell(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${ps(shortcut)}); $s.Arguments`);
+  return { supported: true, enabled: target.includes(path.join(dataRoot, 'launch.ps1')), conflict: !target.includes(path.join(dataRoot, 'launch.ps1')) };
+}
+export function setAutostart(enabled: boolean) {
+  const shortcut = startupPath();
+  if (autostartStatus().conflict) throw new Error('An unmanaged Codex Usage startup shortcut already exists.');
+  if (!enabled) { if (existsSync(shortcut)) unlinkSync(shortcut); return autostartStatus(); }
+  mkdirSync(dataRoot, { recursive: true }); mkdirSync(path.dirname(shortcut), { recursive: true });
+  const launcher = path.join(dataRoot, 'launch.ps1');
+  const env = ['CODEX_USAGE_DATA_DIR', 'CODEX_HOME', 'CODEX_BIN'].map(key => process.env[key] ? `$env:${key}=${ps(process.env[key]!)}\n` : '').join('');
+  const cliArgument = '"' + path.join(packageRoot, 'bin/codex-usage.mjs') + '" start';
+  writeFileSync(launcher, `\ufeff${env}$env:CODEX_USAGE_DATA_DIR=${ps(dataRoot)}\n$env:PORT=${ps(String(port))}\nStart-Process -FilePath ${ps(process.execPath)} -ArgumentList ${ps(cliArgument)} -WindowStyle Hidden -RedirectStandardOutput ${ps(path.join(dataRoot, 'launcher.log'))} -RedirectStandardError ${ps(path.join(dataRoot, 'launcher-error.log'))}\n`, 'utf8');
+  const args = `-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"`;
+  powershell(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${ps(shortcut)}); $s.TargetPath=${ps(path.join(process.env.SystemRoot!, 'System32/WindowsPowerShell/v1.0/powershell.exe'))}; $s.Arguments=${ps(args)}; $s.WorkingDirectory=${ps(dataRoot)}; $s.WindowStyle=7; $s.Description='Codex Usage managed startup'; $s.Save()`);
+  const result = autostartStatus();
+  if (!result.enabled) throw new Error('Startup registration did not persist.');
+  return result;
+}
