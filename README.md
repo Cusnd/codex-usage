@@ -19,7 +19,7 @@ Windows 上的本地 Codex 用量分析工具：账户额度和每日用量、�
 也可以从 [GitHub Releases](https://github.com/Cusnd/codex-usage/releases/latest) 下载 `.tgz` 和 `SHA256SUMS`，核对 SHA-256 后安装。已安装兼容 Node 的用户可使用：
 
 ```powershell
-npm install --global https://github.com/Cusnd/codex-usage/releases/download/v0.1.0/codex-detailed-usage-0.1.0.tgz
+npm install --global https://github.com/Cusnd/codex-usage/releases/download/v0.1.1/codex-detailed-usage-0.1.0.tgz
 codex-usage
 ```
 

@@ -41,18 +41,17 @@ if (Test-Path -LiteralPath $oldCli) {
   & $nodePath $oldCli stop --json
   if ($LASTEXITCODE -ne 0) { throw 'Stop the previous service before upgrading.' }
 }
-$release = Invoke-RestMethod -Headers @{ 'User-Agent'='CodexUsageInstaller'; Accept='application/vnd.github+json' } 'https://api.github.com/repos/Cusnd/codex-usage/releases/latest'
-if ($release.draft -or $release.prerelease -or $release.tag_name -notmatch '^v\d+\.\d+\.\d+$') { throw 'No supported stable release found.' }
-$package = @($release.assets | Where-Object { $_.name -match '^codex-detailed-usage-\d+\.\d+\.\d+\.tgz$' })
-$checksums = @($release.assets | Where-Object { $_.name -eq 'SHA256SUMS' })
-if ($package.Count -ne 1 -or $checksums.Count -ne 1) { throw 'Release package/checksum assets are missing or ambiguous.' }
-foreach ($asset in @($package[0], $checksums[0])) {
-  if (-not $asset.browser_download_url.StartsWith('https://github.com/Cusnd/codex-usage/releases/download/')) { throw 'Unexpected release asset host or repository.' }
-}
-$packageFile = Join-Path $InstallRoot $package[0].name
-Invoke-WebRequest -UseBasicParsing $package[0].browser_download_url -OutFile $packageFile
-$sums = (Invoke-WebRequest -UseBasicParsing $checksums[0].browser_download_url).Content
-$line = @($sums -split "`n" | Where-Object { $_ -match ('\s+' + [regex]::Escape($package[0].name) + '\s*$') })
+# GitHub's public release redirect avoids shared-IP anonymous API rate limits.
+$latest = Invoke-WebRequest -UseBasicParsing 'https://github.com/Cusnd/codex-usage/releases/latest'
+$releaseUri = if ($latest.BaseResponse.ResponseUri) { $latest.BaseResponse.ResponseUri.AbsoluteUri } else { $latest.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }
+if ($releaseUri -notmatch '^https://github\.com/Cusnd/codex-usage/releases/tag/(v\d+\.\d+\.\d+)$') { throw 'No supported stable release found.' }
+$releaseTag = $Matches[1]
+$packageName = 'codex-detailed-usage-' + $releaseTag.Substring(1) + '.tgz'
+$assetBase = "https://github.com/Cusnd/codex-usage/releases/download/$releaseTag"
+$packageFile = Join-Path $InstallRoot $packageName
+Invoke-WebRequest -UseBasicParsing "$assetBase/$packageName" -OutFile $packageFile
+$sums = (Invoke-WebRequest -UseBasicParsing "$assetBase/SHA256SUMS").Content
+$line = @($sums -split "`n" | Where-Object { $_ -match ('\s+' + [regex]::Escape($packageName) + '\s*$') })
 if ($line.Count -ne 1 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $packageFile).Hash -ine ($line[0].Trim() -split '\s+')[0]) { throw 'Release package checksum mismatch.' }
 & $nodePath $npmCli install --global --prefix $InstallRoot --ignore-scripts $packageFile
 if ($LASTEXITCODE -ne 0) { throw 'Package installation failed.' }
@@ -76,4 +75,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Installed CLI failed.' }
 if ($wasEnabled) { & $nodePath $oldCli autostart enable --json; if ($LASTEXITCODE -ne 0) { throw 'Could not update the startup launcher.' } }
 & $nodePath $oldCli doctor --json
 if ($LASTEXITCODE -ne 0) { throw 'Doctor failed.' }
-Write-Output "Installed $($release.tag_name). Open a new terminal and run codex-usage. Autostart is unchanged; use the Web settings to opt in."
+Write-Output "Installed $releaseTag. Open a new terminal and run codex-usage. Autostart is unchanged; use the Web settings to opt in."

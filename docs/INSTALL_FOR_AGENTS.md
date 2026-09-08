@@ -7,10 +7,12 @@ Use this procedure when the user asks you to install Codex Usage. Reading this d
 Run PowerShell as the current user, without elevation. First inspect `Get-Command codex-usage -ErrorAction SilentlyContinue` and `Get-Command node.exe -ErrorAction SilentlyContinue`. Preserve unrelated installations. Resolve this repository's latest stable release, pin its tag for the installation script, and inspect the downloaded script before running it:
 
 ```powershell
-$release = Invoke-RestMethod -Headers @{ 'User-Agent'='CodexUsageInstall'; Accept='application/vnd.github+json' } 'https://api.github.com/repos/Cusnd/codex-usage/releases/latest'
-if ($release.draft -or $release.prerelease -or $release.tag_name -notmatch '^v\d+\.\d+\.\d+$') { throw 'No supported stable release' }
+$latest = Invoke-WebRequest -UseBasicParsing 'https://github.com/Cusnd/codex-usage/releases/latest'
+$releaseUri = if ($latest.BaseResponse.ResponseUri) { $latest.BaseResponse.ResponseUri.AbsoluteUri } else { $latest.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }
+if ($releaseUri -notmatch '^https://github\.com/Cusnd/codex-usage/releases/tag/(v\d+\.\d+\.\d+)$') { throw 'No supported stable release' }
+$releaseTag = $Matches[1]
 $installer = Join-Path $env:TEMP ('codex-usage-install-' + [guid]::NewGuid().ToString() + '.ps1')
-Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/Cusnd/codex-usage/$($release.tag_name)/scripts/install.ps1" -OutFile $installer
+Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/Cusnd/codex-usage/$releaseTag/scripts/install.ps1" -OutFile $installer
 Get-Content -LiteralPath $installer
 ```
 

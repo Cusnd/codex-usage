@@ -1,6 +1,6 @@
 {
   "name": "codex-detailed-usage",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -55,6 +55,7 @@
     "docs/INSTALL_FOR_AGENTS.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
-    "README.md"
+    "README.md",
+    "scripts/shell-link.ps1"
   ]
 }

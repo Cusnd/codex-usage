@@ -44,7 +44,7 @@ export function autostartStatus() {
   if (process.platform !== 'win32') return { supported: false, enabled: false };
   const shortcut = startupPath();
   if (!existsSync(shortcut)) return { supported: true, enabled: false };
-  const target = powershell(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${ps(shortcut)}); $s.Arguments`);
+  const target = powershell(`. ${ps(path.join(packageRoot, 'scripts/shell-link.ps1'))}; [CodexUsage.StartupLink]::ReadArguments(${ps(shortcut)})`);
   return { supported: true, enabled: target.includes(path.join(dataRoot, 'launch.ps1')), conflict: !target.includes(path.join(dataRoot, 'launch.ps1')) };
 }
 export function setAutostart(enabled: boolean) {
@@ -57,7 +57,7 @@ export function setAutostart(enabled: boolean) {
   const cliArgument = '"' + path.join(packageRoot, 'bin/codex-usage.mjs') + '" start';
   writeFileSync(launcher, `\ufeff${env}$env:CODEX_USAGE_DATA_DIR=${ps(dataRoot)}\n$env:PORT=${ps(String(port))}\nStart-Process -FilePath ${ps(process.execPath)} -ArgumentList ${ps(cliArgument)} -WindowStyle Hidden -RedirectStandardOutput ${ps(path.join(dataRoot, 'launcher.log'))} -RedirectStandardError ${ps(path.join(dataRoot, 'launcher-error.log'))}\n`, 'utf8');
   const args = `-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${launcher}"`;
-  powershell(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${ps(shortcut)}); $s.TargetPath=${ps(path.join(process.env.SystemRoot!, 'System32/WindowsPowerShell/v1.0/powershell.exe'))}; $s.Arguments=${ps(args)}; $s.WorkingDirectory=${ps(dataRoot)}; $s.WindowStyle=7; $s.Description='Codex Usage managed startup'; $s.Save()`);
+  powershell(`. ${ps(path.join(packageRoot, 'scripts/shell-link.ps1'))}; [CodexUsage.StartupLink]::Save(${ps(shortcut)}, ${ps(path.join(process.env.SystemRoot!, 'System32/WindowsPowerShell/v1.0/powershell.exe'))}, ${ps(args)}, ${ps(dataRoot)})`);
   const result = autostartStatus();
   if (!result.enabled) throw new Error('Startup registration did not persist.');
   return result;
