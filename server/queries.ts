@@ -10,6 +10,7 @@ import type {
   TrendRow,
   Filters,
   ThreadDetail,
+  AgentUsage,
 } from "../shared/contracts.js";
 import { Store } from "./db.js";
 import { label, ratio } from "./util.js";
@@ -39,6 +40,7 @@ const fieldMap = {
   thread: "thread_id",
 } as const;
 type QueryFilter = Filter & {
+  threadIds?: string[];
   q?: string;
   turnId?: string | null;
   searchTurns?: boolean;
@@ -46,6 +48,10 @@ type QueryFilter = Filter & {
 export function where(f: QueryFilter) {
   const conditions: string[] = [];
   const params: SQLInputValue[] = [];
+  if (f.threadIds !== undefined) {
+    conditions.push("thread_id IN (SELECT value FROM json_each(?))");
+    params.push(JSON.stringify(f.threadIds));
+  }
   for (const [field, value] of [
     ["at >=", f.from],
     ["at <", f.to],
@@ -249,19 +255,81 @@ export class Queries {
     };
   }
   detail(id: string): ThreadDetail | null {
-    const row = this.threads({ threadId: id }, 1, 0).items[0];
-    if (!row) return null;
     const info = this.store.one("SELECT * FROM threads WHERE id=?", [id]);
+    let row = this.threads({ threadId: id }, 1, 0).items[0];
+    if (!row && !info) return null;
+    row ??= {
+      id, title: info!.title ?? null, project: info!.project ?? null,
+      firstAt: null, lastAt: null, ...this.summary({ threadId: id }),
+    };
     const related = this.store.all(
-      "SELECT id,project FROM threads WHERE parent_id=? OR id=?",
-      [id, info?.parent_id || ""],
+      `SELECT id,project,subagent_parent_id,forked_from_id FROM threads
+       WHERE id<>? AND (parent_id=? OR subagent_parent_id=? OR forked_from_id=? OR id IN (?,?,?)) ORDER BY id`,
+      [id, id, id, id, info?.parent_id || "", info?.subagent_parent_id || "", info?.forked_from_id || ""],
     );
     return {
       thread: row,
       source: info?.source || null,
       parentId: info?.parent_id || null,
-      related: related.map((r) => ({ id: r.id, project: r.project })),
+      related: related.flatMap((r) => {
+        const relations: ThreadDetail["related"][number]["relation"][] = [];
+        if (r.subagent_parent_id === id) relations.push("subagent");
+        if (r.forked_from_id === id) relations.push("fork");
+        if (info?.subagent_parent_id === r.id) relations.push("subagent_parent");
+        if (info?.forked_from_id === r.id) relations.push("fork_parent");
+        if (!relations.length) relations.push("unknown");
+        return relations.map((relation) => ({ id: r.id, project: r.project, relation }));
+      }),
       models: this.groups({ threadId: id }, "model"),
+    };
+  }
+  agents(id: string, f: Filter = {}): AgentUsage | null {
+    const root = this.store.one("SELECT * FROM threads WHERE id=?", [id]);
+    if (!root) return null;
+    // UNION deduplicates IDs before traversal, including malformed cycles.
+    const nodes = this.store.all(`WITH RECURSIVE family(id) AS (
+      SELECT id FROM threads WHERE id=? UNION
+      SELECT t.id FROM threads t JOIN family f ON t.subagent_parent_id=f.id
+    ) SELECT t.* FROM threads t JOIN family f ON t.id=f.id ORDER BY t.id`, [id]);
+    const children = new Map<string, typeof nodes>();
+    for (const node of nodes) {
+      const siblings = children.get(node.subagent_parent_id) || [];
+      siblings.push(node);
+      children.set(node.subagent_parent_id, siblings);
+    }
+    const ids = nodes.map((n) => n.id as string);
+    // The route identifies the root. A caller's threadId must not hide descendants.
+    const filter: QueryFilter = { ...f, threadId: undefined, threadIds: ids };
+    const values = new Map(this.groups(filter, "thread").map(({ key, label: _label, share: _share, ...usage }) => [key, usage]));
+    const w = where(filter);
+    const modelRows = this.store.all(`SELECT DISTINCT thread_id,model FROM effective_events ${w.sql} ORDER BY thread_id,model`, w.params);
+    const models = new Map<string, (string | null)[]>();
+    for (const row of modelRows) {
+      const list = models.get(row.thread_id) || [];
+      list.push(row.model);
+      models.set(row.thread_id, list);
+    }
+    const empty = this.summary({ threadIds: [] });
+    const agents: AgentUsage["agents"] = [];
+    const seen = new Set<string>();
+    const pending = [{ node: root, depth: 0 }];
+    while (pending.length) {
+      const { node, depth } = pending.pop()!;
+      if (seen.has(node.id)) continue;
+      seen.add(node.id);
+      agents.push({
+        id: node.id, parentId: node.subagent_parent_id ?? null, depth,
+        title: node.title ?? null, project: node.project ?? null,
+        models: models.get(node.id) || [], usage: values.get(node.id) || empty,
+      });
+      for (const child of [...(children.get(node.id) || [])].reverse())
+        pending.push({ node: child, depth: depth + 1 });
+    }
+    return {
+      self: agents[0].usage,
+      subagents: this.summary({ ...filter, threadIds: ids.filter((key) => key !== id) }),
+      team: this.summary(filter),
+      agents,
     };
   }
   turns(

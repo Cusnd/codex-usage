@@ -1795,3 +1795,21 @@ footer {
     padding-top: 8px;
   }
 }
+.agent-usage { margin-block: 28px; min-width: 0; }
+.agent-usage h3 { margin-bottom: 8px; }
+.agent-hint { color: var(--muted, #686b70); font-size: 13px; line-height: 1.6; }
+.agent-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-block: 18px; }
+.agent-totals > div { display: flex; flex-direction: column; gap: 7px; padding: 16px; border: 1px solid var(--border, #deded9); border-radius: 12px; }
+.agent-totals strong { font-size: 24px; overflow-wrap: anywhere; }
+.agent-totals small { font-size: 12px; font-weight: 400; }
+.agent-details > summary { cursor: pointer; padding-block: 12px; }
+.agent-table-scroll { max-width: 100%; overflow-x: auto; }
+.agent-table { min-width: 720px; }
+.agent-name { display: flex; flex-direction: column; gap: 5px; min-width: 150px; max-width: 300px; overflow-wrap: anywhere; }
+.agent-name small { color: var(--muted, #686b70); font-size: 11px; }
+.agent-name a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.agent-models { max-width: 170px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .agent-totals { grid-template-columns: 1fr; gap: 8px; }
+  .agent-totals > div { padding: 12px; }
+}

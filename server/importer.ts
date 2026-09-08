@@ -16,6 +16,7 @@ export const tokenFields = [
 ] as const;
 type Tokens = Record<(typeof tokenFields)[number], bigint | null>;
 type State = {
+  metadataVersion?: number;
   thread: string;
   turn: string | null;
   project: string | null;
@@ -31,6 +32,14 @@ type State = {
   cutoff: string | null;
   deferred?: boolean;
 };
+type ThreadMetadata = {
+  project: string | null;
+  source: string | null;
+  parent: string | null;
+  subagentParent: string | null;
+  forkedFrom: string | null;
+};
+const metadataVersion = 1;
 type Event = Tokens & {
   event_key: string;
   thread_id: string;
@@ -186,12 +195,15 @@ export class Importer {
     ]);
     const identity = `${info.dev}:${info.ino}:${info.birthtimeMs}`;
     const savedState = saved ? (JSON.parse(saved.state) as State) : null;
+    // Re-read old files once, including unchanged logs, to recover typed edges.
+    const needsMetadata = savedState?.metadataVersion !== metadataVersion;
     const retryParent =
       !!savedState?.deferred &&
       !!savedState.parent &&
       !!this.store.one("SELECT 1 FROM threads WHERE id=?", [savedState.parent]);
     if (
       !retryParent &&
+      !needsMetadata &&
       saved &&
       saved.identity === identity &&
       Number(saved.size) === info.size &&
@@ -212,6 +224,7 @@ export class Importer {
     }
     let append =
       !retryParent &&
+      !needsMetadata &&
       !!saved &&
       saved.identity === identity &&
       info.size > Number(saved.size) &&
@@ -219,6 +232,7 @@ export class Importer {
     let state: State = append
       ? JSON.parse(saved!.state)
       : {
+          metadataVersion,
           thread:
             path
               .basename(file)
@@ -240,7 +254,7 @@ export class Importer {
     const events: Event[] = [];
     const threads = new Map<
       string,
-      { project: string | null; source: string | null; parent: string | null }
+      ThreadMetadata
     >();
     let offset = append ? Number(saved!.offset) : 0;
     let pending = Buffer.alloc(0);
@@ -311,9 +325,10 @@ export class Importer {
         );
       for (const [id, t] of threads)
         this.store.run(
-          `INSERT INTO threads(id,project,source,parent_id) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET
-        project=COALESCE(excluded.project,threads.project),source=COALESCE(excluded.source,threads.source),parent_id=COALESCE(excluded.parent_id,threads.parent_id)`,
-          [id, t.project, t.source, t.parent],
+          `INSERT INTO threads(id,project,source,parent_id,subagent_parent_id,forked_from_id) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+        project=COALESCE(excluded.project,threads.project),source=COALESCE(excluded.source,threads.source),parent_id=excluded.parent_id,
+        subagent_parent_id=excluded.subagent_parent_id,forked_from_id=excluded.forked_from_id`,
+          [id, t.project, t.source, t.parent, t.subagentParent, t.forkedFrom],
         );
       this.store.reconcile([...affected]);
       this.store.run(
@@ -339,7 +354,7 @@ export class Importer {
     events: Event[],
     threads: Map<
       string,
-      { project: string | null; source: string | null; parent: string | null }
+      ThreadMetadata
     >,
   ) {
     const p = obj?.payload;
@@ -356,10 +371,12 @@ export class Importer {
         s.thread = id;
       }
       s.project = projectPath(p.cwd);
-      s.parent =
-        typeof p.forked_from_id === "string"
-          ? p.forked_from_id
-          : p.source?.subagent?.thread_spawn?.parent_thread_id || null;
+      const nonempty = (value: unknown) =>
+        typeof value === "string" && value.trim() ? value : null;
+      const subagentParent = nonempty(p.source?.subagent?.thread_spawn?.parent_thread_id);
+      const forkedFrom = nonempty(p.forked_from_id);
+      // Preserve the existing inheritance baseline; team membership uses its own edge.
+      s.parent = forkedFrom || subagentParent;
       s.inherited = !!s.parent;
       s.cutoff = iso(p.timestamp || obj.timestamp);
       threads.set(s.thread, {
@@ -367,6 +384,8 @@ export class Importer {
         source:
           typeof p.source === "string" ? p.source : p.thread_source || null,
         parent: s.parent,
+        subagentParent,
+        forkedFrom,
       });
       return;
     }

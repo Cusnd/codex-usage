@@ -120,6 +120,21 @@ export const ThreadRowSchema = Type.Object({
   ...MetricsSchema.properties,
 });
 export type ThreadRow = Static<typeof ThreadRowSchema>;
+export const AgentUsageSchema = Type.Object({
+  self: MetricsSchema,
+  subagents: MetricsSchema,
+  team: MetricsSchema,
+  agents: Type.Array(Type.Object({
+    id: Type.String(),
+    parentId: NullableString,
+    depth: Type.Integer({ minimum: 0 }),
+    title: NullableString,
+    project: NullableString,
+    models: Type.Array(NullableString),
+    usage: MetricsSchema,
+  })),
+});
+export type AgentUsage = Static<typeof AgentUsageSchema>;
 export const TurnRowSchema = Type.Object({
   id: NullableString,
   threadId: Type.String(),
@@ -245,7 +260,14 @@ export const ThreadDetailSchema = Type.Object({
   source: NullableString,
   parentId: NullableString,
   related: Type.Array(
-    Type.Object({ id: Type.String(), project: NullableString }),
+    Type.Object({
+      id: Type.String(), project: NullableString,
+      relation: Type.Union([
+        Type.Literal("subagent"), Type.Literal("subagent_parent"),
+        Type.Literal("fork"), Type.Literal("fork_parent"),
+        Type.Literal("unknown"),
+      ]),
+    }),
   ),
   models: Type.Array(GroupRowSchema),
 });

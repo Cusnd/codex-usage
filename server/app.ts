@@ -387,6 +387,20 @@ export async function createApp(
         ),
       ),
   );
+  app.get<{ Params: { id: string }; Querystring: C.Filter }>(
+    "/api/local/threads/:id/agents",
+    {
+      schema: {
+        ...schema(C.AgentUsageSchema, C.FilterSchema),
+        params: Type.Object({ id: Type.String() }),
+      },
+    },
+    async (req) => {
+      const data = queries.agents(req.params.id, normalize(req.query));
+      if (!data) throw Object.assign(new Error("没有找到该任务。"), { statusCode: 404 });
+      return wrap(data);
+    },
+  );
   app.get<{ Params: { id: string } }>(
     "/api/local/threads/:id",
     {

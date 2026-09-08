@@ -70,6 +70,7 @@ npm start
 - `/api/local/threads`：标题／项目／ID 搜索 `q`、排序与分页，可加 `cacheBelow=0.2` 查询低缓存占比任务。
 - `/api/local/threads/:id`、`/:id/turns`：完整任务与可筛选轮次；轮次提供模型／推理强度构成。
 - `/api/local/turns`：跨 Session 轮次，支持共用筛选、`q` 搜索、`sort=tokens|recent|oldest` 与分页。
+- `/api/local/threads/:id/agents`：当前 agent、后代 subagent 与团队用量，支持时间、项目、模型、推理强度及未知维度筛选。返回 `self`、`subagents`、`team` 指标及 `agents` 列表；列表包含当前 agent（depth=0），每项提供 `id`、`parentId`、`depth`、`title`、`project`、`models` 和自身 `usage`。路径 ID 决定根节点，查询参数 `threadId` 不限制其后代。
 - `/api/pricing`：官方价格预置、来源、核对日期；设置中的 `costEnabled` 和 `modelPrices` 控制显示与覆盖。
 - `/api/local/compare`：前一个等长时段对比；也支持成对 `baselineFrom/baselineTo`。按 `groupBy=thread` 定位任务增量。
 - `/api/account/usage`、`limits`：账户每日桶与多额度窗口。
@@ -107,6 +108,12 @@ node skills/codex-usage/scripts/query.mjs threads --days 30 --cacheBelow 0.2
 当前视觉图与交互说明见 [设计说明](docs/design/atlas/README.md)。时间、维度、搜索、选择与分页保存到 URL；支持单日／小时下钻、Session 内轮次及跨任务 Turn 排行。
 
 任务标题只读 Codex 本机 `session_index.jsonl`，按 ID 关联最新有效名称；缺失时回退为项目名与短 ID，不读取聊天正文来编造标题。
+
+Session 详情的「Agent 用量」分别显示当前 agent、Subagent 合计和团队合计，可展开每个 agent 的输入、缓存命中、输出及总 Token，并跳转查看其轮次。团队合计递归包含嵌套 subagent；顶部 Session 总数和每个 agent 行保持自身用量口径。缓存命中属于输入，不应再次加到输入和输出之和中。开启成本设置时沿用现有参考费用估算。
+
+团队关系只采用明确的 `source.subagent.thread_spawn.parent_thread_id`；`forked_from_id` 单独保存，普通 fork 不计入团队。关联任务导航会区分子 agent、父 agent、Fork 任务和 Fork 来源。筛选先确定完整关系，再过滤用量，所以无匹配记录的中间 agent 不会隐藏其后代。完整 Session 使用完整范围；范围内详情沿用当前筛选。已知但无有效用量的 agent 仍可打开详情，并标记「暂无用量记录」。
+
+首次使用此功能会自动迁移本地 SQLite 缓存，并在下一次本地刷新时重新解析旧版本已导入的日志（包括未增长的日志），一次性回填关系类型；之后恢复增量导入。原日志保持只读。关系未知或原日志缺失时不推断团队归属，结果只代表本机已保留的可识别记录，不是完整账户账单。新的 agents API 对已知无用量任务返回空指标，对不存在的任务返回 404；原任务详情 API 也支持已知无用量任务。
 
 默认显示非缓存输入、缓存读取和输出。非缓存输入包含写入；写入缺失不会补零，普通输入无法可靠分离时返回 null。`cacheWriteMissingEvents` 标明缺失覆盖情况。
 

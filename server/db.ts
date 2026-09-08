@@ -40,6 +40,10 @@ export class Store {
       CREATE INDEX IF NOT EXISTS snapshots_latest ON account_snapshots(account_id,kind,id DESC);
     `);
     const threadColumns = this.db.prepare("PRAGMA table_info(threads)").all();
+    for (const column of ["subagent_parent_id", "forked_from_id"])
+      if (!threadColumns.some((c) => c.name === column))
+        this.db.exec(`ALTER TABLE threads ADD COLUMN ${column} TEXT`);
+    this.db.exec("CREATE INDEX IF NOT EXISTS threads_subagent_parent ON threads(subagent_parent_id)");
     const snapshotColumns = this.db.prepare("PRAGMA table_info(account_snapshots)").all();
     for (const column of ["identity_key", "provider", "fallback_reason"])
       if (!snapshotColumns.some((c) => c.name === column))

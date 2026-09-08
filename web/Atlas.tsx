@@ -65,6 +65,7 @@ import {
   UsageHeadings,
 } from "./Usage";
 import { ComparisonSection } from "./Comparison";
+import { AgentUsagePanel } from "./AgentUsage";
 
 type Group = "project" | "model" | "effort";
 type View = Group | "session" | "turn";
@@ -970,7 +971,7 @@ function SessionPanel({
         </div>
         <div className="detail-total">
           <strong>{compact(data?.totalTokens)}</strong>
-          <span>Token · {data?.turnCount ?? "—"} Turns</span>
+          <span>当前 agent · Token · {data?.turnCount ?? "—"} Turns</span>
         </div>
       </div>
       {copyError && <p role="status">{copyError}</p>}
@@ -990,7 +991,9 @@ function SessionPanel({
       <Loading isLoading={detail.isPending || summary.isPending} />
       {data && data.eventCount === 0 ? (
         <div className="atlas-empty">
-          该 Session 不再匹配当前筛选。请调整条件，或查看完整 Session。
+          {full
+            ? "当前 agent 暂无可统计用量记录，已识别的子 agent 用量见下方。"
+            : "当前 agent 在筛选范围内暂无用量记录。下方仍会展示其子 agent 的范围内用量。"}
         </div>
       ) : (
         <>
@@ -998,16 +1001,17 @@ function SessionPanel({
           <TurnTable filters={filters} threadId={id} />
         </>
       )}
+      <AgentUsagePanel id={id} filters={full ? {} : filters} />
       {!!detail.data?.data.related.length && (
         <details className="related-tasks">
           <summary>关联任务 · {detail.data.data.related.length}</summary>
           {detail.data.data.related.map((row) => (
             <Link
-              key={row.id}
+              key={`${row.id}:${row.relation}`}
               to={`/threads/${encodeURIComponent(row.id)}`}
               state={{ from: location.pathname + location.search }}
             >
-              {projectName(row.project)} · {shortId(row.id)}
+              {{ subagent: "子 agent", subagent_parent: "父 agent", fork: "Fork 任务", fork_parent: "Fork 来源", unknown: "关系待识别" }[row.relation]} · {projectName(row.project)} · {shortId(row.id)}
             </Link>
           ))}
         </details>
