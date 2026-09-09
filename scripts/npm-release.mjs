@@ -54,6 +54,7 @@ async function main(command) {
     await writeFile(record, JSON.stringify({ ...info, tarball, integrity }, null, 2));
     if (process.env.GITHUB_ENV) await appendFile(process.env.GITHUB_ENV, `CODEX_USAGE_TEST_TARBALL=${tarball}\n`);
     console.log(tarball);
+    console.log(JSON.stringify({ ...info, integrity, source: process.env.GITHUB_SHA }));
     return;
   }
   assert.equal(command, 'publish');
@@ -68,7 +69,9 @@ async function main(command) {
     console.error('npm publish reported an error; checking the registry before reporting the outcome.');
   }
   let verificationError;
-  for (let attempt = 0; attempt < 6; attempt++) {
+  // npm scans accepted uploads before they become available; this can exceed 15 minutes.
+  const verificationDeadline = Date.now() + 20 * 60 * 1000;
+  while (true) {
     try {
       const base = `https://registry.npmjs.org/${encodeURIComponent(info.name)}`;
       const version = await registry(`${base}/${encodeURIComponent(info.version)}`);
@@ -81,7 +84,9 @@ async function main(command) {
       if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
       return;
     } catch (error) { verificationError = error; }
-    if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 10000));
+    if (Date.now() >= verificationDeadline) break;
+    console.log('Waiting for npm availability and matching version, integrity, and channel...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
   }
   throw new AggregateError([publishError, verificationError].filter(Boolean), 'npm release could not be verified');
 }
