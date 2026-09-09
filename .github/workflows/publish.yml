@@ -1,0 +1,44 @@
+name: Publish npm
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+jobs:
+  version:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/npm-release.mjs validate
+  checks:
+    needs: version
+    uses: ./.github/workflows/windows.yml
+  publish:
+    needs: [version, checks]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/npm-release.mjs pack
+      - run: npm run package:smoke
+      - run: node scripts/npm-release.mjs publish
