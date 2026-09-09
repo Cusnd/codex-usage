@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { serviceGuardAddress } from '../dist/server/platform.js';
 import { createHash } from 'node:crypto';
-import { promisify } from 'node:util';
+import { captureProcess as exec } from './capture-process.mjs';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-const exec = promisify(execFile);
 const root = await mkdtemp(path.join(os.tmpdir(), 'codex-package-中文 空格-'));
 const project = process.cwd();
 const packageName = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8')).name;
@@ -31,10 +30,7 @@ const install = async target => {
 };
 const run = async (...args) => {
   console.log('Checking:', args.join(' '));
-  const pending = exec(windows ? 'powershell.exe' : shim, windows ? ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', shim, ...args] : args, { env, cwd: root, windowsHide: true, timeout: 45000 });
-  // A redirected stdin left open can keep Windows PowerShell waiting for input.
-  pending.child.stdin.end();
-  const result = await pending;
+  const result = await exec(windows ? 'powershell.exe' : shim, windows ? ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', shim, ...args] : args, { env, cwd: root, windowsHide: true, timeout: 45000 });
   return JSON.parse(result.stdout);
 };
 try {
