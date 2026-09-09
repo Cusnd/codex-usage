@@ -9,7 +9,7 @@ export function useResultMotion<T>(
 ) {
   useSyncExternalStore(subscribeMotion, refreshMotionVersion, () => 0);
   const ticket = readMotionTicket(search, source);
-  const data = useMemo(() => query.data ? JSON.stringify(query.data.data) : undefined, [query.data]);
+  const data = useMemo(() => query.data ? JSON.stringify(query.data.data) : undefined, [query.data?.data]);
   const [snapshot, setSnapshot] = useState<ResultSnapshot>({ data: undefined, at: 0, used: ticket.id, revision: 0, animate: false, initial: true });
   if (query.isError && ticket.id > snapshot.used) setSnapshot({ ...snapshot, used: ticket.id, animate: false });
   if (!query.isPlaceholderData && data !== undefined && (query.dataUpdatedAt !== snapshot.at || data !== snapshot.data))
