@@ -2,7 +2,18 @@
 
 [Product overview](../README.md) · [User guide](USER_GUIDE.md) · [Technical reference](TECHNICAL_REFERENCE.md)
 
-Use this procedure when the user asks you to install Codex Usage. Reading this document alone does not authorize installation. Supported release: Windows x64, Node.js >=26.7.0. The application reads local Codex records; it does not invoke a model or upload usage history.
+Use this procedure when the user asks you to install Codex Usage. Reading this document alone does not authorize installation. Supported release: Windows x64, Node.js 22.13+ (22.x), 24.x, or 26.x. The application reads local Codex records; it does not invoke a model or upload usage history.
+
+## Install from npm with an existing Node runtime
+
+For Windows x64 with Node.js 22.13+ (22.x), 24.x, or 26.x and npm, inspect `Get-Command codex-usage -ErrorAction SilentlyContinue` first. If the legacy package is installed, use the migration procedure below. Otherwise:
+
+```powershell
+npm install -g @esoren/codex-usage
+if ($LASTEXITCODE -ne 0) { throw 'Installation did not complete' }
+```
+
+Continue at **3. Verify the service and install the Skill**. This route uses the current npm global prefix (`npm prefix --global`); it does not install a private Node runtime. If the runtime is missing, use the GitHub installer procedure below. Older GitHub releases still install the legacy package.
 
 ## 1. Inspect the environment and download the installer
 
@@ -27,7 +38,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer
 if ($LASTEXITCODE -ne 0) { throw 'Installation did not complete' }
 ```
 
-`-ExecutionPolicy Bypass` applies to that process only. Do not change machine execution policy. The installer reuses a compatible x64 Node with npm; otherwise it downloads Node 26.7.0 from `nodejs.org`, verifies the archive against the official HTTPS SHA256SUMS, and extracts it under the user's installation directory. It verifies the Release `.tgz` against `SHA256SUMS`, installs with lifecycle scripts disabled, and copies the verified Node executable beside the npm command shims so an older system Node cannot take precedence. Only the installation prefix is added to the user PATH; existing Node installations are not replaced.
+`-ExecutionPolicy Bypass` applies to that process only. Do not change machine execution policy. The installer reuses a compatible x64 Node with npm; otherwise it downloads the latest Node 24 LTS patch from `nodejs.org`, verifies the archive against the official HTTPS SHA256SUMS, and extracts it under the user's installation directory. It verifies the Release `.tgz` against `SHA256SUMS`, installs with npm default lifecycle behavior, and copies the verified Node executable beside the npm command shims so an older system Node cannot take precedence. Only the installation prefix is added to the user PATH; existing Node installations are not replaced.
 
 The default npm prefix is `%LOCALAPPDATA%\CodexUsage\tools`. No npm registry publication is required; runtime dependencies are downloaded from npm during installation. The package and installer are public; account login files are never part of installation.
 
@@ -76,22 +87,53 @@ Report the installed version, install path, working local URL, Skill path, actua
 
 ## Upgrade, migrate, or uninstall
 
+For a scoped npm installation, stop the service, install the desired `@esoren/codex-usage` version into the same prefix, reinstall the Skill, and re-enable autostart if it was enabled. The cache remains outside the installed package directory.
+
 For an installation managed by the script, rerun it: it stops the old service, verifies and installs the new package, preserves the data directory, and updates an enabled startup launcher. Reinstall the managed Skill afterward. For other prefixes, stop the existing CLI first and use that prefix explicitly.
 
 To import an older checkout's cache, cleanly stop that checkout's server, then run `codex-usage migrate --from C:\absolute\old-checkout\data\usage.sqlite`. The command refuses an existing destination or SQLite sidecar files, checks integrity, copies and verifies SHA-256, and preserves the original. It does not discover databases from the current directory.
 
-To uninstall:
+### Migrate a legacy package to npm
+
+The legacy `codex-detailed-usage` package and `@esoren/codex-usage` provide the same command. Record the old prefix, data-directory overrides, and `codex-usage autostart status --json` before migration. Use the old installation's CLI to disable autostart and stop its service. Keep its managed Skill so installing the new Skill can back it up and update its CLI path. Do not install both package names into the same prefix.
+
+With a compatible Node/npm on PATH, substitute the actual old prefix below (script installs normally use `%LOCALAPPDATA%\CodexUsage\tools`; regular npm installs use `npm prefix --global`):
+
+```powershell
+codex-usage autostart disable
+codex-usage stop
+$prefix = Join-Path $env:LOCALAPPDATA 'CodexUsage\tools'
+npm uninstall --global --prefix $prefix codex-detailed-usage
+if ($LASTEXITCODE -ne 0) { throw 'Legacy package removal failed' }
+npm install --global --prefix $prefix @esoren/codex-usage
+if ($LASTEXITCODE -ne 0) { throw 'Scoped package installation failed; keep the data directory and retry' }
+& (Join-Path $prefix 'codex-usage.cmd') skill install
+& (Join-Path $prefix 'codex-usage.cmd') start --json
+```
+
+Preserve the old data-directory environment overrides and re-enable autostart only if previously enabled. The uninstall removes the old npm package, not the external cache or Codex records. If this installation only has a private npm runtime, use the Node/npm invocation shown below for both uninstall and install. Verify the new installation before reporting migration complete.
+
+### Uninstall
+
+For a regular scoped npm installation, run `codex-usage autostart disable`, `codex-usage stop`, and `codex-usage skill uninstall`, then `npm uninstall --global @esoren/codex-usage` using its actual prefix. For a script-managed installation:
 
 ```powershell
 codex-usage autostart disable
 codex-usage stop
 codex-usage skill uninstall
 $prefix = Join-Path $env:LOCALAPPDATA 'CodexUsage\tools'
-$privateNpm = Join-Path $prefix 'runtime\node-v26.7.0-win-x64\node_modules\npm\bin\npm-cli.js'
-if (Test-Path -LiteralPath $privateNpm) {
-  & (Join-Path $prefix 'node.exe') $privateNpm uninstall --global --prefix $prefix codex-detailed-usage
+$packageName = if (Test-Path -LiteralPath (Join-Path $prefix 'node_modules/@esoren/codex-usage/package.json')) { '@esoren/codex-usage' } else { 'codex-detailed-usage' }
+$runtimeRoot = Join-Path $prefix 'runtime'
+$privateNpm = if (Test-Path -LiteralPath $runtimeRoot) {
+  Get-ChildItem -LiteralPath $runtimeRoot -Directory | Where-Object { $_.Name -match '^node-v(22|24|26)\.\d+\.\d+-win-x64$' } |
+    Sort-Object { [version]($_.Name -replace '^node-v|\-win-x64$', '') } -Descending |
+    ForEach-Object { Join-Path $_.FullName 'node_modules/npm/bin/npm-cli.js' } |
+    Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
+if ($privateNpm -and (Test-Path -LiteralPath $privateNpm)) {
+  & (Join-Path $prefix 'node.exe') $privateNpm uninstall --global --prefix $prefix $packageName
 } else {
-  npm uninstall --global --prefix $prefix codex-detailed-usage
+  npm uninstall --global --prefix $prefix $packageName
 }
 ```
 

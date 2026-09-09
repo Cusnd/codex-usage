@@ -4,7 +4,7 @@ Help people understand their Codex activity without losing the context behind th
 
 ## Develop locally
 
-Use Windows x64 with Node.js >=26.7.0:
+Use Windows x64 with Node.js 22.13+ (22.x), 24.x, or 26.x:
 
 ```powershell
 npm ci

@@ -1,0 +1,284 @@
+/* A quiet horizontal shell; content and utility navigation share a baseline. */
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(580px, 1fr) auto;
+  align-content: start;
+  min-height: 100vh;
+  padding: 0 36px;
+  max-width: 1760px;
+  margin: auto;
+}
+.sidebar {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  height: 72px;
+  grid-row: 1;
+  grid-column: 1;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.brand {
+  color: var(--ink);
+  white-space: nowrap;
+  text-decoration: none !important;
+}
+.brand > div {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.8px;
+}
+.brand small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: 0;
+}
+.brand-icon,
+.sidebar-footer,
+.breadcrumb {
+  display: none;
+}
+.sidebar nav {
+  display: flex;
+  align-self: stretch;
+  gap: 28px;
+}
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 2px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+.sidebar nav a svg {
+  display: none;
+}
+.sidebar nav a.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--blue);
+}
+.sidebar nav a:hover {
+  color: var(--blue);
+}
+.main-shell {
+  display: contents;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  grid-row: 1;
+  grid-column: 2;
+  border-bottom: 1px solid var(--line);
+}
+.topbar .actions {
+  gap: 8px;
+}
+.timezone-link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.topbar button {
+  background: transparent;
+  border-color: transparent;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.topbar button:hover {
+  background: var(--hover);
+}
+.topbar .choice {
+  width: 104px;
+}
+.sync-status {
+  display: none;
+}
+.main-shell > main {
+  grid-column: 1/-1;
+  width: 100%;
+  min-width: 0;
+  padding: 32px 0 48px;
+}
+footer {
+  grid-column: 1/-1;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.example-label {
+  margin: -8px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 304px;
+  gap: 32px;
+  align-items: start;
+}
+.overview-local {
+  min-width: 0;
+}
+.overview-local > .section-title {
+  margin-bottom: 12px;
+}
+.overview-local .metrics-summary {
+  padding: 12px 0 0;
+}
+.overview-local .usage-breakdown {
+  margin: 20px 0 0;
+  padding: 20px 0;
+}
+.overview-trend.panel {
+  margin: 0;
+  padding: 20px 0 0;
+}
+.overview-trend .panel-heading {
+  margin-bottom: 12px;
+}
+.overview-trend .chart {
+  height: 260px;
+}
+.overview-local > .footnote {
+  margin-top: 16px;
+}
+.overview-account {
+  min-width: 0;
+  background: var(--surface);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.overview-account .section-title {
+  margin-bottom: 12px;
+}
+.overview-account .notice {
+  padding: 10px 12px;
+  margin-bottom: 20px;
+}
+.account-source-details {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.account-source-details summary {
+  color: var(--muted);
+}
+.limits-grid {
+  display: grid;
+  gap: 20px;
+}
+.limit-panel.panel {
+  padding: 16px 0 0;
+  margin: 0;
+}
+.limit-panel h2 {
+  font-size: 13px;
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+.limit-window {
+  margin-top: 16px;
+}
+.limit-window > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.limit-window strong {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.8px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.limit-window strong small {
+  font-size: 11px;
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+.limit-window > small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.limit-window progress {
+  display: block;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: #edf0f4;
+  margin: 10px 0 8px;
+  overflow: hidden;
+}
+.limit-window progress::-webkit-progress-bar {
+  background: #edf0f4;
+}
+.limit-window progress::-webkit-progress-value {
+  background: var(--chart-account);
+  border-radius: 4px;
+}
+.limit-window progress::-moz-progress-bar {
+  background: var(--chart-account);
+  border-radius: 4px;
+}
+.account-chart {
+  margin-top: 32px;
+}
+.account-chart > summary {
+  font-size: 12px;
+  color: var(--muted);
+}
+.account-chart[open] > summary {
+  margin-bottom: 20px;
+}
+.account-chart .chart {
+  height: 260px;
+}
+.account-total {
+  text-align: right;
+}
+.account-total span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.account-total strong {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+.account-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.account-facts b {
+  color: var(--ink);
+  margin-left: 6px;
+}

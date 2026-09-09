@@ -37,13 +37,6 @@ export function projectPath(value: unknown): string | null {
     .replace(/[\\/]+$/, "")
     .toLowerCase();
 }
-export function label(value: string | null): string {
-  return value ? value.split(/[\\/]/).filter(Boolean).at(-1) || value : "未知";
-}
-export function ratio(a: bigint | null, b: bigint | null): number | null {
-  return a === null || b === null || b === 0n
-    ? null
-    : Number((a * 1_000_000n) / b) / 1_000_000;
-}
+export { label, ratio } from "../shared/query-values.js";
 export const yieldLoop = () =>
   new Promise<void>((resolve) => setImmediate(resolve));

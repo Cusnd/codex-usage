@@ -28,7 +28,8 @@ export async function createApp(
     managed?: { token: string; version: string; shutdown: () => Promise<void> };
   } = {},
 ) {
-  const app = Fastify({ logger: options.logger ?? false });
+  // Managed stop must also release speculative TCP connections without a request.
+  const app = Fastify({ logger: options.logger ?? false, forceCloseConnections: options.managed ? true : undefined });
   if (options.managed) {
     const managed = options.managed;
     app.post<{ Params: { action: string } }>('/_control/:action', async (req, reply) => {

@@ -2,6 +2,8 @@
 
 Codex Usage original code is licensed under Apache-2.0. Dependencies retain their own licenses. This inventory is generated from the locked production dependencies; bundled browser code and font assets retain the notices below.
 
+The online synthetic example additionally bundles sql.js 1.14.2 (MIT), with its license distributed as `/sql-js-license.txt`. It runs SQLite in the visitor's browser and is excluded from the local application's production bundle and runtime dependencies.
+
 The Codex App Server documentation and the CC Switch / New API implementations are referenced for protocol understanding and algorithmic ideas; this project implements its own statistics. No upstream source files are redistributed as part of those references.
 
 ## @fastify/accept-negotiator 2.1.0

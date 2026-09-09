@@ -1,7 +1,7 @@
 import { useContext } from "react";
 import type { EstimatedCost, Metrics, ThreadRow } from "../shared/contracts";
-import { Workspace } from "./workspace";
 import { compact, exact, percent, projectName } from "./api";
+import { Workspace } from "./workspace";
 
 export const sessionTitle = (
   row: Pick<ThreadRow, "title" | "project" | "id">,
@@ -66,7 +66,19 @@ export function UsageBreakdown({
   return (
     <div className="usage-breakdown">
       {fields.map(([label, value, hint]) => (
-        <div key={label} title={hint || ""}>
+        <div
+          key={label}
+          title={hint || ""}
+          data-kind={
+            label === "缓存读取"
+              ? "cache"
+              : label === "输出"
+                ? "output"
+                : label === "非缓存输入"
+                  ? "input"
+                  : undefined
+          }
+        >
           <span>{label}</span>
           <strong title={exact(value)}>
             {!data ? "—" : value == null ? "未提供" : compact(value)}

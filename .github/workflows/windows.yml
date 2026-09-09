@@ -8,13 +8,17 @@ permissions:
 jobs:
   windows-x64:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.13.0', '22.x', '24.0.0', '24.x', '26.0.0', '26.x']
     steps:
       - uses: actions/checkout@v4
         with:
           path: workspace/中文 project
       - uses: actions/setup-node@v4
         with:
-          node-version: 26.7.0
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: workspace/中文 project/package-lock.json
       - run: npm ci

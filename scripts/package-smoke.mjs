@@ -8,29 +8,43 @@ import path from 'node:path';
 const exec = promisify(execFile);
 const root = await mkdtemp(path.join(os.tmpdir(), 'codex-package-中文 空格-'));
 const project = process.cwd();
+const packageName = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8')).name;
 const portServer = createServer();
 await new Promise(r => portServer.listen(0, '127.0.0.1', r));
 const port = portServer.address().port;
 await new Promise(r => portServer.close(r));
 const env = { ...process.env, PORT: String(port), CODEX_USAGE_DATA_DIR: path.join(root, 'data'), CODEX_HOME: path.join(root, 'codex'), CODEX_BIN: path.join(root, 'missing.exe'), CODEX_USAGE_STARTUP_DIR: path.join(root, 'Startup') };
 const prefix = path.join(root, 'install');
+// Exercise npm's generated shim using the selected Node runtime.
+const inheritedPath = process.env.PATH ?? process.env.Path ?? '';
+for (const key of Object.keys(env)) if (key.toLowerCase() === 'path') delete env[key];
+env.Path = `${path.dirname(process.execPath)}${path.delimiter}${inheritedPath}`;
 let cli;
+const shim = path.join(prefix, 'codex-usage.ps1');
+const install = async target => {
+  const result = await exec(process.execPath, [process.env.npm_execpath, 'install', '-g', '--prefix', prefix, target], { cwd: root, env, windowsHide: true, timeout: 300000 });
+  assert.ok(!/EBADENGINE/.test(result.stderr), result.stderr);
+};
 const run = async (...args) => {
   console.log('Checking:', args.join(' '));
-  const result = await exec(process.execPath, [cli, ...args], { env, cwd: root, windowsHide: true, timeout: 45000 });
+  const pending = exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', shim, ...args], { env, cwd: root, windowsHide: true, timeout: 45000 });
+  // A redirected stdin left open can keep Windows PowerShell waiting for input.
+  pending.child.stdin.end();
+  const result = await pending;
   return JSON.parse(result.stdout);
 };
 try {
   await mkdir(env.CODEX_HOME, { recursive: true });
-  let tarball = process.env.CODEX_USAGE_TEST_TARBALL;
+  let tarball = process.env.CODEX_USAGE_TEST_PACKAGE || process.env.CODEX_USAGE_TEST_TARBALL;
   if (!tarball) {
-    const packed = await exec(process.execPath, [process.env.npm_execpath, 'pack', '--json', '--pack-destination', root], { cwd: project, windowsHide: true });
+    const packed = await exec(process.execPath, [process.env.npm_execpath, 'pack', '--json', '--silent', '--pack-destination', root], { cwd: project, windowsHide: true });
     const manifest = JSON.parse(packed.stdout)[0];
     assert.ok(manifest.files.every(f => !/(^|\/)(data|output|node_modules|\.env)(\/|$)/.test(f.path)));
     tarball = path.join(root, manifest.filename);
   }
-  await exec(process.execPath, [process.env.npm_execpath, 'install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', tarball], { cwd: root, windowsHide: true, timeout: 300000 });
-  cli = path.join(prefix, 'node_modules/codex-detailed-usage/bin/codex-usage.mjs');
+  await install(tarball);
+  cli = path.join(prefix, 'node_modules', packageName, 'bin/codex-usage.mjs');
+  assert.equal((await run('doctor', '--json')).node, process.version);
   assert.equal((await run('status', '--json')).running, false);
   const both = await Promise.all([run('start', '--json'), run('start', '--json')]);
   assert.ok(both.every(x => x.running));
@@ -81,7 +95,7 @@ try {
   assert.equal((await run('status', '--json')).running, false);
   // Same installed version reinstalled as the upgrade path: data survives.
   const before = await readFile(path.join(env.CODEX_USAGE_DATA_DIR, 'usage.sqlite'));
-  await exec(process.execPath, [process.env.npm_execpath, 'install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', tarball], { cwd: root, windowsHide: true, timeout: 300000 });
+  await install(tarball);
   assert.deepEqual(await readFile(path.join(env.CODEX_USAGE_DATA_DIR, 'usage.sqlite')), before);
   const migrationEnv = { ...env, CODEX_USAGE_DATA_DIR: path.join(root, 'migrated') };
   const migrationArgs = [cli, 'migrate', '--from', path.join(env.CODEX_USAGE_DATA_DIR, 'usage.sqlite'), '--json'];
@@ -98,6 +112,9 @@ try {
   try { await assert.rejects(run('start', '--json')); assert.ok(foreign.listening); }
   finally { await new Promise(r => foreign.close(r)); }
   console.log('PASS: package install, arbitrary cwd, concurrent/repeated start, API/assets, JSON, refresh, identity/version mismatch, same-origin startup, hidden launcher, Skill, reinstall/data preservation, migration, stale recovery, stop, port conflict.');
+} catch (error) {
+  console.error('Package smoke failed:', error);
+  throw error;
 } finally {
   if (cli) { try { await run('stop', '--json'); } catch {} }
   const resolved = path.resolve(root);

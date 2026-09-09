@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, openSync, closeSync, existsSync, readFileSync, writeFileSync, cpSync, renameSync, copyFileSync, unlinkSync } from 'node:fs';
+import { mkdirSync, openSync, closeSync, existsSync, readFileSync, writeFileSync, renameSync, copyFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { recentCalendarRange } from '../shared/time-range.js';
+import { copyDirectory } from './copy-directory.js';
 import { dataRoot, packageRoot, version, port, base, instance, alive, control, delay, autostartStatus, setAutostart } from './runtime.js';
 
 async function ensureService() {
@@ -62,7 +63,7 @@ function skill(action: string) {
   }
   if (action === 'install') {
     mkdirSync(target, { recursive: true });
-    cpSync(path.join(packageRoot, 'skills/codex-usage'), target, { recursive: true });
+    copyDirectory(path.join(packageRoot, 'skills/codex-usage'), target);
     writeFileSync(marker, 'codex-detailed-usage\n');
     writeFileSync(path.join(target, '.codex-usage-cli.json'), JSON.stringify({ node: process.execPath, cli: path.join(packageRoot, 'bin/codex-usage.mjs') }));
   }

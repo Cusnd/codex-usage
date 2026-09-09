@@ -6,14 +6,8 @@ import { createInterface } from "node:readline";
 import type { Store } from "./db.js";
 import { integer, json, parseJson, projectPath, yieldLoop } from "./util.js";
 
-export const tokenFields = [
-  "input_tokens",
-  "cached_input_tokens",
-  "cache_write_input_tokens",
-  "output_tokens",
-  "reasoning_output_tokens",
-  "total_tokens",
-] as const;
+import { tokenFields } from "../shared/query-values.js";
+export { tokenFields } from "../shared/query-values.js";
 type Tokens = Record<(typeof tokenFields)[number], bigint | null>;
 type State = {
   metadataVersion?: number;

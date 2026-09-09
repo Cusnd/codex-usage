@@ -8,11 +8,11 @@ A local dashboard for understanding your Codex activity. Follow a usage spike fr
 
 Windows x64 · Local-first · Apache-2.0
 
-Try the [interactive product showcase](https://codex-usage-showcase.sorenliu.workers.dev) with synthetic data before installing. Your own usage is available in the local app.
+Try the [live example](https://codex-usage-showcase.sorenliu.workers.dev) before installing. It runs the same React frontend with synthetic records, including task and turn details, agent teams, filters, and browser-local cost settings. Your own usage is available in the local app.
 
-![Seven days of Codex usage, with a daily trend, token composition, and project breakdown](docs/images/analysis.png)
+![Codex Usage overview with seven days of activity, token composition, daily trend, and synthetic account limits](docs/images/overview.png)
 
-*A week of activity across four example projects. Screenshots use synthetic data in the real application; the current UI is in Chinese.*
+*119.21M tokens across 28 tasks and 92 turns. Captured from the live example using the same frontend as the local app. All usage and account limits shown are synthetic; the current UI is in Chinese.*
 
 ## Follow the numbers to the work
 
@@ -24,7 +24,7 @@ Start with the daily trend, open a day to see its hours, and narrow the view by 
 
 A task can delegate work, and those subagents can delegate again. View **the current agent, all subagents, and the team total** separately, then open any agent to inspect its turns. Each row shows that agent's own usage, so a busy child does not disappear inside its parent's number.
 
-![Agent team usage showing the current agent, two direct subagents, and a nested subagent](docs/images/agent-team.png)
+![Task details with individual turns and an expanded agent team, including two direct subagents and one nested subagent](docs/images/agent-team.png)
 
 *One example task: 18.2M tokens from the current agent, 30.4M from its descendants, and 48.6M for the team. Chinese UI; synthetic data.*
 
@@ -52,14 +52,14 @@ The Skill queries the local service through the CLI. Its answers retain the time
 
 The [installation guide](docs/INSTALL_FOR_AGENTS.md) covers verified downloads and a user-level Node setup when needed.
 
-**Already have Node.js 26.7.0 or newer on Windows x64?** Download the `.tgz` and `SHA256SUMS` from [Releases](https://github.com/Cusnd/codex-usage/releases/latest), verify the package as described in the [manual installation guide](docs/USER_GUIDE.md#manual-installation), then install it:
+**Already have Node.js 22.13+ (22.x), 24.x, or 26.x on Windows x64?** Install the public npm package:
 
 ```powershell
-npm install --global --ignore-scripts .\codex-detailed-usage-0.1.1.tgz
+npm install -g @esoren/codex-usage
 codex-usage
 ```
 
-This example uses v0.1.1; use the filename of the release you downloaded. The release includes the built web app. Install **`codex-detailed-usage` from this project's release**, as the npm package named `codex-usage` belongs to another project.
+The npm package includes the built web app. The package name is **`@esoren/codex-usage`**; the command is `codex-usage`. The unscoped npm package `codex-usage` belongs to another project. Existing `codex-detailed-usage` installations should follow the [migration steps](docs/INSTALL_FOR_AGENTS.md#migrate-a-legacy-package-to-npm) before switching.
 
 To enable agent queries:
 
@@ -84,6 +84,7 @@ Open a fresh agent task if the newly installed Skill is not discovered yet. Firs
 | A repeatable installation procedure for an agent | [Agent installation guide](docs/INSTALL_FOR_AGENTS.md) |
 | CLI/API behavior, counting rules, and data sources | [Technical reference](docs/TECHNICAL_REFERENCE.md) |
 | Development and contribution checks | [Contributing](CONTRIBUTING.md) |
+| Building the interactive example and reproducing its screenshots | [Example frontend](showcase/README.md) · [Screenshot guide](docs/images/README.md) |
 
 Found a problem? [Open an issue](https://github.com/Cusnd/codex-usage/issues) with reproduction steps and sanitized errors.
 

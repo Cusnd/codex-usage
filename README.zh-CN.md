@@ -8,11 +8,11 @@
 
 Windows x64 · 本地优先 · Apache-2.0
 
-安装前可以先体验使用合成数据的[在线产品展示](https://codex-usage-showcase.sorenliu.workers.dev)。查看自己的用量时，请使用本地应用。
+安装前可以先体验[在线示例](https://codex-usage-showcase.sorenliu.workers.dev)：与本地应用使用同一套 React 前端，接入合成记录，可操作任务、轮次、Agent 团队、筛选和仅保存在当前浏览器的成本设置。查看自己的真实用量时，请使用本地应用。
 
-![七日用量分析：每日趋势、Token 构成与项目分布](docs/images/analysis.png)
+![新版用量总览：七日用量、Token 构成、每日趋势与合成账户额度](docs/images/overview.png)
 
-*四个示例项目的一周活动。截图来自真实应用界面，全部使用合成数据；当前界面为中文。*
+*28 个任务、92 个轮次，共 119.21M Token。截图来自在线示例，与本地应用使用同一套前端；用量和账户额度均为合成数据，当前界面为中文。*
 
 ## 从数字找到具体工作
 
@@ -24,7 +24,7 @@ Windows x64 · 本地优先 · Apache-2.0
 
 一个任务可以把工作交给子 Agent，子 Agent 也可以继续委派。分别查看**当前 Agent、所有子 Agent 和整个团队的合计**，再进入任意 Agent 查看轮次。每一行只展示该 Agent 自身的用量，方便辨认工作究竟发生在哪里。
 
-![Agent 团队明细：当前 Agent、两个直接子 Agent 与一个嵌套子 Agent](docs/images/agent-team.png)
+![任务轮次与展开的 Agent 团队明细：当前 Agent、两个直接子 Agent 与一个嵌套子 Agent](docs/images/agent-team.png)
 
 *一个示例任务：当前 Agent 消耗 18.2M Token，后代合计 30.4M，团队合计 48.6M。截图为中文界面，数据均为合成示例。*
 
@@ -52,14 +52,14 @@ Skill 通过 CLI 查询本地服务。回答会保留时间范围、来源和数
 
 [安装文档](docs/INSTALL_FOR_AGENTS.md)包含下载校验步骤，需要时会配置用户级 Node 环境。
 
-**已经在 Windows x64 上安装 Node.js 26.7.0 或更新版本？** 从 [Releases](https://github.com/Cusnd/codex-usage/releases/latest) 下载 `.tgz` 与 `SHA256SUMS`，按照[手动安装说明](docs/USER_GUIDE.zh-CN.md#手动安装)核对文件后执行：
+**已经在 Windows x64 上安装 Node.js 22.13+（22.x）、24.x 或 26.x？** 直接安装公开的 npm 包：
 
 ```powershell
-npm install --global --ignore-scripts .\codex-detailed-usage-0.1.1.tgz
+npm install -g @esoren/codex-usage
 codex-usage
 ```
 
-示例使用 v0.1.1，实际操作请替换为下载版本的文件名。发布包已包含构建好的网页。请使用**本项目 Release 中的 `codex-detailed-usage`**；npm 上名为 `codex-usage` 的包属于其他项目。
+发布包已包含构建好的网页。npm 包名是 **`@esoren/codex-usage`**，命令名仍为 `codex-usage`；npm 上未带 scope 的 `codex-usage` 属于其他项目。已安装旧包 `codex-detailed-usage` 的用户，请先按照[迁移步骤](docs/INSTALL_FOR_AGENTS.md#migrate-a-legacy-package-to-npm)切换。
 
 启用 Agent 查询：
 
@@ -84,6 +84,7 @@ codex-usage skill install
 | 供 Agent 执行的完整安装步骤 | [Agent 安装指南](docs/INSTALL_FOR_AGENTS.md) |
 | CLI/API、统计口径与数据来源 | [技术参考（英文）](docs/TECHNICAL_REFERENCE.md) |
 | 开发环境与贡献检查 | [贡献指南（英文）](CONTRIBUTING.md) |
+| 构建完整交互示例、复现公开截图 | [示例前端说明（英文）](showcase/README.md) · [截图复现（英文）](docs/images/README.md) |
 
 发现问题可前往 [Issues](https://github.com/Cusnd/codex-usage/issues)，提供复现步骤和脱敏错误信息。
 

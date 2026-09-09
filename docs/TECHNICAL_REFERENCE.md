@@ -6,7 +6,7 @@ This document describes the local application's interfaces and counting rules. F
 
 ## Runtime and storage
 
-Windows x64 and Node.js >=26.7.0 are the supported runtime. SQLite is provided by Node; no separate database or Python installation is required. Web assets are resolved relative to the installed package, independently of the working directory.
+Windows x64 and Node.js 22.13+ (22.x), 24.x, or 26.x are the supported runtime. SQLite is provided by Node; no separate database or Python installation is required. Web assets are resolved relative to the installed package, independently of the working directory.
 
 | Setting | Purpose |
 | --- | --- |

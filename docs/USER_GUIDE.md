@@ -4,11 +4,20 @@
 
 ## Install and open
 
-Codex Usage supports Windows x64 and requires Node.js 26.7.0 or newer. Local statistics work without the Codex CLI; account features depend on an existing supported Codex login.
+Codex Usage supports Windows x64 and requires Node.js 22.13+ (22.x), 24.x, or 26.x. Local statistics work without the Codex CLI; account features depend on an existing supported Codex login.
 
 The easiest route is to give an agent the [installation guide](INSTALL_FOR_AGENTS.md). Its installer verifies the release and can provide a user-level Node runtime. Installation requires internet access to download the package and its dependencies; the web app is already built.
 
 ### Manual installation
+
+```powershell
+npm install -g @esoren/codex-usage
+codex-usage
+```
+
+For an existing `codex-detailed-usage` installation, follow the [migration steps](INSTALL_FOR_AGENTS.md#migrate-a-legacy-package-to-npm) first. For updates to the scoped package, stop the service, install the desired version into the same prefix, reinstall the Skill, and re-enable autostart if it was enabled.
+
+### Alternative: GitHub Release archive
 
 With compatible Node and npm installed, download the `.tgz` package and `SHA256SUMS` from the **same** [release](https://github.com/Cusnd/codex-usage/releases/latest). In their download directory, run the following, adjusting the filename for your release:
 
@@ -22,12 +31,12 @@ $expected = ($checksumLines[0] -split '\s+')[0]
 if ((Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash -ne $expected) {
   throw 'Package checksum mismatch'
 }
-npm install --global --ignore-scripts ".\$package"
+npm install --global ".\$package"
 if ($LASTEXITCODE -ne 0) { throw 'Installation failed' }
 codex-usage
 ```
 
-The CLI command is `codex-usage`; the installed package is `codex-detailed-usage`. Do not substitute the unrelated `codex-usage` package from npm.
+The example above is the legacy GitHub v0.1.1 archive (`codex-detailed-usage`). New scoped archives use `esoren-codex-usage-<version>.tgz`; use the filename actually listed in the release. The public npm package is `@esoren/codex-usage`, and the CLI command remains `codex-usage`. Do not substitute the unrelated unscoped npm package.
 
 Running `codex-usage` starts or reuses the background service and opens the browser. The default address is [127.0.0.1:8765](http://127.0.0.1:8765/). The first history import may take several minutes; follow the progress shown in the app.
 
@@ -112,7 +121,7 @@ For a manual installation, run `codex-usage stop`, verify the new package, and i
 
 Data defaults to `%LOCALAPPDATA%\CodexUsage`. To copy a cache from an old source checkout, stop that checkout's service and run `codex-usage migrate --from C:\absolute\old-checkout\data\usage.sqlite`. The command refuses to overwrite a destination, checks integrity and SHA-256, and preserves the original.
 
-Before uninstalling, run `codex-usage autostart disable`, `codex-usage stop`, and `codex-usage skill uninstall`. Uninstall `codex-detailed-usage` from its actual npm prefix. Script installations use `%LOCALAPPDATA%\CodexUsage\tools`; the [complete procedure](INSTALL_FOR_AGENTS.md#upgrade-migrate-or-uninstall) covers its private Node runtime. Cache, logs, launcher files, and Skill backups are retained by default.
+Before uninstalling, run `codex-usage autostart disable`, `codex-usage stop`, and `codex-usage skill uninstall`. Uninstall `@esoren/codex-usage` (or `codex-detailed-usage` for a legacy installation) from its actual npm prefix. Script installations use `%LOCALAPPDATA%\CodexUsage\tools`; the [complete procedure](INSTALL_FOR_AGENTS.md#upgrade-migrate-or-uninstall) covers its private Node runtime. Cache, logs, launcher files, and Skill backups are retained by default.
 
 ## Troubleshooting
 

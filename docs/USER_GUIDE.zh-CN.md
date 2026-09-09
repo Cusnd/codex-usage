@@ -4,11 +4,20 @@
 
 ## 安装与打开
 
-当前支持 Windows x64，需要 Node.js 26.7.0 或更新版本。本地统计不要求安装 Codex CLI；账户功能依赖现有且受支持的 Codex 登录。
+当前支持 Windows x64，需要 Node.js 22.13+（22.x）、24.x 或 26.x。本地统计不要求安装 Codex CLI；账户功能依赖现有且受支持的 Codex 登录。
 
 推荐把 [Agent 安装指南](INSTALL_FOR_AGENTS.md)交给 Agent。安装器会校验发布包，必要时配置用户级 Node 环境。安装需要联网下载发布包和依赖，网页已经预构建。
 
 ### 手动安装
+
+```powershell
+npm install -g @esoren/codex-usage
+codex-usage
+```
+
+已安装旧包 `codex-detailed-usage` 时，先按照[迁移步骤](INSTALL_FOR_AGENTS.md#migrate-a-legacy-package-to-npm)切换。更新 scoped 包时，先停止服务，再安装到相同前缀、重新安装 Skill，并在原来已启用自启动时重新启用自启动。
+
+### 备选：GitHub Release 安装包
 
 已有兼容 Node 和 npm 时，从[同一个 Release](https://github.com/Cusnd/codex-usage/releases/latest) 下载 `.tgz` 和 `SHA256SUMS`。在下载目录执行以下命令，按实际版本调整文件名：
 
@@ -22,12 +31,12 @@ $expected = ($checksumLines[0] -split '\s+')[0]
 if ((Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash -ne $expected) {
   throw 'Package checksum mismatch'
 }
-npm install --global --ignore-scripts ".\$package"
+npm install --global ".\$package"
 if ($LASTEXITCODE -ne 0) { throw 'Installation failed' }
 codex-usage
 ```
 
-命令名是 `codex-usage`，安装包名是 `codex-detailed-usage`。不要替换为 npm 上另一个项目的同名 `codex-usage` 包。
+上述文件名对应旧 GitHub v0.1.1 安装包 `codex-detailed-usage`。新的 scoped 归档文件名为 `esoren-codex-usage-<版本>.tgz`，以实际 Release 附件为准。公开 npm 包名是 `@esoren/codex-usage`，命令名仍为 `codex-usage`。不要替换为 npm 上另一个项目的无 scope 包。
 
 运行 `codex-usage` 会启动或复用后台服务，并打开浏览器。默认地址为 [127.0.0.1:8765](http://127.0.0.1:8765/)。首次导入可能需要几分钟，可在页面查看进度。
 
@@ -110,7 +119,7 @@ codex-usage stop
 
 数据默认在 `%LOCALAPPDATA%\CodexUsage`。迁移旧源码目录缓存时，先停止旧服务，再执行 `codex-usage migrate --from C:\absolute\old-checkout\data\usage.sqlite`。它拒绝覆盖已有目标，检查完整性与 SHA-256，并保留原件。
 
-卸载前执行 `codex-usage autostart disable`、`codex-usage stop` 和 `codex-usage skill uninstall`，再从实际 npm 前缀卸载 `codex-detailed-usage`。脚本安装前缀为 `%LOCALAPPDATA%\CodexUsage\tools`；含私有 Node 的[完整卸载步骤](INSTALL_FOR_AGENTS.md#upgrade-migrate-or-uninstall)见安装指南。缓存、日志、启动器文件和 Skill 备份默认保留。
+卸载前执行 `codex-usage autostart disable`、`codex-usage stop` 和 `codex-usage skill uninstall`，再从实际 npm 前缀卸载 `@esoren/codex-usage`（旧安装对应 `codex-detailed-usage`）。脚本安装前缀为 `%LOCALAPPDATA%\CodexUsage\tools`；含私有 Node 的[完整卸载步骤](INSTALL_FOR_AGENTS.md#upgrade-migrate-or-uninstall)见安装指南。缓存、日志、启动器文件和 Skill 备份默认保留。
 
 ## 常见问题
 

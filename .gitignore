@@ -17,3 +17,4 @@ output/
 .playwright-cli/
 release-artifacts/
 .wrangler/
+showcase/build/
