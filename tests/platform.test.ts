@@ -37,8 +37,11 @@ test('data-directory aliases share a kernel guard; conflicts do not displace its
   try {
     const data = path.join(root, 'data'); await mkdir(data);
     const alias = path.join(root, 'alias'); await symlink(data, alias, process.platform === 'win32' ? 'junction' : 'dir');
-    const address = serviceGuardAddress(data, 'darwin');
-    assert.deepEqual(serviceGuardAddress(alias, 'darwin'), address);
+    // Bind the host's real guard: Windows named pipes, macOS loopback TCP.
+    // A macOS hash-derived port may be unavailable on a Windows runner.
+    const address = serviceGuardAddress(data);
+    assert.deepEqual(serviceGuardAddress(alias), address);
+    assert.deepEqual(serviceGuardAddress(alias, 'darwin'), serviceGuardAddress(data, 'darwin'));
     await new Promise<void>((resolve, reject) => { first.once('error', reject); first.listen(address, resolve); });
     await assert.rejects(new Promise<void>((resolve, reject) => { second.once('error', reject); second.listen(address, resolve); }), { code: 'EADDRINUSE' });
     assert.ok(first.listening);
