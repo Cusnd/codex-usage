@@ -22,8 +22,10 @@ import { useData, useRange } from "./workspace";
 import { Segmented, Updating } from "./MotionPrimitives";
 import { MotionBar } from "./ChartMotion";
 import { useTrendLayout } from "./TrendMotion";
+import { useReducedMotion } from "./motion";
 
 export function TrendWorkspace() {
+  const reduced = useReducedMotion();
   const r = useRange();
   const patch = useUrlPatch();
   const bucket = r.bucket;
@@ -242,7 +244,9 @@ export function TrendWorkspace() {
                       tickFormatter={(n) => `${n}M`}
                     />
                     <Tooltip
-                      isAnimationActive={false}
+                      isAnimationActive={!reduced}
+                      animationDuration={180}
+                      animationEasing="ease-out"
                       cursor={{ fill: "var(--accent-soft)" }}
                       content={({ active, payload }) => {
                         const point = payload?.[0]?.payload as
