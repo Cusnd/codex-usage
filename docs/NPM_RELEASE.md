@@ -50,13 +50,14 @@ Published publicly after npm browser authentication. The official registry now r
 
 ## Prepare and verify
 
+The release instruction authorizes completing the current develop release, including necessary fixes and their relevant checks, integration, versioning, publication and cleanup. Follow the authorization and stopping rules in the [project workflow](../.agents/workflow.md). Routine fixes do not restart approval. The historical receipts above describe past investigations, not mandatory checks for every release.
+
 1. Set the confirmed scoped name in `package.json` and synchronize `package-lock.json`. Remove `private: true` only once the target is confirmed.
 2. Check the registry for the exact package and version and verify the logged-in npm account has access to the scope.
 3. Update installation and uninstall examples in both languages. Adapt the GitHub installer for the scoped installation directory and tarball naming before publishing a new GitHub Release. Preserve the existing Skill ownership marker for upgrade compatibility.
-4. Run `npm test`, `npm run build`, and `npm run smoke`.
-5. Run `npm pack --json --pack-destination release-artifacts`. The `prepack` hook builds from current source. Inspect the file list for required assets and excluded local data, credentials, generated previews and development files.
-6. Set `CODEX_USAGE_TEST_TARBALL` to the absolute candidate tarball path, then run `npm run package:smoke`. This verifies that exact archive in an isolated temporary global prefix, including service lifecycle, API/assets, Skill installation, startup and data preservation.
-7. Save its SHA-256 and npm integrity value. Record the source revision and any uncommitted source changes so the candidate can be traced. Any source changes after validation require a fresh package and relevant checks.
+4. Complete the platform matrix for the final candidate, or reuse a successful run for the exact same Git tree. Do not repeat it merely because squash/merge changes the commit SHA. Relevant content changes require new validation.
+5. The release job builds once, then packs with `--ignore-scripts` so the prepack hook does not build again. It inspects the file list and records the archive integrity and source commit.
+6. The release job sets `CODEX_USAGE_TEST_TARBALL` and runs `npm run package:smoke` against that exact archive, then uploads the same file. A second local candidate build and full smoke run are not prerequisites for an already validated automated release.
 
 ## First publication
 
@@ -70,13 +71,15 @@ npm publish <validated-tarball.tgz> --access public --registry=https://registry.
 npm publish <validated-tarball.tgz> --access public --registry=https://registry.npmjs.org/ --ignore-scripts
 ```
 
-The final publish is performed after the package target and candidate are reviewed. A dry run is not evidence of publishing permission or version availability. Authentication and 2FA may still be required at publication time.
+The user's release instruction authorizes the final publish within the agreed scope; do not request approval again for each routine step. A dry run is not evidence of publishing permission or version availability. Authentication and 2FA may still be required for a manual first publication.
 
 ## Registry verification and installation
 
 Allow time for npm's publish-time scan before treating an initial registry 404 as a failed publish. npm documents a typical delay of about five minutes, sometimes 15 minutes or more. `npm dist-tag ls @esoren/codex-usage` can work while the package is still unavailable. Do not republish or change the version merely because the first download is not yet available. See [npm publish-time scanning](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/).
 
-After publication, read back `name`, `version`, `dist.integrity`, `bin`, `engines`, `os`, and `cpu` with `npm view` against the official registry. Download the exact registry version with `npm pack @esoren/codex-usage@0.1.4`, compare integrity with the workflow's tested upload archive, and run the isolated package smoke test against the downloaded archive.
+Publication is complete when the release script confirms registry availability, the intended version/channel and integrity matching the archive already tested before upload. This is one bounded verification stage; stop checking after it succeeds. Report the result, synchronize branches and finish cleanup.
+
+Do not routinely download the published archive for another full smoke test, compare it file by file with an earlier local candidate, or make formatting differences a new release gate. Investigate only a concrete anomaly such as a registry integrity mismatch or a reported installation failure. A successful release workflow already supplies the completion evidence; no separate local re-verification is required.
 
 Users with the supported runtime can then run:
 
