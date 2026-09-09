@@ -186,5 +186,9 @@ try {
   if (cli) { try { await run('stop', '--json'); } catch {} }
   const resolved = path.resolve(root);
   assert.ok(resolved.startsWith(path.resolve(os.tmpdir()) + path.sep) && path.basename(resolved).startsWith('codex-package-'));
+  if (windows) {
+    const snapshot = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($env:CODEX_USAGE_TEST_ROOT) } | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress"], { env: { ...env, CODEX_USAGE_TEST_ROOT: root }, timeout: 15000 });
+    console.log('[DEBUG-cleanup] Remaining synthetic Node processes:', snapshot.stdout.trim());
+  }
   await rm(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 1000 });
 }
