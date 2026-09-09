@@ -8,7 +8,7 @@
 
 Windows x64 · 本地优先 · Apache-2.0
 
-当前源码已加入 macOS Apple Silicon 和 Intel 适配，候选包安装和验证状态见 [macOS 兼容说明](docs/MACOS_COMPATIBILITY.md)。已发布的 0.1.2 仍仅支持 Windows；Mac 适配尚未完成平台验证及新版发布。
+当前源码已加入 macOS Apple Silicon 和 Intel 适配，并通过两种架构的原生 GitHub Actions 验证，候选包安装和运行记录见 [macOS 兼容说明](docs/MACOS_COMPATIBILITY.md)。已发布的 0.1.2 仍仅支持 Windows；此次适配尚未发布到 npm。
 
 安装前可以先体验[在线示例](https://codex-usage-showcase.sorenliu.workers.dev)：与本地应用使用同一套 React 前端，接入合成记录，可操作任务、轮次、Agent 团队、筛选和仅保存在当前浏览器的成本设置。查看自己的真实用量时，请使用本地应用。
 

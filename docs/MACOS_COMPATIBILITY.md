@@ -62,9 +62,9 @@ Data, logs and Skill backups remain. To migrate an old cache, stop its old servi
 
 ## Validation status
 
-- Windows x64 / Node 26.7.0: type checks, build, production API/assets smoke and npm installation/lifecycle smoke passed. The suite has 57 tests: 55 pass, with 2 macOS-only cases skipped. Browser-control acceptance verified task/turn navigation, platform-neutral settings text and the isolated startup switch (off → on → off). No macOS result is inferred from these checks.
-- macOS CI: configured for `macos-15` (arm64) and `macos-15-intel` (x64), with Node 22.13.0/22.x, 24.0.0/24.x and 26.0.0/26.x. Not run from this Windows workspace.
-- macOS permissions, npm symlinks and process-group cleanup: tests require a real Mac runner; a Windows skip is not a pass.
+- Native CI passed all 18 jobs on 2026-09-09: `windows-latest` (x64), `macos-15` (arm64) and `macos-15-intel` (x64), each with Node 22.13.0/22.x, 24.0.0/24.x and 26.0.0/26.x. [Actions run 34325789035](https://github.com/Cusnd/codex-usage/actions/runs/34325789035) tested commit `da32062be78105f4160b2f890c746a91ba7aafc1`.
+- Each Mac job passed type checks, all 58 tests with zero skips, build, production API/assets smoke, and actual npm installation/lifecycle smoke. Coverage includes native permissions, npm symlinks, process-group cleanup with an uncooperative descendant, and 20 consecutive short-lived RPC error/cleanup cycles.
+- Each Windows x64 job passed type checks, 55 tests (3 macOS-only cases skipped), build and both smoke suites. The local Windows baseline also passed build and both smoke suites. Browser-control acceptance verified task/turn navigation, platform-neutral settings text and the isolated startup switch (off → on → off).
 - macOS LaunchAgent: package smoke validates the actual plist with `plutil`, bootstraps a uniquely labelled copy in the login domain `gui/<uid>`, waits for the launcher to exit while its service survives, verifies stop does not restart, and removes the job. Smoke tests do not change real login items.
 - macOS desktop: browser opening, logout/login and OS background-item approval are optional follow-up checks; they are not the compatibility completion gate. The native CI matrix validates the Node backend and real launchd lifecycle.
 - npm publication: not performed by this update.
