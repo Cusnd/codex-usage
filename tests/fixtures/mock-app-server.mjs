@@ -7,9 +7,10 @@ const root = process.env.CODEX_HOME;
 const scenario = JSON.parse(readFileSync(path.join(root, 'rpc-scenario.json'), 'utf8'));
 writeFileSync(path.join(root, 'rpc-pid'), String(process.pid));
 if (scenario.grandchild) {
- const c = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], {stdio:'ignore', windowsHide:true});
+ const c = spawn(process.execPath, ['-e', scenario.stubborn ? 'process.on("SIGTERM",()=>{}); process.send("ready"); setInterval(()=>{},1000)' : 'process.send("ready"); setInterval(()=>{},1000)'], {stdio:['ignore','ignore','ignore','ipc'], windowsHide:true});
+ await new Promise(resolve => c.once('message', resolve));
  writeFileSync(path.join(root,'rpc-grandchild-pid'), String(c.pid));
- process.on('exit',()=>c.kill());
+ if (!scenario.stubborn) process.on('exit',()=>c.kill());
 }
 const reader = createInterface({input:process.stdin});
 reader.on('line',line=>{

@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, openSync, closeSync, existsSync, readFileSync, writeFileSync, cpSync, renameSync, copyFileSync, unlinkSync } from 'node:fs';
+import { mkdirSync, openSync, closeSync, existsSync, readFileSync, writeFileSync, renameSync, copyFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { recentCalendarRange } from '../shared/time-range.js';
+import { copyDirectory } from './copy-directory.js';
 import { dataRoot, packageRoot, version, port, base, instance, alive, control, delay, autostartStatus, setAutostart } from './runtime.js';
 
 async function ensureService() {
@@ -62,7 +63,7 @@ function skill(action: string) {
   }
   if (action === 'install') {
     mkdirSync(target, { recursive: true });
-    cpSync(path.join(packageRoot, 'skills/codex-usage'), target, { recursive: true });
+    copyDirectory(path.join(packageRoot, 'skills/codex-usage'), target);
     writeFileSync(marker, 'codex-detailed-usage\n');
     writeFileSync(path.join(target, '.codex-usage-cli.json'), JSON.stringify({ node: process.execPath, cli: path.join(packageRoot, 'bin/codex-usage.mjs') }));
   }
@@ -144,8 +145,19 @@ async function main() {
   if (command === 'start' || command === 'open') {
     if (port !== 8765) console.error('Custom port: usage.esoren.com still redirects to port 8765.');
     if (command === 'open') {
-      const opener = spawn('rundll32.exe', ['url.dll,FileProtocolHandler', base], { detached: true, stdio: 'ignore', windowsHide: true });
-      await new Promise<void>((resolve, reject) => { opener.once('spawn', resolve); opener.once('error', reject); }); opener.unref();
+      try {
+        const mac = process.platform === 'darwin';
+        const opener = spawn(mac ? '/usr/bin/open' : 'rundll32.exe', mac ? [base] : ['url.dll,FileProtocolHandler', base], { detached: true, stdio: 'ignore', windowsHide: true, ...(mac ? { timeout: 15000 } : {}) });
+        await new Promise<void>((resolve, reject) => {
+          opener.once('error', reject);
+          if (mac) opener.once('exit', code => code === 0 ? resolve() : reject(new Error(`open exited with code ${code}`)));
+          else opener.once('spawn', resolve);
+        });
+        opener.unref();
+      } catch (error) {
+        console.error(`Browser could not be opened: ${(error as Error).message}. Open ${base} manually; the service is running.`);
+        process.exitCode = 1;
+      }
     }
     return output({ running: true, url: base, version });
   }

@@ -22,11 +22,11 @@ export function SystemSettings() {
     <h2>启动与访问</h2>
     <div className="startup-row">
       <div className="startup-copy">
-        <h3 id="startup-label">登录 Windows 后后台启动</h3>
+        <h3 id="startup-label">登录系统后后台启动</h3>
         <p id="startup-description">{exampleMode ? '示例站无法管理设备启动项；安装本地应用后可用。' : '安静地启动本地服务，不弹出浏览器。关闭网页后仍可随时访问。'}</p>
       </div>
       <div className="startup-control">
-        <span className="startup-state" aria-live="polite">{exampleMode ? '本地应用专属' : busy ? '更新中…' : query.isPending ? '读取中…' : !state ? '状态未知' : state.enabled ? '已开启' : '已关闭'}</span>
+        <span className="startup-state" aria-live="polite">{exampleMode ? '本地应用专属' : busy ? '更新中…' : query.isPending ? '读取中…' : query.error ? '读取失败' : !state ? '状态未知' : !state.supported ? '当前系统不支持' : state.conflict ? '启动项冲突' : state.enabled ? '已开启' : '已关闭'}</span>
         <button id="autostart" className="startup-switch" type="button" role="switch" aria-labelledby="startup-label" aria-describedby="startup-description"
           aria-checked={state?.enabled ?? false} disabled={busy || !state?.supported || !!state.conflict} onClick={changeStartup}>
           <span className="startup-switch-track"><span className="startup-switch-thumb" /></span>

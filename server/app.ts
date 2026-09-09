@@ -28,7 +28,8 @@ export async function createApp(
     managed?: { token: string; version: string; shutdown: () => Promise<void> };
   } = {},
 ) {
-  const app = Fastify({ logger: options.logger ?? false });
+  // Managed stop must also release speculative TCP connections without a request.
+  const app = Fastify({ logger: options.logger ?? false, forceCloseConnections: options.managed ? true : undefined });
   if (options.managed) {
     const managed = options.managed;
     app.post<{ Params: { action: string } }>('/_control/:action', async (req, reply) => {
@@ -175,7 +176,7 @@ export async function createApp(
       return reply.code(403).send({ error: { code: 'FORBIDDEN', message: '需要同源设置页面操作。' } });
     }
     try { return wrap(setAutostart(req.body.enabled), 'settings'); }
-    catch (error) { throw Object.assign(new Error(error instanceof Error ? error.message : 'Windows 启动项操作失败。'), { statusCode: 400 }); }
+    catch (error) { throw Object.assign(new Error(error instanceof Error ? error.message : '系统启动项操作失败。'), { statusCode: 400 }); }
   });
   app.get(
     "/api/pricing",

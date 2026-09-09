@@ -161,7 +161,13 @@ test('switching users within same workspace during HTTP or RPC discards results'
 const mockProgram=path.resolve('tests/fixtures/mock-app-server.mjs');
 async function writeScenario(root:string,data:object){await writeFile(path.join(root,'rpc-scenario.json'),JSON.stringify(data));}
 function nativeReader(root:string,timeout=5000) {
- return new AccountReader({root,openRpc:async signal=>openAccountRpc({bin:process.execPath,args:[mockProgram]},root,signal,timeout)});
+ return new AccountReader({root,openRpc:async signal=>{
+  const rpc = openAccountRpc({bin:process.execPath,args:[mockProgram]},root,signal,timeout);
+  return {...rpc, close: async () => {
+   try { await rpc.close(); }
+   catch (error) { console.error('Synthetic RPC cleanup failed:', error); throw error; }
+  }};
+ }});
 }
 function alive(pid:number){try{process.kill(pid,0);return true;}catch{return false;}}
 async function until(fn:()=>Promise<boolean>,ms=5000){const start=Date.now();while(!await fn()){if(Date.now()-start>ms)throw new Error('condition timed out');await delay(20);}}
@@ -174,7 +180,7 @@ test('real synthetic App Server protocol, large integers and child cleanup',()=>
  }finally{reader.close();}
 }));
 
-test('App Server shutdown aborts RPC and Windows npm-style process tree',()=>fixture(async root=>{
+test('App Server shutdown aborts RPC and npm-style process tree',()=>fixture(async root=>{
  await writeAuth(root);await writeScenario(root,{hang:'account/usage/read',grandchild:true});const reader=nativeReader(root);
  const pending=reader.readUsage();const rejected=assert.rejects(pending,(e:any)=>e.code==='CANCELLED');
  await until(async()=>{try{await access(path.join(root,'rpc-grandchild-pid'));return true;}catch{return false;}});
@@ -239,6 +245,35 @@ test('invalid explicit CLI or unsupported login never sends OAuth HTTP',()=>fixt
  await writeAuth(root);await writeFile(path.join(root,'config.toml'),'cli_auth_credentials_store = "keyring"');
  const keyring=new AccountReader({root,resolveCommand:noCli,fetch:fetcher});
  await assert.rejects(keyring.readLimits(),(e:any)=>e.code==='UNSUPPORTED_STORE');keyring.close();assert.equal(fetches,0);
+}));
+
+test('macOS repeated short-lived RPC cleanup preserves upstream errors', { skip: process.platform !== 'darwin' }, () => fixture(async root => {
+ await writeAuth(root); await writeScenario(root, { fail: 'account/usage/read' });
+ for (let i = 0; i < 20; i++) {
+  const reader = nativeReader(root);
+  try {
+   await assert.rejects(reader.readUsage(), (e: any) => e.code === 'UNSUPPORTED_METHOD');
+   const pid = Number(await readFile(path.join(root, 'rpc-pid'), 'utf8'));
+   await until(async () => !alive(pid));
+  } finally { reader.close(); }
+ }
+}));
+
+test('macOS shutdown terminates an uncooperative descendant after the grace period', { skip: process.platform !== 'darwin' }, () => fixture(async root => {
+ await writeAuth(root); await writeScenario(root, { hang: 'account/usage/read', grandchild: true, stubborn: true });
+ const reader = nativeReader(root);
+ const pending = reader.readUsage();
+ const rejected = assert.rejects(pending, (e: any) => e.code === 'CANCELLED');
+ await until(async () => { try { await access(path.join(root, 'rpc-grandchild-pid')); return true; } catch { return false; } });
+ const parent = Number(await readFile(path.join(root, 'rpc-pid'), 'utf8'));
+ const descendant = Number(await readFile(path.join(root, 'rpc-grandchild-pid'), 'utf8'));
+ try {
+  reader.close(); await rejected;
+  await until(async () => !alive(parent) && !alive(descendant));
+ } finally {
+  reader.close();
+  for (const pid of [parent, descendant]) { try { process.kill(pid, 'SIGKILL'); } catch {} }
+ }
 }));
 
 test('OAuth credentials remain unchanged and never enter API, logs or SQLite snapshots',()=>fixture(async root=>{

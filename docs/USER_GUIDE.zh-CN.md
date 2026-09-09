@@ -4,11 +4,22 @@
 
 ## 安装与打开
 
-当前支持 Windows x64，需要 Node.js 26.7.0 或更新版本。本地统计不要求安装 Codex CLI；账户功能依赖现有且受支持的 Codex 登录。
+当前支持 Windows x64，需要 Node.js 22.13+（22.x）、24.x 或 26.x。本地统计不要求安装 Codex CLI；账户功能依赖现有且受支持的 Codex 登录。
 
 推荐把 [Agent 安装指南](INSTALL_FOR_AGENTS.md)交给 Agent。安装器会校验发布包，必要时配置用户级 Node 环境。安装需要联网下载发布包和依赖，网页已经预构建。
 
 ### 手动安装
+
+当前源码已加入 macOS Apple Silicon/Intel 适配，但已发布的 0.1.2 仍为 Windows 版本。Mac 请按[候选包安装和验证状态](MACOS_COMPATIBILITY.md)使用已有的兼容 Node/npm。不含 PowerShell 变量的 CLI 示例也适用于 zsh/bash；私有运行时安装器和旧归档示例仅用于 Windows。
+
+```powershell
+npm install -g @esoren/codex-usage
+codex-usage
+```
+
+已安装旧包 `codex-detailed-usage` 时，先按照[迁移步骤](INSTALL_FOR_AGENTS.md#migrate-a-legacy-package-to-npm)切换。更新 scoped 包时，先停止服务，再安装到相同前缀、重新安装 Skill，并在原来已启用自启动时重新启用自启动。
+
+### 备选：GitHub Release 安装包
 
 已有兼容 Node 和 npm 时，从[同一个 Release](https://github.com/Cusnd/codex-usage/releases/latest) 下载 `.tgz` 和 `SHA256SUMS`。在下载目录执行以下命令，按实际版本调整文件名：
 
@@ -22,12 +33,12 @@ $expected = ($checksumLines[0] -split '\s+')[0]
 if ((Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash -ne $expected) {
   throw 'Package checksum mismatch'
 }
-npm install --global --ignore-scripts ".\$package"
+npm install --global ".\$package"
 if ($LASTEXITCODE -ne 0) { throw 'Installation failed' }
 codex-usage
 ```
 
-命令名是 `codex-usage`，安装包名是 `codex-detailed-usage`。不要替换为 npm 上另一个项目的同名 `codex-usage` 包。
+上述文件名对应旧 GitHub v0.1.1 安装包 `codex-detailed-usage`。新的 scoped 归档文件名为 `esoren-codex-usage-<版本>.tgz`，以实际 Release 附件为准。公开 npm 包名是 `@esoren/codex-usage`，命令名仍为 `codex-usage`。不要替换为 npm 上另一个项目的无 scope 包。
 
 运行 `codex-usage` 会启动或复用后台服务，并打开浏览器。默认地址为 [127.0.0.1:8765](http://127.0.0.1:8765/)。首次导入可能需要几分钟，可在页面查看进度。
 
@@ -38,7 +49,7 @@ codex-usage
 | 总览 | 同时查看近期本机活动与可用的账户额度。 |
 | 消耗分析 | 查看趋势，按项目、模型、推理强度、任务或轮次组织用量。 |
 | 任务明细 | 搜索任务、查看轮次、了解 Agent 团队消耗。 |
-| 设置 | 调整刷新、时区、参考成本与 Windows 登录启动，检查数据源状态。 |
+| 设置 | 调整刷新、时区、参考成本与 系统登录启动，检查数据源状态。 |
 
 ### 从高峰追到轮次
 
@@ -98,11 +109,13 @@ codex-usage status --json
 codex-usage stop
 ```
 
-关闭网页或启动终端不会停止后台服务。在设置开启 **登录 Windows 后后台启动**，或运行 `codex-usage autostart enable`，即可登录后后台启动。默认关闭，开启后不弹浏览器。`autostart disable` 仅影响后续登录，`autostart status` 查看状态。
+关闭网页或启动终端不会停止后台服务。在设置开启 **登录系统后后台启动**，或运行 `codex-usage autostart enable`，即可登录后后台启动。默认关闭，开启后不弹浏览器。`autostart disable` 仅影响后续登录，`autostart status` 查看状态。
 
 默认服务已运行时，[usage.esoren.com](https://usage.esoren.com) 会跳转到当前电脑的本地地址。域名需要联网，不能安装、启动程序或访问另一台电脑。自定义端口须使用对应本地地址。CLI 与本地地址可离线查看本机统计。
 
 ## 升级、迁移与卸载
+
+macOS 默认数据目录为 `~/Library/Application Support/CodexUsage`，由 `CODEX_USAGE_DATA_DIR` 覆盖。登录启动使用用户级 LaunchAgent，下次登录生效，不会持续拉起手动停止的服务。若 macOS 阻止 Node 后台项目，需要在系统设置中允许；注册状态不代表已验证真实登录启动成功。更换 Node 或 npm 前缀后重新安装 Skill，并重新启用原先已启用的自启动，以刷新绝对路径。升级和卸载 CLI 顺序相同，迁移使用带引号的 POSIX 路径；完整命令见 [macOS 生命周期](MACOS_COMPATIBILITY.md#paths-and-lifecycle)。
 
 安装器管理的版本可以重跑[安装流程](INSTALL_FOR_AGENTS.md)：停止服务、校验并更新发布包、保留缓存、更新已启用的启动器。之后执行 `codex-usage skill install` 更新 Skill。
 
@@ -110,17 +123,17 @@ codex-usage stop
 
 数据默认在 `%LOCALAPPDATA%\CodexUsage`。迁移旧源码目录缓存时，先停止旧服务，再执行 `codex-usage migrate --from C:\absolute\old-checkout\data\usage.sqlite`。它拒绝覆盖已有目标，检查完整性与 SHA-256，并保留原件。
 
-卸载前执行 `codex-usage autostart disable`、`codex-usage stop` 和 `codex-usage skill uninstall`，再从实际 npm 前缀卸载 `codex-detailed-usage`。脚本安装前缀为 `%LOCALAPPDATA%\CodexUsage\tools`；含私有 Node 的[完整卸载步骤](INSTALL_FOR_AGENTS.md#upgrade-migrate-or-uninstall)见安装指南。缓存、日志、启动器文件和 Skill 备份默认保留。
+卸载前执行 `codex-usage autostart disable`、`codex-usage stop` 和 `codex-usage skill uninstall`，再从实际 npm 前缀卸载 `@esoren/codex-usage`（旧安装对应 `codex-detailed-usage`）。脚本安装前缀为 `%LOCALAPPDATA%\CodexUsage\tools`；含私有 Node 的[完整卸载步骤](INSTALL_FOR_AGENTS.md#upgrade-migrate-or-uninstall)见安装指南。缓存、日志、启动器文件和 Skill 备份默认保留。
 
 ## 常见问题
 
 | 现象 | 下一步 |
 | --- | --- |
-| 安装后找不到命令 | 新开终端，或从实际安装前缀调用 `codex-usage.cmd`。 |
+| 安装后找不到命令 | 新开终端；Windows 从实际前缀调用 `codex-usage.cmd`，macOS 调用 `"$(npm prefix --global)/bin/codex-usage"`。 |
 | 网页打不开 | 执行 `codex-usage doctor --json` 和 `codex-usage status --json`，检查端口与服务状态。 |
 | 历史为空或不完整 | 检查日期、筛选、导入进度和 Codex 数据目录；本机已归档会话也会导入。 |
 | 账户面板不可用 | 在设置分别检查额度和历史错误，本机统计不依赖它们。 |
 | 改时区后每日总量变化 | 日期边界改变会把记录分到不同日期，原始 UTC 时间未改变。 |
 | 安装 Skill 提示冲突 | 保留已有非本工具管理的 Skill，确认归属后再处理。 |
 
-等待本地导入可执行 `codex-usage refresh --source local --wait --timeout 300 --json`。持续出错时，在 [Issue](https://github.com/Cusnd/codex-usage/issues) 中提供应用、Node 和 Windows 版本及脱敏复现信息，不要附带登录文件、实例私有令牌、数据库或真实会话截图。
+等待本地导入可执行 `codex-usage refresh --source local --wait --timeout 300 --json`。持续出错时，在 [Issue](https://github.com/Cusnd/codex-usage/issues) 中提供应用、Node 和操作系统版本、架构及脱敏复现信息，不要附带登录文件、实例私有令牌、数据库或真实会话截图。

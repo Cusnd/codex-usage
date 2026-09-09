@@ -236,7 +236,7 @@ export function SettingsPage() {
           )}
         </div>
         <p className="footnote">
-          范围：本机 Windows 的 sessions 和
+          范围：本机 Codex 的 sessions 和
           archived_sessions。部分旧格式、缺失父任务或已删除记录不能恢复为完整账本。
         </p>
       </section>

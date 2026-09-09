@@ -1,15 +1,40 @@
 {
-  "name": "codex-detailed-usage",
-  "version": "0.1.1",
-  "private": true,
+  "name": "@esoren/codex-usage",
+  "version": "0.1.2",
+  "description": "A local Codex usage dashboard and CLI for exploring projects, tasks, turns, and agent teams.",
+  "homepage": "https://github.com/Cusnd/codex-usage#readme",
+  "bugs": {
+    "url": "https://github.com/Cusnd/codex-usage/issues"
+  },
+  "keywords": [
+    "codex",
+    "usage",
+    "tokens",
+    "analytics",
+    "dashboard",
+    "cli"
+  ],
+  "os": [
+    "win32",
+    "darwin"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "engines": {
-    "node": ">=26.7.0"
+    "node": "^22.13.0 || ^24.0.0 || ^26.0.0"
   },
   "scripts": {
     "showcase:build": "node scripts/build-showcase.mjs",
     "dev": "node scripts/dev.mjs",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
+    "prepack": "npm run build 1>&2",
     "start": "node dist/server/index.js",
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
@@ -33,7 +58,7 @@
   },
   "devDependencies": {
     "@types/luxon": "^3.7.1",
-    "@types/node": "^26.0.0",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@types/sql.js": "^1.4.11",
@@ -49,7 +74,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cusnd/codex-usage.git"
+    "url": "git+https://github.com/Cusnd/codex-usage.git"
   },
   "files": [
     "bin/",
@@ -59,6 +84,11 @@
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
     "README.md",
+    "README.zh-CN.md",
+    "docs/USER_GUIDE.md",
+    "docs/USER_GUIDE.zh-CN.md",
+    "docs/TECHNICAL_REFERENCE.md",
+    "docs/MACOS_COMPATIBILITY.md",
     "scripts/shell-link.ps1"
   ]
 }

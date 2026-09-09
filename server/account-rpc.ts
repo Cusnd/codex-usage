@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { CodexCommand } from "./codex-command.js";
 import { AccountError } from "./account-credentials.js";
@@ -9,7 +9,7 @@ export function openAccountRpc(command: CodexCommand, root: string, signal: Abor
   signal.throwIfAborted();
   let child;
   try { child = spawn(command.bin, [...command.args, "app-server"], {
-    windowsHide: true, stdio: "pipe", env: { ...process.env, CODEX_HOME: root },
+    windowsHide: true, detached: process.platform === 'darwin', stdio: "pipe", env: { ...process.env, CODEX_HOME: root },
   }); } catch { throw new AccountError("CLI_START", "无法启动 Codex App Server，请检查安装入口。"); }
   let next = 1, failure: AccountError | null = null;
   const pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
@@ -40,6 +40,34 @@ export function openAccountRpc(command: CodexCommand, root: string, signal: Abor
     fail(new AccountError("CANCELLED", "账户读取已取消。"));
     reader.close(); signal.removeEventListener("abort", abort);
     closing = (async () => {
+      if (process.platform === 'darwin' && child.pid) {
+        // Only this spawned session's process group, including the npm wrapper's native child.
+        const group = -child.pid;
+        const signalGroup = (signal: NodeJS.Signals | 0) => {
+          try { process.kill(group, signal); return true; }
+          catch (error: any) {
+            if (error.code === 'ESRCH') return false;
+            if (error.code === 'EPERM') {
+              // Darwin killpg skips zombies and can return EPERM for a group
+              // whose last member is being reaped. Preserve real permission errors.
+              const processes = execFileSync('/bin/ps', ['-axo', 'pgid=,stat='], { encoding: 'utf8', timeout: 3000 });
+              const live = processes.split('\n').some(line => {
+                const [pgid, state] = line.trim().split(/\s+/);
+                return Number(pgid) === -group && state && !state.startsWith('Z');
+              });
+              if (!live) return false;
+            }
+            throw error;
+          }
+        };
+        child.stdin.end();
+        if (signalGroup('SIGTERM')) {
+          const deadline = Date.now() + 1500;
+          while (signalGroup(0) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
+          if (signalGroup(0)) signalGroup('SIGKILL');
+        }
+        return;
+      }
       if (process.platform === "win32" && child.pid && child.exitCode === null && child.signalCode === null) {
         // npm's JS entry can own a native Codex child. Terminate only this spawned process tree.
         await new Promise<void>((resolve) => {

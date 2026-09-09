@@ -1,4 +1,5 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, realpath, stat } from "node:fs/promises";
+import { constants } from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import { AccountError } from "./account-credentials.js";
@@ -10,10 +11,14 @@ export async function resolveCodexCommand(
 ): Promise<CodexCommand> {
   const resolve = async (file: string): Promise<CodexCommand> => {
     await access(file);
+    if (platform !== 'win32') file = await realpath(file);
+    if (!(await stat(file)).isFile()) throw new Error('not a file');
     const ext = path.extname(file).toLowerCase();
-    if ([".js", ".mjs", ".cjs"].includes(ext))
+    if ([".js", ".mjs", ".cjs"].includes(ext)) {
+      await access(file, constants.R_OK);
       return { bin: process.execPath, args: [path.resolve(file)] };
-    if (ext === ".cmd") {
+    }
+    if (platform === 'win32' && ext === ".cmd") {
       // Recognize the npm shim, but never execute its shell contents.
       const shim = await readFile(file, "utf8");
       if (!/node_modules[\\/]@openai[\\/]codex[\\/]bin[\\/]codex\.js/i.test(shim))
@@ -23,11 +28,14 @@ export async function resolveCodexCommand(
       return { bin: process.execPath, args: [path.resolve(script)] };
     }
     if (platform === "win32" && ext !== ".exe") throw new Error("unsupported executable");
+    if (platform !== 'win32') await access(file, constants.X_OK);
     return { bin: path.resolve(file), args: [] };
   };
   if (env.CODEX_BIN) {
     try { return await resolve(env.CODEX_BIN); }
-    catch { throw new AccountError("CLI_START", "CODEX_BIN 无效：请指定 Codex .exe、JS 入口或标准 npm codex.cmd。"); }
+    catch { throw new AccountError("CLI_START", platform === 'win32'
+      ? "CODEX_BIN 无效：请指定 Codex .exe、JS 入口或标准 npm codex.cmd。"
+      : "CODEX_BIN 无效：请指定可执行的 Codex 文件、有效符号链接或可读的 JS 入口。"); }
   }
   const directories = (env.PATH || env.Path || "").split(platform === "win32" ? ";" : ":")
     .map((p) => p.replace(/^"|"$/g, "")).filter(Boolean);

@@ -6,12 +6,20 @@ This document describes the local application's interfaces and counting rules. F
 
 ## Runtime and storage
 
-Windows x64 and Node.js >=26.7.0 are the supported runtime. SQLite is provided by Node; no separate database or Python installation is required. Web assets are resolved relative to the installed package, independently of the working directory.
+Windows x64 and Node.js 22.13+ (22.x), 24.x, or 26.x are the supported runtime. SQLite is provided by Node; no separate database or Python installation is required. Web assets are resolved relative to the installed package, independently of the working directory.
+
+The source also targets macOS x64/arm64; see [validation status](MACOS_COMPATIBILITY.md). The required macOS version follows the selected Node distribution. Data defaults to `~/Library/Application Support/CodexUsage`, overridden by `CODEX_USAGE_DATA_DIR`; original records use `~/.codex`, overridden by `CODEX_HOME`.
+
+Windows starters hold a named pipe. macOS holds an exclusive loopback listener at `49152 + first_uint16_be(SHA256(realpath(dataRoot))) % 16384`. Starters for the same real directory share a guard regardless of HTTP port; the kernel releases it on crash. Hash collisions or foreign listeners fail closed with details in `service.log`. No alternate guard is selected and no foreign process is killed. The guard has no control API. If a custom HTTP port equals the guard port, select a different HTTP port.
+
+macOS autostart writes a user LaunchAgent (`CODEX_USAGE_STARTUP_DIR` overrides its directory for tests), with `RunAtLoad`, no `KeepAlive`, and a one-shot CLI `start` launcher. It captures absolute Node/CLI paths plus PATH, PORT, CODEX_HOME, CODEX_BIN and data-root values. The `supported/enabled/conflict` API shape is unchanged: enabled means a validated owned registration for future logins, not a running launchd job or OS background-item approval.
+
+Project normalization follows recorded path format: drive/UNC paths retain Windows rules, POSIX paths preserve case. Import metadata version 2 re-reads cached sources once, replacing derived rows without changing logs. Missing sources cannot recover previously lost casing; their cached rows are retained.
 
 | Setting | Purpose |
 | --- | --- |
 | `CODEX_HOME` | Codex source directory; defaults to the user's `.codex`. |
-| `CODEX_USAGE_DATA_DIR` | Overrides `%LOCALAPPDATA%\CodexUsage` for the tool's data. |
+| `CODEX_USAGE_DATA_DIR` | Overrides the platform data directory described above. |
 | `PORT` | Overrides the default port 8765. The server binds to `127.0.0.1`. |
 | `CODEX_BIN` | Explicit Codex executable or supported npm JS/shim entry for account capabilities. |
 | `CODEX_USAGE_URL` | Connects CLI queries to an already-running HTTP loopback origin; disables query/status auto-start. |
@@ -54,6 +62,8 @@ Each refresh detects whether Codex CLI is available. If available, account calls
 The HTTP path reads only supported file credentials from the selected Codex directory. Access tokens stay in server memory; requests time out after 15 seconds and reject redirects. It does not invoke a model, reset limits, refresh/write credentials, or provide a new login UI. API-key logins, missing/damaged credentials, and unsupported credential-storage modes return an unavailable reason.
 
 Windows discovery supports PATH executables, standard npm `codex.cmd`, and the default global npm JS entry. JS runs under the current Node executable; standard `.cmd` shims are resolved to their npm JS entry without shell execution. An invalid explicit `CODEX_BIN` fails without choosing another installation or switching to OAuth.
+
+macOS resolves PATH executables and symbolic links, including npm links to JS. Native files need execute permission; JS runs under the current Node. `CODEX_BIN` remains authoritative. App Server runs in a dedicated macOS process group; close sends SIGTERM, then SIGKILL after a bounded grace period to that spawned group only.
 
 Limits and daily history refresh independently, retaining their own errors and last successful snapshots for the same verified identity. Missing percentages are unknown; missing dates are not zero. Account activity and local activity are never added together.
 

@@ -8,6 +8,8 @@
 
 Windows x64 · 本地优先 · Apache-2.0
 
+当前源码已加入 macOS Apple Silicon 和 Intel 适配，并通过两种架构的原生 GitHub Actions 验证，候选包安装和运行记录见 [macOS 兼容说明](docs/MACOS_COMPATIBILITY.md)。已发布的 0.1.2 仍仅支持 Windows；此次适配尚未发布到 npm。
+
 安装前可以先体验[在线示例](https://codex-usage-showcase.sorenliu.workers.dev)：与本地应用使用同一套 React 前端，接入合成记录，可操作任务、轮次、Agent 团队、筛选和仅保存在当前浏览器的成本设置。查看自己的真实用量时，请使用本地应用。
 
 ![新版用量总览：七日用量、Token 构成、每日趋势与合成账户额度](docs/images/overview.png)
@@ -52,14 +54,14 @@ Skill 通过 CLI 查询本地服务。回答会保留时间范围、来源和数
 
 [安装文档](docs/INSTALL_FOR_AGENTS.md)包含下载校验步骤，需要时会配置用户级 Node 环境。
 
-**已经在 Windows x64 上安装 Node.js 26.7.0 或更新版本？** 从 [Releases](https://github.com/Cusnd/codex-usage/releases/latest) 下载 `.tgz` 与 `SHA256SUMS`，按照[手动安装说明](docs/USER_GUIDE.zh-CN.md#手动安装)核对文件后执行：
+**已经在 Windows x64 上安装 Node.js 22.13+（22.x）、24.x 或 26.x？** 直接安装公开的 npm 包：
 
 ```powershell
-npm install --global --ignore-scripts .\codex-detailed-usage-0.1.1.tgz
+npm install -g @esoren/codex-usage
 codex-usage
 ```
 
-示例使用 v0.1.1，实际操作请替换为下载版本的文件名。发布包已包含构建好的网页。请使用**本项目 Release 中的 `codex-detailed-usage`**；npm 上名为 `codex-usage` 的包属于其他项目。
+发布包已包含构建好的网页。npm 包名是 **`@esoren/codex-usage`**，命令名仍为 `codex-usage`；npm 上未带 scope 的 `codex-usage` 属于其他项目。已安装旧包 `codex-detailed-usage` 的用户，请先按照[迁移步骤](docs/INSTALL_FOR_AGENTS.md#migrate-a-legacy-package-to-npm)切换。
 
 启用 Agent 查询：
 

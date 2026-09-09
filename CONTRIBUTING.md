@@ -4,7 +4,7 @@ Help people understand their Codex activity without losing the context behind th
 
 ## Develop locally
 
-Use Windows x64 with Node.js >=26.7.0:
+Use Windows x64 or macOS x64/arm64 with Node.js 22.13+ (22.x), 24.x, or 26.x:
 
 ```powershell
 npm ci
@@ -35,6 +35,6 @@ For public screenshots, use this dataset and the fixed September 2–9, 2026 ran
 
 Keep Codex source records read-only. Test parser and account changes with synthetic fixtures. Do not include personal session files, login files, SQLite databases, task titles, project paths, or real-account screenshots in issues, pull requests or demo assets. Preserve decimal-string token precision and the distinction between local activity and account-level snapshots.
 
-Report bugs through GitHub Issues with the application/Node version, Windows version, reproduction steps, and sanitized error text. Never paste `auth.json`, tokens or the private `instance.json` token. For UI changes include screenshots using the synthetic `scripts/design-preview.ts` dataset.
+Report bugs through GitHub Issues with the application/Node version, OS version and architecture, reproduction steps, and sanitized error text. Never paste `auth.json`, tokens or the private `instance.json` token. For UI changes include screenshots using the synthetic `scripts/design-preview.ts` dataset.
 
-This is a Windows-first release. Changes for other systems are welcome with an explicit support statement and installation/lifecycle tests; do not infer platform support from TypeScript compilation alone.
+CI checks Windows x64, macOS Apple Silicon (`macos-15`) and Intel (`macos-15-intel`) across the existing Node matrix. macOS package smoke uses a unique temporary launchd job and removes it afterward. Use browser-control tools for UI acceptance, not Playwright. Record actual macOS CI and desktop results separately in [compatibility status](docs/MACOS_COMPATIBILITY.md); compilation on Windows is not proof of macOS support.
