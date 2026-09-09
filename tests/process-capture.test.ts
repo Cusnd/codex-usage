@@ -16,14 +16,16 @@ test('Windows command capture completes after a launcher exits with a detached c
     closeSync(fd);
     writeFileSync(process.pid + '.pid', String(child.pid));
     child.unref();
-    console.log('ready');
+    console.log(JSON.stringify({ ready: true, finishedAt: Date.now() }));
   `);
   const ps = (value: string) => "'" + value.replaceAll("'", "''") + "'";
   try {
-    const start = performance.now();
-    const results = await Promise.all([1, 2].map(() => captureProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `& ${ps(process.execPath)} ${ps(launcher)}; exit $LASTEXITCODE`], { cwd: root, windowsHide: true, timeout: 8000 })));
-    assert.ok(results.every(result => result.stdout.trim() === 'ready'));
-    assert.ok(performance.now() - start < 6500, 'must not wait for inherited pipes until the timeout');
+    const results = await Promise.all([1, 2].map(() => captureProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `& ${ps(process.execPath)} ${ps(launcher)}; exit $LASTEXITCODE`], { cwd: root, windowsHide: true, timeout: 30000 })
+      .then(result => ({ message: JSON.parse(result.stdout), returnedAt: Date.now() }))));
+    for (const { message, returnedAt } of results) {
+      assert.equal(message.ready, true);
+      assert.ok(returnedAt - message.finishedAt < 5000, 'must return after output completes without waiting for inherited pipes');
+    }
   } finally {
     for (const file of await readdir(root)) if (file.endsWith('.pid')) {
       try { process.kill(Number(await readFile(path.join(root, file), 'utf8')), 'SIGKILL'); } catch {}
