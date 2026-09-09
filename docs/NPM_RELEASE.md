@@ -1,10 +1,16 @@
-# npm release plan
+# npm releases
 
-## Cross-platform release candidate — 0.1.3
+## Cross-platform release completed — 0.1.3
 
 The candidate supports Windows x64 and macOS x64/arm64 with Node 22.13+ (22.x), 24.x and 26.x. The native compatibility matrix passed all 18 jobs for the implementation; see [compatibility status](MACOS_COMPATIBILITY.md). The independent `main` and `master` histories were joined by merge commit `b9556ab`, preserving the validated tree and both histories. Completed branches were retired; their worktree directories remain intact at detached commits.
 
-Version 0.1.3 is undergoing final CI and exact-archive verification. Publication is not yet confirmed. Evidence is stored under `release-artifacts/npm-esoren-0.1.3/`. Desktop spot checks are optional follow-up, not a compatibility release gate.
+`@esoren/codex-usage@0.1.3` was published publicly on 2026-09-09 through GitHub Actions Trusted Publishing, from annotated tag [`v0.1.3`](https://github.com/Cusnd/codex-usage/tree/v0.1.3), commit `6ceaf7e8bc863593f836fae18da3739faf33a90c`. The official registry reports `latest: 0.1.3`. The [release workflow](https://github.com/Cusnd/codex-usage/actions/runs/34338249802) passed all 18 native platform/runtime combinations and tested the exact archive before uploading it.
+
+The registry download's SHA-512 matches npm metadata and the registry provenance subject; provenance identifies the same tag, source commit and `publish.yml` workflow. SHA-256: `891ed7da59629940b24bff680dbfb6972294624170ba5634b7cee274b782660d`. The full archive, metadata, attestations and verification receipt are stored under `release-artifacts/npm-esoren-0.1.3/registry/` and `release-artifacts/npm-esoren-0.1.3/published-release-receipt.json`. Desktop spot checks remain optional follow-up, not a compatibility release gate.
+
+The downloaded registry archive passed the full isolated Windows installation/lifecycle smoke test on Node 22.13.0, including three occupied-port attempts that returned explicit CLI errors and a check that every synthetic Node process exited before cleanup.
+
+The first upload succeeded but its 50-second registry verification window expired while npm's publish-time scan was pending. Registry availability was then verified separately, and the failed job was rerun successfully: the existing version, channel and rebuilt archive integrity matched exactly. Subsequent release jobs allow up to 20 minutes for availability, log the full expected integrity before publishing, and retain a bounded overall job timeout. Upload acceptance and verified registry availability are separate outcomes.
 
 ## First release completed — 2026-09-09
 
@@ -25,7 +31,7 @@ Published publicly after npm browser authentication. The official registry now r
 ## Release target
 
 - Public scoped npm package: `@esoren/codex-usage`; CLI remains `codex-usage`.
-- Candidate version: `0.1.3`, subject to availability under the chosen scope.
+- Current release: `0.1.3` on the `latest` channel.
 - Supported platforms: Windows x64 and macOS x64/arm64, Node.js 22.13+ (22.x), 24.x, or 26.x.
 - Ship the CLI, compiled server/shared code, built web assets, Skill, runtime helper, license and user documentation.
 - Keep existing GitHub Release installation working while adding npm installation.
@@ -69,6 +75,6 @@ codex-usage
 codex-usage skill install
 ```
 
-For subsequent releases, choose a new version; published name/version pairs cannot be reused. Consider GitHub Actions trusted publishing after the first release and npm package ownership are established. Keep automated publication separate from ordinary test runs.
+For subsequent releases, choose a new version; published name/version pairs cannot be reused. Follow the [project workflow](../.agents/workflow.md): merge the version into `main`, then push its annotated version tag to trigger GitHub Actions Trusted Publishing. Ordinary test runs do not publish packages.
 
 References: [npm publish](https://docs.npmjs.com/cli/v11/commands/npm-publish), [public scoped packages](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/), [trusted publishing](https://docs.npmjs.com/trusted-publishers/).
