@@ -168,7 +168,12 @@ try {
   // Occupied port is not silently changed and the foreign listener survives.
   const foreign = createServer(socket => socket.destroy());
   await new Promise(r => foreign.listen(port, '127.0.0.1', r));
-  try { await assert.rejects(run('start', '--json')); assert.ok(foreign.listening); }
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await assert.rejects(run('start', '--json'), error => Boolean(error.stderr?.includes('"code":"CLI_ERROR"')));
+      assert.ok(foreign.listening);
+    }
+  }
   finally { await new Promise(r => foreign.close(r)); }
   console.log('PASS: package install, arbitrary cwd, concurrent/repeated start, API/assets, JSON, refresh, identity/version mismatch, same-origin startup, hidden launcher, Skill, reinstall/data preservation, migration, stale recovery, stop, port conflict.');
 } catch (error) {
