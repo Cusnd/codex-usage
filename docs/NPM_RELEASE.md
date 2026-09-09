@@ -1,16 +1,22 @@
 # npm releases
 
-## Patch candidate — 0.1.4
+## macOS cleanup patch completed — 0.1.4
 
 This follow-up fixes an intermittent macOS RPC cleanup failure discovered in a post-release main-branch run. A zero-signal process-group probe returning `EPERM` now keeps cleanup in its bounded wait/escalation path; actual termination signals retain their permission checks. The native regression injects the inconclusive probe into a real process group with a descendant that ignores SIGTERM, and verifies that cleanup still terminates it.
 
-Version 0.1.4 is prepared in the patch PR for review. The public `latest` release remains 0.1.3; no 0.1.4 tag or npm publication has been created.
+`@esoren/codex-usage@0.1.4` was published publicly on 2026-09-09 from annotated tag [`v0.1.4`](https://github.com/Cusnd/codex-usage/tree/v0.1.4), commit `3a14dfe0dc4665677e4de77244ab6e2e10bfad7d`, after [PR #5](https://github.com/Cusnd/codex-usage/pull/5) and release [PR #6](https://github.com/Cusnd/codex-usage/pull/6). The [release workflow](https://github.com/Cusnd/codex-usage/actions/runs/34345499737) succeeded on its first attempt: all 18 native platform/runtime checks passed, and the exact uploaded archive passed installation/lifecycle checks. The registry reports `latest: 0.1.4`.
+
+The downloaded registry archive matches the workflow's full SHA-512 integrity and the registry provenance subject. The provenance payload identifies the same source commit, tag and `publish.yml`; no independent signature verification was performed. SHA-256: `b98301959e77a2eeb23dd5cb4d8921a2545aaa1a33e2e72c792b3497bb893fac`. Evidence is under `release-artifacts/npm-esoren-0.1.4/`, including `published-release-receipt.json` and the official archive in `registry/`.
+
+The earlier local candidate has a different archive hash: 40 of 44 files are byte-identical; three files differ only by CRLF/LF line endings, and `dist/web/index.html` additionally differs by one blank line. The complete comparison is recorded in `candidate-registry-comparison.json`; all file contents agree after those documented whitespace differences. The published archive is identified by the workflow and registry hashes above.
+
+The official registry download also passed the full isolated Windows installation/lifecycle smoke test on the minimum supported Node 22.13.0, including concurrent/repeated startup, API/assets, port conflicts, Skill installation, reinstall/data preservation, migration and shutdown. Its log is `registry/package-smoke-node22.13.0.log` in the evidence directory.
 
 ## Cross-platform release completed — 0.1.3
 
 The candidate supports Windows x64 and macOS x64/arm64 with Node 22.13+ (22.x), 24.x and 26.x. The native compatibility matrix passed all 18 jobs for the implementation; see [compatibility status](MACOS_COMPATIBILITY.md). The independent `main` and `master` histories were joined by merge commit `b9556ab`, preserving the validated tree and both histories. Completed branches were retired; their worktree directories remain intact at detached commits.
 
-`@esoren/codex-usage@0.1.3` was published publicly on 2026-09-09 through GitHub Actions Trusted Publishing, from annotated tag [`v0.1.3`](https://github.com/Cusnd/codex-usage/tree/v0.1.3), commit `6ceaf7e8bc863593f836fae18da3739faf33a90c`. The official registry reports `latest: 0.1.3`. The [release workflow](https://github.com/Cusnd/codex-usage/actions/runs/34338249802) passed all 18 native platform/runtime combinations and tested the exact archive before uploading it.
+`@esoren/codex-usage@0.1.3` was published publicly on 2026-09-09 through GitHub Actions Trusted Publishing, from annotated tag [`v0.1.3`](https://github.com/Cusnd/codex-usage/tree/v0.1.3), commit `6ceaf7e8bc863593f836fae18da3739faf33a90c`. It initially became `latest` and was superseded by 0.1.4. The [release workflow](https://github.com/Cusnd/codex-usage/actions/runs/34338249802) passed all 18 native platform/runtime combinations and tested the exact archive before uploading it.
 
 The registry download's SHA-512 matches npm metadata and the registry provenance subject; provenance identifies the same tag, source commit and `publish.yml` workflow. SHA-256: `891ed7da59629940b24bff680dbfb6972294624170ba5634b7cee274b782660d`. The full archive, metadata, attestations and verification receipt are stored under `release-artifacts/npm-esoren-0.1.3/registry/` and `release-artifacts/npm-esoren-0.1.3/published-release-receipt.json`. Desktop spot checks remain optional follow-up, not a compatibility release gate.
 
@@ -37,7 +43,7 @@ Published publicly after npm browser authentication. The official registry now r
 ## Release target
 
 - Public scoped npm package: `@esoren/codex-usage`; CLI remains `codex-usage`.
-- Current release: `0.1.3` on the `latest` channel.
+- Current release: `0.1.4` on the `latest` channel.
 - Supported platforms: Windows x64 and macOS x64/arm64, Node.js 22.13+ (22.x), 24.x, or 26.x.
 - Ship the CLI, compiled server/shared code, built web assets, Skill, runtime helper, license and user documentation.
 - Keep existing GitHub Release installation working while adding npm installation.
@@ -70,7 +76,7 @@ The final publish is performed after the package target and candidate are review
 
 Allow time for npm's publish-time scan before treating an initial registry 404 as a failed publish. npm documents a typical delay of about five minutes, sometimes 15 minutes or more. `npm dist-tag ls @esoren/codex-usage` can work while the package is still unavailable. Do not republish or change the version merely because the first download is not yet available. See [npm publish-time scanning](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/).
 
-After publication, read back `name`, `version`, `dist.integrity`, `bin`, `engines`, `os`, and `cpu` with `npm view` against the official registry. Download the exact registry version with `npm pack @esoren/codex-usage@0.1.3`, compare integrity with the candidate, and run the isolated package smoke test against the downloaded archive.
+After publication, read back `name`, `version`, `dist.integrity`, `bin`, `engines`, `os`, and `cpu` with `npm view` against the official registry. Download the exact registry version with `npm pack @esoren/codex-usage@0.1.4`, compare integrity with the workflow's tested upload archive, and run the isolated package smoke test against the downloaded archive.
 
 Users with the supported runtime can then run:
 
