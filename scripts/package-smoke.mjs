@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
 import { execFile, spawn } from 'node:child_process';
+import { serviceGuardAddress } from '../dist/server/platform.js';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createServer } from 'node:net';
 import os from 'node:os';
@@ -18,16 +20,18 @@ const prefix = path.join(root, 'install');
 // Exercise npm's generated shim using the selected Node runtime.
 const inheritedPath = process.env.PATH ?? process.env.Path ?? '';
 for (const key of Object.keys(env)) if (key.toLowerCase() === 'path') delete env[key];
-env.Path = `${path.dirname(process.execPath)}${path.delimiter}${inheritedPath}`;
+env[process.platform === 'win32' ? 'Path' : 'PATH'] = `${path.dirname(process.execPath)}${path.delimiter}${inheritedPath}`;
 let cli;
-const shim = path.join(prefix, 'codex-usage.ps1');
+const windows = process.platform === 'win32';
+const shim = windows ? path.join(prefix, 'codex-usage.ps1') : path.join(prefix, 'bin/codex-usage');
+let launchJob;
 const install = async target => {
   const result = await exec(process.execPath, [process.env.npm_execpath, 'install', '-g', '--prefix', prefix, target], { cwd: root, env, windowsHide: true, timeout: 300000 });
   assert.ok(!/EBADENGINE/.test(result.stderr), result.stderr);
 };
 const run = async (...args) => {
   console.log('Checking:', args.join(' '));
-  const pending = exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', shim, ...args], { env, cwd: root, windowsHide: true, timeout: 45000 });
+  const pending = exec(windows ? 'powershell.exe' : shim, windows ? ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', shim, ...args] : args, { env, cwd: root, windowsHide: true, timeout: 45000 });
   // A redirected stdin left open can keep Windows PowerShell waiting for input.
   pending.child.stdin.end();
   const result = await pending;
@@ -37,13 +41,14 @@ try {
   await mkdir(env.CODEX_HOME, { recursive: true });
   let tarball = process.env.CODEX_USAGE_TEST_PACKAGE || process.env.CODEX_USAGE_TEST_TARBALL;
   if (!tarball) {
-    const packed = await exec(process.execPath, [process.env.npm_execpath, 'pack', '--json', '--silent', '--pack-destination', root], { cwd: project, windowsHide: true });
+    // The build is an explicit prerequisite; install and test that exact output without rebuilding it.
+    const packed = await exec(process.execPath, [process.env.npm_execpath, 'pack', '--ignore-scripts', '--json', '--silent', '--pack-destination', root], { cwd: project, windowsHide: true });
     const manifest = JSON.parse(packed.stdout)[0];
     assert.ok(manifest.files.every(f => !/(^|\/)(data|output|node_modules|\.env)(\/|$)/.test(f.path)));
     tarball = path.join(root, manifest.filename);
   }
   await install(tarball);
-  cli = path.join(prefix, 'node_modules', packageName, 'bin/codex-usage.mjs');
+  cli = path.join(prefix, ...(windows ? [] : ['lib']), 'node_modules', packageName, 'bin/codex-usage.mjs');
   assert.equal((await run('doctor', '--json')).node, process.version);
   assert.equal((await run('status', '--json')).running, false);
   const both = await Promise.all([run('start', '--json'), run('start', '--json')]);
@@ -88,6 +93,45 @@ try {
     assert.equal((await run('doctor', '--json')).service, 'verified');
     await run('autostart', 'disable', '--json');
   }
+  if (process.platform === 'darwin') {
+    assert.equal((await run('autostart', 'enable', '--json')).enabled, true);
+    const plist = path.join(env.CODEX_USAGE_STARTUP_DIR, 'com.esoren.codex-usage.plist');
+    await exec('/usr/bin/plutil', ['-lint', plist]);
+    const parsed = JSON.parse((await exec('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plist])).stdout);
+    assert.deepEqual(parsed.ProgramArguments, [process.execPath, await realpath(cli), 'start']);
+    assert.equal(parsed.EnvironmentVariables.CODEX_HOME, env.CODEX_HOME);
+    assert.equal(parsed.EnvironmentVariables.CODEX_BIN, env.CODEX_BIN);
+    assert.equal(parsed.KeepAlive, false);
+    // Bootstrap a uniquely labelled copy in the user's non-GUI domain. Never touch real login items.
+    const label = `com.esoren.codex-usage.test.${createHash('sha256').update(root).digest('hex').slice(0, 16)}`;
+    const copy = path.join(root, 'test-launch.plist');
+    await writeFile(copy, (await readFile(plist, 'utf8')).replace('com.esoren.codex-usage</string>', `${label}</string>`));
+    const domain = `user/${process.getuid()}`;
+    await run('stop', '--json');
+    await exec('/bin/launchctl', ['bootstrap', domain, copy]);
+    launchJob = `${domain}/${label}`;
+    for (let i = 0; i < 60; i++) {
+      if ((await run('doctor', '--json')).service === 'verified') break;
+      await new Promise(r => setTimeout(r, 300));
+    }
+    assert.equal((await run('doctor', '--json')).service, 'verified');
+    // Wait until the one-shot launcher exits, then prove its detached service survives.
+    let exited = false;
+    for (let i = 0; i < 60; i++) {
+      const job = (await exec('/bin/launchctl', ['print', launchJob])).stdout;
+      if (/last exit code = 0/.test(job) && !/\n\s*pid = \d+/.test(job)) { exited = true; break; }
+      await new Promise(r => setTimeout(r, 300));
+    }
+    assert.ok(exited, 'one-shot launch job exited successfully');
+    assert.equal((await run('doctor', '--json')).service, 'verified');
+    const disabled = await fetch(base + '/api/system/autostart', { method: 'POST', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: false }) });
+    assert.equal(disabled.status, 200);
+    assert.equal((await run('doctor', '--json')).service, 'verified');
+    await run('stop', '--json');
+    await new Promise(r => setTimeout(r, 1500));
+    assert.equal((await run('status', '--json')).running, false, 'launchd does not restart manually stopped service');
+    await exec('/bin/launchctl', ['bootout', launchJob]); launchJob = undefined;
+  }
   await run('skill', 'install', '--json');
   assert.ok((await readFile(path.join(env.CODEX_HOME, 'skills/codex-usage/SKILL.md'), 'utf8')).includes('codex-usage'));
   await run('skill', 'uninstall', '--json');
@@ -106,6 +150,23 @@ try {
   await writeFile(recordFile, JSON.stringify({ pid: 2147483000, token: 'stale', version: '0.1.0', port }));
   await Promise.all([run('start', '--json'), run('start', '--json')]);
   await run('stop', '--json');
+  // Abrupt death leaves an instance record, but the kernel must release the guard.
+  await run('start', '--json');
+  const crashed = JSON.parse(await readFile(recordFile, 'utf8'));
+  process.kill(crashed.pid, 'SIGKILL');
+  for (let i = 0; i < 100; i++) {
+    try { process.kill(crashed.pid, 0); } catch { break; }
+    await new Promise(r => setTimeout(r, 50));
+  }
+  await Promise.all([run('start', '--json'), run('start', '--json')]);
+  assert.notEqual(JSON.parse(await readFile(recordFile, 'utf8')).pid, crashed.pid);
+  await run('stop', '--json');
+  if (process.platform === 'darwin') {
+    const lockOwner = createServer(socket => socket.destroy());
+    await new Promise((resolve, reject) => { lockOwner.once('error', reject); lockOwner.listen(serviceGuardAddress(env.CODEX_USAGE_DATA_DIR), resolve); });
+    try { await assert.rejects(run('start', '--json')); assert.ok(lockOwner.listening); }
+    finally { await new Promise(r => lockOwner.close(r)); }
+  }
   // Occupied port is not silently changed and the foreign listener survives.
   const foreign = createServer(socket => socket.destroy());
   await new Promise(r => foreign.listen(port, '127.0.0.1', r));
@@ -113,9 +174,17 @@ try {
   finally { await new Promise(r => foreign.close(r)); }
   console.log('PASS: package install, arbitrary cwd, concurrent/repeated start, API/assets, JSON, refresh, identity/version mismatch, same-origin startup, hidden launcher, Skill, reinstall/data preservation, migration, stale recovery, stop, port conflict.');
 } catch (error) {
+  const diagnostics = path.join(project, 'artifacts/ci-smoke');
+  await mkdir(diagnostics, { recursive: true });
+  await writeFile(path.join(diagnostics, 'failure.txt'), `${process.platform}/${process.arch} ${process.version}\n${error.stack || error}\n${error.stdout || ''}\n${error.stderr || ''}`);
+  // Never collect instance.json, credentials or SQLite: only this test's synthetic service logs.
+  for (const name of ['service.log', 'launcher.log', 'launcher-error.log']) {
+    try { await writeFile(path.join(diagnostics, name), await readFile(path.join(env.CODEX_USAGE_DATA_DIR, name))); } catch {}
+  }
   console.error('Package smoke failed:', error);
   throw error;
 } finally {
+  if (launchJob) await exec('/bin/launchctl', ['bootout', launchJob]).catch(() => {});
   if (cli) { try { await run('stop', '--json'); } catch {} }
   const resolved = path.resolve(root);
   assert.ok(resolved.startsWith(path.resolve(os.tmpdir()) + path.sep) && path.basename(resolved).startsWith('codex-package-'));

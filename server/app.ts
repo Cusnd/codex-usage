@@ -176,7 +176,7 @@ export async function createApp(
       return reply.code(403).send({ error: { code: 'FORBIDDEN', message: '需要同源设置页面操作。' } });
     }
     try { return wrap(setAutostart(req.body.enabled), 'settings'); }
-    catch (error) { throw Object.assign(new Error(error instanceof Error ? error.message : 'Windows 启动项操作失败。'), { statusCode: 400 }); }
+    catch (error) { throw Object.assign(new Error(error instanceof Error ? error.message : '系统启动项操作失败。'), { statusCode: 400 }); }
   });
   app.get(
     "/api/pricing",

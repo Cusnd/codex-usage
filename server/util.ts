@@ -32,10 +32,14 @@ export function integer(value: unknown): bigint | null {
 }
 export function projectPath(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
-  return path.win32
-    .normalize(value.replace(/^\\\\\?\\/, ""))
-    .replace(/[\\/]+$/, "")
-    .toLowerCase();
+  const windows = /^[a-z]:/i.test(value) || value.startsWith('\\\\') || /^\/\/[^/]+\/[^/]+(?:\/|$)/.test(value);
+  if (!windows) {
+    const normalized = path.posix.normalize(value);
+    return normalized === '/' ? '/' : normalized.replace(/\/+$/, '');
+  }
+  const plain = value.replace(/^\\\\\?\\UNC\\/i, '\\\\').replace(/^\\\\\?\\/, '');
+  const normalized = path.win32.normalize(plain).toLowerCase();
+  return normalized === path.win32.parse(normalized).root ? normalized : normalized.replace(/[\\/]+$/, '');
 }
 export { label, ratio } from "../shared/query-values.js";
 export const yieldLoop = () =>

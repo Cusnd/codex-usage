@@ -1,16 +1,25 @@
-name: Windows checks
+name: Windows and macOS checks
 on:
   push:
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: compatibility-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  windows-x64:
-    runs-on: windows-latest
+  platform-checks:
+    name: ${{ matrix.target.runner }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.target.runner }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        target:
+          - { runner: windows-latest, platform: win32, arch: x64 }
+          - { runner: macos-15, platform: darwin, arch: arm64 }
+          - { runner: macos-15-intel, platform: darwin, arch: x64 }
         node: ['22.13.0', '22.x', '24.0.0', '24.x', '26.0.0', '26.x']
     steps:
       - uses: actions/checkout@v4
@@ -19,8 +28,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          architecture: ${{ matrix.target.arch }}
           cache: npm
           cache-dependency-path: workspace/中文 project/package-lock.json
+      - name: Verify native platform and architecture
+        env:
+          EXPECTED_PLATFORM: ${{ matrix.target.platform }}
+          EXPECTED_ARCH: ${{ matrix.target.arch }}
+        run: node -e "console.log(process.platform, process.arch, process.version); if (process.platform !== process.env.EXPECTED_PLATFORM || process.arch !== process.env.EXPECTED_ARCH) process.exit(1)"
       - run: npm ci
         working-directory: workspace/中文 project
       - run: npm run check
@@ -33,3 +48,11 @@ jobs:
         working-directory: workspace/中文 project
       - run: npm run package:smoke
         working-directory: workspace/中文 project
+      - name: Preserve synthetic lifecycle failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifecycle-${{ matrix.target.runner }}-node-${{ matrix.node }}
+          path: workspace/中文 project/artifacts/ci-smoke/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,5 +1,9 @@
 # npm release plan
 
+## macOS source candidate — not published
+
+The source adds Windows x64 + macOS x64/arm64 compatibility. Published 0.1.2 remains Windows-only. Before a future publication, require successful native Windows and both Mac architecture CI matrices, record the run in [compatibility status](MACOS_COMPATIBILITY.md), then select a new version and verify the exact archive. Desktop spot checks are optional follow-up, not a compatibility release gate. This update does not publish a new package.
+
 ## First release completed — 2026-09-09
 
 `@esoren/codex-usage@0.1.1` was published publicly with the `latest` tag. The authenticated publisher was `sorenliu`, verified as owner of the `esoren` organization. Anonymous registry access, registry metadata, SHA-512 integrity, and the downloaded tarball's SHA-256 were verified. The downloaded registry archive passed the isolated installation/lifecycle smoke test.

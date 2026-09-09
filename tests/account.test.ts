@@ -174,7 +174,7 @@ test('real synthetic App Server protocol, large integers and child cleanup',()=>
  }finally{reader.close();}
 }));
 
-test('App Server shutdown aborts RPC and Windows npm-style process tree',()=>fixture(async root=>{
+test('App Server shutdown aborts RPC and npm-style process tree',()=>fixture(async root=>{
  await writeAuth(root);await writeScenario(root,{hang:'account/usage/read',grandchild:true});const reader=nativeReader(root);
  const pending=reader.readUsage();const rejected=assert.rejects(pending,(e:any)=>e.code==='CANCELLED');
  await until(async()=>{try{await access(path.join(root,'rpc-grandchild-pid'));return true;}catch{return false;}});
@@ -239,6 +239,23 @@ test('invalid explicit CLI or unsupported login never sends OAuth HTTP',()=>fixt
  await writeAuth(root);await writeFile(path.join(root,'config.toml'),'cli_auth_credentials_store = "keyring"');
  const keyring=new AccountReader({root,resolveCommand:noCli,fetch:fetcher});
  await assert.rejects(keyring.readLimits(),(e:any)=>e.code==='UNSUPPORTED_STORE');keyring.close();assert.equal(fetches,0);
+}));
+
+test('macOS shutdown terminates an uncooperative descendant after the grace period', { skip: process.platform !== 'darwin' }, () => fixture(async root => {
+ await writeAuth(root); await writeScenario(root, { hang: 'account/usage/read', grandchild: true, stubborn: true });
+ const reader = nativeReader(root);
+ const pending = reader.readUsage();
+ const rejected = assert.rejects(pending, (e: any) => e.code === 'CANCELLED');
+ await until(async () => { try { await access(path.join(root, 'rpc-grandchild-pid')); return true; } catch { return false; } });
+ const parent = Number(await readFile(path.join(root, 'rpc-pid'), 'utf8'));
+ const descendant = Number(await readFile(path.join(root, 'rpc-grandchild-pid'), 'utf8'));
+ try {
+  reader.close(); await rejected;
+  await until(async () => !alive(parent) && !alive(descendant));
+ } finally {
+  reader.close();
+  for (const pid of [parent, descendant]) { try { process.kill(pid, 'SIGKILL'); } catch {} }
+ }
 }));
 
 test('OAuth credentials remain unchanged and never enter API, logs or SQLite snapshots',()=>fixture(async root=>{

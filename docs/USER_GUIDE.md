@@ -10,6 +10,8 @@ The easiest route is to give an agent the [installation guide](INSTALL_FOR_AGENT
 
 ### Manual installation
 
+The source adds macOS Apple Silicon/Intel compatibility; published 0.1.2 is still Windows-only. On a Mac follow [candidate installation and validation status](MACOS_COMPATIBILITY.md), using existing supported Node/npm. CLI examples without PowerShell variables also work in zsh/bash. The private-runtime installer and legacy archive example are Windows-only.
+
 ```powershell
 npm install -g @esoren/codex-usage
 codex-usage
@@ -49,7 +51,7 @@ The current interface is in Chinese. These are the main areas:
 | 总览 — Overview | See recent activity and available account limits side by side. |
 | 消耗分析 — Analysis | Explore trends and group usage by project, model, reasoning effort, task, or turn. |
 | 任务明细 — Tasks | Search for a task, inspect its turns, and explore its agent team. |
-| 设置 — Settings | Configure refresh, timezone, costs, and Windows login startup; inspect data-source status. |
+| 设置 — Settings | Configure refresh, timezone, costs, and system login startup; inspect data-source status. |
 
 ### Follow a usage spike
 
@@ -109,11 +111,13 @@ codex-usage status --json
 codex-usage stop
 ```
 
-Closing the browser or launch terminal does not stop the background service. Enable **登录 Windows 后后台启动** in Settings, or use `codex-usage autostart enable`, to start it at Windows login. This is off by default and does not open a browser. `autostart disable` affects future logins, not the running process; `autostart status` reports its state.
+Closing the browser or launch terminal does not stop the background service. Enable **登录系统后后台启动** in Settings, or use `codex-usage autostart enable`, to start it at system login. This is off by default and does not open a browser. `autostart disable` affects future logins, not the running process; `autostart status` reports its state.
 
 With the default service running, [usage.esoren.com](https://usage.esoren.com) redirects to this computer's local address. It needs internet, cannot install or start the app, and does not access another computer. A custom port needs its own local URL. Local statistics remain accessible offline through the CLI and local address.
 
 ## Upgrade, migrate, or uninstall
+
+macOS data defaults to `~/Library/Application Support/CodexUsage`, overridden by `CODEX_USAGE_DATA_DIR`. A user LaunchAgent registers startup for the next login and does not continuously restart a manually stopped service. If macOS blocks the Node background item, allow it in System Settings. Registration alone is not proof of successful login startup. After changing Node or the npm prefix, reinstall the Skill and re-enable previously enabled autostart to refresh absolute paths. The same CLI upgrade/uninstall sequence applies; migration uses a quoted POSIX path. Full commands: [macOS lifecycle](MACOS_COMPATIBILITY.md#paths-and-lifecycle).
 
 For an installation managed by the installer, rerun the [installation procedure](INSTALL_FOR_AGENTS.md): it stops the service, verifies the new release, preserves the cache, and updates an enabled startup launcher. Run `codex-usage skill install` afterward to update the Skill.
 
@@ -127,11 +131,11 @@ Before uninstalling, run `codex-usage autostart disable`, `codex-usage stop`, an
 
 | Symptom | Next step |
 | --- | --- |
-| Command is not found after installation | Open a new terminal, or invoke `codex-usage.cmd` from the actual installation prefix. |
+| Command is not found after installation | Open a new terminal. Windows: use `codex-usage.cmd` from the actual prefix. macOS: use `"$(npm prefix --global)/bin/codex-usage"`. |
 | Dashboard does not open | Run `codex-usage doctor --json` and `codex-usage status --json`; inspect the reported port and service state. |
 | History looks empty or incomplete | Check the selected dates, filters, import progress, and Codex data directory. Archived local sessions are included. |
 | Account panel is unavailable | Inspect the separate limits/history errors in Settings. Local statistics do not depend on them. |
 | Daily totals changed after switching timezone | Different day boundaries move records between dates; raw UTC timestamps are unchanged. |
 | Skill installation reports a conflict | Preserve the existing unmanaged Skill; resolve its ownership before retrying. |
 
-To wait for a local import, run `codex-usage refresh --source local --wait --timeout 300 --json`. For persistent errors, include the app, Node, and Windows versions with sanitized reproduction details in an [issue](https://github.com/Cusnd/codex-usage/issues). Do not attach login files, private instance tokens, databases, or real-session screenshots.
+To wait for a local import, run `codex-usage refresh --source local --wait --timeout 300 --json`. For persistent errors, include the app, Node, and OS versions and architecture with sanitized reproduction details in an [issue](https://github.com/Cusnd/codex-usage/issues). Do not attach login files, private instance tokens, databases, or real-session screenshots.

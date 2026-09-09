@@ -6,6 +6,10 @@ Use this procedure when the user asks you to install Codex Usage. Reading this d
 
 ## Install from npm with an existing Node runtime
 
+**macOS candidate:** the source targets x64/arm64, but registry version 0.1.2 remains Windows-only. Follow [candidate installation](MACOS_COMPATIBILITY.md) using existing supported Node/npm. Inspect `command -v node`, `command -v codex-usage`, `node -p 'process.arch'`, and `npm prefix --global`; install the verified candidate with `npm install --global /absolute/path/to/candidate.tgz`, then run the common CLI checks in section 3. Sections 1–2 are Windows-only.
+
+On macOS doctor must report `darwin` and `x64` or `arm64`, `webAssets: true`, and a verified service after start. Data/logs default to `~/Library/Application Support/CodexUsage`; Codex records and Skills use `~/.codex` or explicit overrides. If the CLI is missing, invoke `"$(npm prefix --global)/bin/codex-usage"`. Use a writable user prefix rather than `sudo`. Every command must succeed before continuing.
+
 For Windows x64 with Node.js 22.13+ (22.x), 24.x, or 26.x and npm, inspect `Get-Command codex-usage -ErrorAction SilentlyContinue` first. If the legacy package is installed, use the migration procedure below. Otherwise:
 
 ```powershell
@@ -77,7 +81,7 @@ Do not print login files or the private instance token. Logs are under `%LOCALAP
 After successful installation, tell the user:
 
 - Run **`codex-usage`** to start/reuse the service and open the dashboard. No subcommand is required.
-- Enable **登录 Windows 后后台启动** in Web Settings, or run `codex-usage autostart enable`. Leave it disabled unless requested. Login startup does not open a browser and may be delayed by Windows.
+- Enable **登录系统后后台启动** in Web Settings, or run `codex-usage autostart enable`. Leave it disabled unless requested. Login startup does not open a browser and may be delayed by the OS.
 - With the default local service running, enter **https://usage.esoren.com** in the browser. It redirects to **http://127.0.0.1:8765/** on that same device; the address bar changes. It cannot install/start the application or access another computer.
 - The domain needs internet. The local address and CLI work offline for local statistics. A custom `PORT` requires its own local URL; the domain always uses 8765.
 - Ask the Agent to analyze recorded usage. Examples: `summary --days 7 --json`, `breakdown --days 7 --group-by model --json`, `agents --id TASK_ID --json`.
@@ -86,6 +90,8 @@ After successful installation, tell the user:
 Report the installed version, install path, working local URL, Skill path, actual startup state, import status, and any unavailable account capabilities. Do not equate account limits with local token history or missing data with zero.
 
 ## Upgrade, migrate, or uninstall
+
+On macOS use the same npm/CLI lifecycle sequence in zsh/bash; see [macOS lifecycle](MACOS_COMPATIBILITY.md#paths-and-lifecycle). After changing Node or the prefix, reinstall the Skill and re-enable previously enabled autostart. Migration accepts a quoted POSIX path, e.g. `codex-usage migrate --from '/Users/name/old data/usage.sqlite'`. Uninstall with `autostart disable`, `stop`, `skill uninstall`, then `npm uninstall --global @esoren/codex-usage` in the actual prefix. Retain cached data and Codex originals; preserve unmanaged LaunchAgents. macOS registration takes effect next login, not immediately.
 
 For a scoped npm installation, stop the service, install the desired `@esoren/codex-usage` version into the same prefix, reinstall the Skill, and re-enable autostart if it was enabled. The cache remains outside the installed package directory.
 

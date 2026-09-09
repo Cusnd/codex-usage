@@ -33,7 +33,7 @@ type ThreadMetadata = {
   subagentParent: string | null;
   forkedFrom: string | null;
 };
-const metadataVersion = 1;
+const metadataVersion = 2; // Re-read cached records using source-platform project path semantics.
 type Event = Tokens & {
   event_key: string;
   thread_id: string;
@@ -189,7 +189,7 @@ export class Importer {
     ]);
     const identity = `${info.dev}:${info.ino}:${info.birthtimeMs}`;
     const savedState = saved ? (JSON.parse(saved.state) as State) : null;
-    // Re-read old files once, including unchanged logs, to recover typed edges.
+    // Re-read old files once to recover typed edges and source-platform project paths.
     const needsMetadata = savedState?.metadataVersion !== metadataVersion;
     const retryParent =
       !!savedState?.deferred &&

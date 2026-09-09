@@ -13,3 +13,13 @@ test('CLI rejects unsupported runtimes before loading application code', () => {
     assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND|ERR_UNKNOWN_BUILTIN_MODULE/);
   }
 });
+
+test('CLI rejects unsupported OS and architecture combinations', () => {
+  for (const [platform, arch] of [['linux', 'x64'], ['win32', 'arm64'], ['darwin', 'ia32']]) {
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `Object.defineProperty(process, 'platform', {value: ${JSON.stringify(platform)}}); Object.defineProperty(process, 'arch', {value: ${JSON.stringify(arch)}}); await import('./bin/codex-usage.mjs');`], { encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /supports Windows x64 and macOS x64\/arm64/);
+    assert.equal(result.stdout, '');
+  }
+});

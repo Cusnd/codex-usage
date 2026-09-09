@@ -15,10 +15,12 @@
     "cli"
   ],
   "os": [
-    "win32"
+    "win32",
+    "darwin"
   ],
   "cpu": [
-    "x64"
+    "x64",
+    "arm64"
   ],
   "publishConfig": {
     "access": "public",
@@ -86,6 +88,7 @@
     "docs/USER_GUIDE.md",
     "docs/USER_GUIDE.zh-CN.md",
     "docs/TECHNICAL_REFERENCE.md",
+    "docs/MACOS_COMPATIBILITY.md",
     "scripts/shell-link.ps1"
   ]
 }

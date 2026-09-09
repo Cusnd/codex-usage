@@ -8,6 +8,8 @@ A local dashboard for understanding your Codex activity. Follow a usage spike fr
 
 Windows x64 · Local-first · Apache-2.0
 
+The source now includes macOS Apple Silicon and Intel compatibility. See [macOS compatibility](docs/MACOS_COMPATIBILITY.md) for candidate installation and validation status. The published 0.1.2 package remains Windows-only; Mac support is not yet a verified release.
+
 Try the [live example](https://codex-usage-showcase.sorenliu.workers.dev) before installing. It runs the same React frontend with synthetic records, including task and turn details, agent teams, filters, and browser-local cost settings. Your own usage is available in the local app.
 
 ![Codex Usage overview with seven days of activity, token composition, daily trend, and synthetic account limits](docs/images/overview.png)

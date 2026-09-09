@@ -86,6 +86,25 @@ async function fixture(
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+test('old cached POSIX project metadata is reimported once without changing usage', () => fixture(async (s, i, dir) => {
+  const file = path.join(dir, 'sessions', 'posix.jsonl');
+  await writeFile(file, lines([
+    { ...meta(), payload: { id: 't', cwd: '/Users/中文/Project' } },
+    { ...context(), payload: { ...context().payload, cwd: '/Users/中文/Project' } }, record('posix-response', 100),
+  ]));
+  await i.scan(() => {});
+  const row = s.one('SELECT state FROM source_files WHERE path=?', [file])!;
+  const old = { ...JSON.parse(row.state), metadataVersion: 1, project: '\\users\\中文\\project' };
+  s.run('UPDATE source_files SET state=? WHERE path=?', [JSON.stringify(old), file]);
+  s.run('UPDATE threads SET project=?', [old.project]);
+  s.run('UPDATE usage_events SET project=?', [old.project]);
+  assert.equal(await i.importFile(file), true);
+  assert.equal(s.one('SELECT project FROM threads WHERE id=?', ['t'])!.project, '/Users/中文/Project');
+  assert.equal(s.one('SELECT project FROM usage_events')!.project, '/Users/中文/Project');
+  assert.equal(String(s.one('SELECT SUM(total_tokens) n FROM effective_events')!.n), '100');
+  assert.equal(await i.importFile(file), false);
+}));
 test("explicit usage replaces mirror, imports are idempotent, copies and archives deduplicate", async () =>
   fixture(async (s, i, d, q) => {
     const file = path.join(d, "sessions", "a.jsonl");

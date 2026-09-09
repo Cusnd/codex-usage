@@ -145,8 +145,19 @@ async function main() {
   if (command === 'start' || command === 'open') {
     if (port !== 8765) console.error('Custom port: usage.esoren.com still redirects to port 8765.');
     if (command === 'open') {
-      const opener = spawn('rundll32.exe', ['url.dll,FileProtocolHandler', base], { detached: true, stdio: 'ignore', windowsHide: true });
-      await new Promise<void>((resolve, reject) => { opener.once('spawn', resolve); opener.once('error', reject); }); opener.unref();
+      try {
+        const mac = process.platform === 'darwin';
+        const opener = spawn(mac ? '/usr/bin/open' : 'rundll32.exe', mac ? [base] : ['url.dll,FileProtocolHandler', base], { detached: true, stdio: 'ignore', windowsHide: true, ...(mac ? { timeout: 15000 } : {}) });
+        await new Promise<void>((resolve, reject) => {
+          opener.once('error', reject);
+          if (mac) opener.once('exit', code => code === 0 ? resolve() : reject(new Error(`open exited with code ${code}`)));
+          else opener.once('spawn', resolve);
+        });
+        opener.unref();
+      } catch (error) {
+        console.error(`Browser could not be opened: ${(error as Error).message}. Open ${base} manually; the service is running.`);
+        process.exitCode = 1;
+      }
     }
     return output({ running: true, url: base, version });
   }
