@@ -1,18 +1,36 @@
 name: Windows and macOS checks
 on:
-  push:
-    branches: [develop, main]
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
-  workflow_call:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: compatibility-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: true
 jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tree: ${{ steps.validation.outputs.tree }}
+      reuse: ${{ steps.validation.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/ci-reuse.test.mjs
+      - id: validation
+        run: node scripts/ci-reuse.mjs lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
   platform-checks:
+    needs: inspect
+    if: needs.inspect.outputs.reuse != 'true'
     name: ${{ matrix.target.runner }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.target.runner }}
     timeout-minutes: 20
@@ -27,6 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           path: workspace/中文 project
       - uses: actions/setup-node@v4
         with:
@@ -40,8 +59,6 @@ jobs:
           EXPECTED_ARCH: ${{ matrix.target.arch }}
         run: node -e "console.log(process.platform, process.arch, process.version); if (process.platform !== process.env.EXPECTED_PLATFORM || process.arch !== process.env.EXPECTED_ARCH) process.exit(1)"
       - run: npm ci
-        working-directory: workspace/中文 project
-      - run: npm run check
         working-directory: workspace/中文 project
       - run: npm test
         working-directory: workspace/中文 project
@@ -59,3 +76,22 @@ jobs:
           path: workspace/中文 project/artifacts/ci-smoke/
           if-no-files-found: ignore
           retention-days: 7
+  validated-tree:
+    name: Validated tree ${{ needs.inspect.outputs.tree }}
+    needs: [inspect, platform-checks]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'All 18 native platform/runtime jobs passed.'
+  result:
+    name: Compatibility result
+    if: always()
+    needs: [inspect, platform-checks, validated-tree]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require fresh or reused validation
+        env:
+          INSPECT: ${{ needs.inspect.result }}
+          REUSE: ${{ needs.inspect.outputs.reuse }}
+          MATRIX: ${{ needs.platform-checks.result }}
+          RECORD: ${{ needs.validated-tree.result }}
+        run: test "$INSPECT" = success && { test "$REUSE" = true || { test "$MATRIX" = success && test "$RECORD" = success; }; }

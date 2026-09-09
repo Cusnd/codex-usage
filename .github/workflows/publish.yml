@@ -4,12 +4,14 @@ on:
     tags: ['v*']
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: npm-publish
   cancel-in-progress: false
 jobs:
   version:
     runs-on: windows-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,11 +20,12 @@ jobs:
         with:
           node-version: '24'
       - run: node scripts/npm-release.mjs validate
-  checks:
-    needs: version
-    uses: ./.github/workflows/windows.yml
+      - name: Require successful checks for the release tree
+        run: node scripts/ci-reuse.mjs require
+        env:
+          GH_TOKEN: ${{ github.token }}
   publish:
-    needs: [version, checks]
+    needs: version
     runs-on: windows-latest
     timeout-minutes: 35
     permissions:
