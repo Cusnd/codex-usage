@@ -1,7 +1,7 @@
 import { AccountNotice } from "./AccountNotice";
 import { ArrowUpRight } from "lucide-react";
 import { DateTime } from "luxon";
-import { useContext, useMemo } from "react";
+import { memo, useContext, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AreaChart,
@@ -33,19 +33,31 @@ import { Workspace, useData, useRange } from "./workspace";
 import { MotionDetails, ResultRegion, Segmented, Updating } from "./MotionPrimitives";
 import { MotionArea, QuotaProgress } from "./ChartMotion";
 import type { ResultMotion } from "./motion-state";
+import { useReducedMotion } from "./motion";
 
-export function Chart({
-  rows,
-  account = false,
-  bucket = "day",
-  change,
-}: {
+type ChartProps = {
   rows: TrendRow[] | { time: string; totalTokens: string }[];
   account?: boolean;
   bucket?: "day" | "hour";
   change: ResultMotion;
-}) {
+};
+
+export function Chart(props: ChartProps) {
   const zone = useContext(Workspace).settings.timezone;
+  // Query timestamps, busy state and identical refreshes must not re-enter Recharts.
+  // Capture intent with the actual data, while letting a real timezone change redraw the plot.
+  const change = useMemo(() => props.change, [props.rows, zone, props.account]);
+  return <ChartCanvas {...props} zone={zone} change={change} />;
+}
+
+const ChartCanvas = memo(function ChartCanvas({
+  rows,
+  account = false,
+  bucket = "day",
+  change,
+  zone,
+}: ChartProps & { zone: string }) {
+  const reduced = useReducedMotion();
   const data = useMemo(() => rows.map((row) => ({
     ...row,
     totalPlot: Number(BigInt(row.totalTokens || "0") / 1000n) / 1000,
@@ -107,7 +119,9 @@ export function Chart({
             tickFormatter={(v) => v + "M"}
           />
           <Tooltip
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
+            animationDuration={180}
+            animationEasing="ease-out"
             content={({ active, payload }) =>
               active && payload?.length ? (
                 <div className="chart-tip">
@@ -132,7 +146,7 @@ export function Chart({
           />
           <Legend verticalAlign="bottom" height={24} iconType="plainline" />
           <MotionArea
-            change={change} points={points} series={`${account ? "account" : "local"}/${bucket}/${zone}/million-tokens`}
+            change={change} points={points} series={`${account ? "account" : "local"}/${zone}/million-tokens`}
             type="monotone"
             dataKey="totalPlot"
             name="总 Token"
@@ -145,18 +159,21 @@ export function Chart({
       </ResponsiveContainer>
     </div>
   );
-}
+});
 
 export function LocalTrend() {
   const r = useRange();
   const bucket = r.bucket;
   const q = useData<TrendRow[]>("local/trend", { ...r.filters, bucket });
+  const [displayed, setDisplayed] = useState<{ rows: TrendRow[]; bucket: typeof bucket }>();
+  if (q.data && !q.isPlaceholderData && (displayed?.rows !== q.data.data || displayed.bucket !== bucket))
+    setDisplayed({ rows: q.data.data, bucket });
   return (
     <section className="panel overview-trend">
       <div className="panel-heading">
         <div>
           <h2>消耗趋势</h2>
-          <p>按{bucket === "day" ? "日" : "小时"}观察本机记录</p>
+          <p>按{(displayed?.bucket ?? bucket) === "day" ? "日" : "小时"}观察本机记录</p>
         </div>
         <Segmented value={bucket} label="趋势粒度" small>
           <button
@@ -176,10 +193,10 @@ export function LocalTrend() {
         </Segmented>
       </div>
       <ErrorBox error={q.error} />
-      <Loading isLoading={q.isLoading} empty={q.data?.data.length === 0} />
+      <Loading isLoading={q.isLoading && !displayed} empty={displayed?.rows.length === 0} />
       <div className="result-region" aria-busy={q.motion.pending}>
         <Updating pending={q.motion.pending} />
-        {!!q.data?.data.length && <Chart rows={q.data.data} bucket={bucket} change={q.motion} />}
+        {!!displayed?.rows.length && <Chart rows={displayed.rows} bucket={displayed.bucket} change={q.motion} />}
       </div>
     </section>
   );

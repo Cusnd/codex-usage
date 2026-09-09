@@ -35,7 +35,7 @@ export function subscribeMotion(notify: () => void) {
 }
 export const refreshMotionVersion = () => Math.max(refresh.local.id, refresh.account.id);
 
-export type ResultMotion = { revision: number; animate: boolean; initial: boolean };
+export type ResultMotion = { revision: number; animate: boolean; initial: boolean; pending?: boolean };
 export type ResultSnapshot = ResultMotion & { data: string | undefined; at: number; used: number };
 export function settleResult(previous: ResultSnapshot, data: string, at: number, ticket: MotionTicket): ResultSnapshot {
   const initial = previous.data === undefined;
@@ -50,11 +50,22 @@ export function settleResult(previous: ResultSnapshot, data: string, at: number,
 }
 
 export type ChartSnapshot = { series: string; buckets: readonly string[]; values: readonly number[]; coordinates: string };
-export function chartTransition(previous: ChartSnapshot | undefined, next: ChartSnapshot, user: boolean, reduced: boolean) {
+export type PlotSnapshot = { input: string; from?: ChartSnapshot; current: ChartSnapshot; animate: boolean; revision: number };
+/** Query metadata cannot cancel an in-flight transition; only a different target changes intent. */
+export function settlePlot(previous: PlotSnapshot, input: string, next: ChartSnapshot, change: ResultMotion): PlotSnapshot {
+  if (input !== previous.input) return { input, from: previous.current, current: next, animate: change.animate, revision: change.revision };
+  if (next.coordinates !== previous.current.coordinates) return { ...previous, current: next };
+  return previous;
+}
+export function chartTransition(previous: ChartSnapshot | undefined, next: ChartSnapshot, user: boolean, reduced: boolean, continuous = false) {
   if (reduced || !user) return "none";
   if (!previous || !previous.values.length || !next.values.length) return "fade";
   if (previous.values.every((value, i) => value === next.values[i]) &&
       previous.buckets.join("|") === next.buckets.join("|") && previous.series === next.series) return "none";
+  // Curves may interpolate screen geometry across ranges/granularities. These intermediate
+  // shapes are visual transitions only; axes, labels and tooltip values remain real data.
+  if (continuous && previous.series === next.series && !!next.coordinates &&
+      next.values.every(Number.isFinite) && previous.values.every(Number.isFinite)) return "morph";
   return previous.series === next.series &&
     previous.coordinates === next.coordinates && !!next.coordinates &&
     previous.buckets.length === next.buckets.length &&
