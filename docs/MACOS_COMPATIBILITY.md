@@ -65,7 +65,7 @@ Data, logs and Skill backups remain. To migrate an old cache, stop its old servi
 - Windows x64 / Node 26.7.0: type checks, build, production API/assets smoke and npm installation/lifecycle smoke passed. The suite has 57 tests: 55 pass, with 2 macOS-only cases skipped. Browser-control acceptance verified task/turn navigation, platform-neutral settings text and the isolated startup switch (off → on → off). No macOS result is inferred from these checks.
 - macOS CI: configured for `macos-15` (arm64) and `macos-15-intel` (x64), with Node 22.13.0/22.x, 24.0.0/24.x and 26.0.0/26.x. Not run from this Windows workspace.
 - macOS permissions, npm symlinks and process-group cleanup: tests require a real Mac runner; a Windows skip is not a pass.
-- macOS LaunchAgent: package smoke validates the actual plist with `plutil`, bootstraps a uniquely labelled copy in `user/<uid>`, waits for the launcher to exit while its service survives, verifies stop does not restart, and removes the job. Smoke tests do not change real login items.
+- macOS LaunchAgent: package smoke validates the actual plist with `plutil`, bootstraps a uniquely labelled copy in the login domain `gui/<uid>`, waits for the launcher to exit while its service survives, verifies stop does not restart, and removes the job. Smoke tests do not change real login items.
 - macOS desktop: browser opening, logout/login and OS background-item approval are optional follow-up checks; they are not the compatibility completion gate. The native CI matrix validates the Node backend and real launchd lifecycle.
 - npm publication: not performed by this update.
 

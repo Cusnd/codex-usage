@@ -102,11 +102,13 @@ try {
     assert.equal(parsed.EnvironmentVariables.CODEX_HOME, env.CODEX_HOME);
     assert.equal(parsed.EnvironmentVariables.CODEX_BIN, env.CODEX_BIN);
     assert.equal(parsed.KeepAlive, false);
-    // Bootstrap a uniquely labelled copy in the user's non-GUI domain. Never touch real login items.
+    // LaunchAgents belong to the login (GUI) domain, which exists on GitHub's Mac images.
+    // Bootstrap a uniquely labelled copy; never change the real user's login item.
     const label = `com.esoren.codex-usage.test.${createHash('sha256').update(root).digest('hex').slice(0, 16)}`;
     const copy = path.join(root, 'test-launch.plist');
     await writeFile(copy, (await readFile(plist, 'utf8')).replace('com.esoren.codex-usage</string>', `${label}</string>`));
-    const domain = `user/${process.getuid()}`;
+    const domain = `gui/${process.getuid()}`;
+    await exec('/bin/launchctl', ['print', domain]);
     await run('stop', '--json');
     await exec('/bin/launchctl', ['bootstrap', domain, copy]);
     launchJob = `${domain}/${label}`;

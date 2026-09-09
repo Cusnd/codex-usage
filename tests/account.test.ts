@@ -161,7 +161,13 @@ test('switching users within same workspace during HTTP or RPC discards results'
 const mockProgram=path.resolve('tests/fixtures/mock-app-server.mjs');
 async function writeScenario(root:string,data:object){await writeFile(path.join(root,'rpc-scenario.json'),JSON.stringify(data));}
 function nativeReader(root:string,timeout=5000) {
- return new AccountReader({root,openRpc:async signal=>openAccountRpc({bin:process.execPath,args:[mockProgram]},root,signal,timeout)});
+ return new AccountReader({root,openRpc:async signal=>{
+  const rpc = openAccountRpc({bin:process.execPath,args:[mockProgram]},root,signal,timeout);
+  return {...rpc, close: async () => {
+   try { await rpc.close(); }
+   catch (error) { console.error('Synthetic RPC cleanup failed:', error); throw error; }
+  }};
+ }});
 }
 function alive(pid:number){try{process.kill(pid,0);return true;}catch{return false;}}
 async function until(fn:()=>Promise<boolean>,ms=5000){const start=Date.now();while(!await fn()){if(Date.now()-start>ms)throw new Error('condition timed out');await delay(20);}}
