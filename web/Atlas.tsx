@@ -15,6 +15,8 @@ import { ComparisonSection } from "./Comparison";
 import { useActiveRule } from "./motion";
 import { Header } from "./ui";
 import { useRange } from "./workspace";
+import { MotionDetails, useHierarchyMotion } from "./MotionPrimitives";
+import { useReveal } from "./motion";
 
 export function AtlasAnalysis() {
   const r = useRange();
@@ -26,6 +28,8 @@ export function AtlasAnalysis() {
   const session = r.search.get("session") || undefined;
   const [compare, setCompare] = useState(false);
   const tabMotion = useActiveRule<HTMLDivElement>(view);
+  const detailMotion = useHierarchyMotion<HTMLDivElement>(session || "", session ? 1 : 0);
+  const directoryMotion = useReveal<HTMLDivElement>(session || "", { direction: -1, ready: !session });
   return (
     <div className="atlas-page">
       <div className="atlas-page-heading">
@@ -71,7 +75,7 @@ export function AtlasAnalysis() {
         <div
           className={"atlas-master-detail " + (session ? "has-selection" : "")}
         >
-          <div className="atlas-directory">
+          <div className="atlas-directory" ref={directoryMotion}>
             <SessionList
               filters={r.filters}
               selected={session}
@@ -85,7 +89,7 @@ export function AtlasAnalysis() {
               }
             />
           </div>
-          <div className="atlas-detail">
+          <div className="atlas-detail" ref={detailMotion}>
             {session ? (
               <SessionPanel
                 id={session}
@@ -106,15 +110,15 @@ export function AtlasAnalysis() {
       ) : (
         <GroupWorkspace key={view} view={view} />
       )}
-      <details
+      <MotionDetails
         className="atlas-comparison"
-        onToggle={(e) => setCompare(e.currentTarget.open)}
-      >
-        <summary>
+        open={compare} onOpenChange={setCompare} duration={260}
+        summary={<>
           与上一时段比较 <ChevronDown size={16} />
-        </summary>
-        {compare && <ComparisonSection />}
-      </details>
+        </>}
+      >
+        <ComparisonSection />
+      </MotionDetails>
     </div>
   );
 }
@@ -123,6 +127,7 @@ export function AtlasThreads() {
   const r = useRange();
   const location = useLocation();
   const navigate = useNavigate();
+  const listMotion = useHierarchyMotion<HTMLDivElement>(location.pathname, 0);
   return (
     <div className="atlas-page">
       <div className="atlas-page-heading">
@@ -133,6 +138,7 @@ export function AtlasThreads() {
         <RangeControls />
       </div>
       <ActiveScope />
+      <div ref={listMotion}>
       <SessionList
         filters={r.filters}
         onSelect={(id) =>
@@ -142,6 +148,7 @@ export function AtlasThreads() {
           )
         }
       />
+      </div>
     </div>
   );
 }

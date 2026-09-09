@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
+import { OverlayScope, usePresence } from "./MotionPrimitives";
 export type ChoiceOption = {
   value: string;
   label: string;
@@ -29,15 +30,18 @@ export function Choice({
 }) {
   const [open, setOpen] = useState(false),
     [search, setSearch] = useState("");
+  const scope = useContext(OverlayScope);
+  const visible = open && scope.active;
   const [opensAbove, setOpensAbove] = useState(false);
-  const [position, setPosition] = useState({
+  const [position, setPosition] = useState<{ left: number; top?: number; bottom?: number; width: number; maxHeight: number }>({
     left: 0,
     top: 0,
     width: 280,
     maxHeight: 320,
   });
+  const presence = usePresence(visible, { popup: true, above: opensAbove });
+  const popup = presence.ref;
   const trigger = useRef<HTMLButtonElement>(null),
-    popup = useRef<HTMLDivElement>(null),
     input = useRef<HTMLInputElement>(null);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
@@ -68,14 +72,12 @@ export function Choice({
     const width = Math.min(Math.max(rect.width, 260), viewportWidth - 24);
     const below = document.documentElement.clientHeight - rect.bottom - 16,
       above = rect.top - 16;
-    const height = Math.min(360, Math.max(below, above));
-    setOpensAbove(below < Math.min(260, above));
+    const upwards = below < Math.min(260, above);
+    const height = Math.min(360, upwards ? above : below);
+    setOpensAbove(upwards);
     setPosition({
       left: Math.max(12, Math.min(rect.left, viewportWidth - width - 12)),
-      top:
-        below >= Math.min(260, above)
-          ? rect.bottom + 6
-          : Math.max(12, rect.top - height - 6),
+      ...(upwards ? { bottom: document.documentElement.clientHeight - rect.top + 6 } : { top: rect.bottom + 6 }),
       width,
       maxHeight: height,
     });
@@ -83,7 +85,7 @@ export function Choice({
     setOpen(true);
   };
   useEffect(() => {
-    if (!open) return;
+    if (!visible) return;
     const frame = requestAnimationFrame(() =>
       searchable
         ? input.current?.focus()
@@ -114,7 +116,8 @@ export function Choice({
       window.removeEventListener("resize", resize);
       document.removeEventListener("scroll", scroll, true);
     };
-  }, [open]);
+  }, [visible]);
+  useEffect(() => { if (!scope.active) setOpen(false); }, [scope.active]);
   const choose = (next: string) => {
     onChange(next);
     close(true);
@@ -127,8 +130,8 @@ export function Choice({
         className="choice-trigger"
         aria-label={label}
         aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? id : undefined}
+        aria-expanded={visible}
+        aria-controls={presence.present ? id : undefined}
         disabled={disabled}
         title={selected?.description || selected?.label || value}
         onClick={() => (open ? close() : show())}
@@ -147,12 +150,15 @@ export function Choice({
           aria-hidden="true"
         />
       </button>
-      {open &&
+      {presence.present &&
         createPortal(
           <div
             ref={popup}
             className="choice-popup"
             data-side={opensAbove ? "above" : "below"}
+            data-overlay-owners={scope.owners.join(" ")}
+            inert={!visible}
+            aria-hidden={!visible}
             style={position}
             onKeyDown={(e) => {
               if (e.key === "Escape") {

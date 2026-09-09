@@ -2,7 +2,6 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { DateTime } from "luxon";
 import { useMemo, useRef } from "react";
 import {
-  Bar,
   BarChart,
   Brush,
   CartesianGrid,
@@ -20,12 +19,16 @@ import { readTrendParent, selectedBrushIndices } from "./trend-range";
 import { ErrorBox, Loading, time } from "./ui";
 import { UsageBreakdown } from "./Usage";
 import { useData, useRange } from "./workspace";
+import { Segmented, Updating } from "./MotionPrimitives";
+import { MotionBar } from "./ChartMotion";
+import { useTrendLayout } from "./TrendMotion";
 
 export function TrendWorkspace() {
   const r = useRange();
   const patch = useUrlPatch();
   const bucket = r.bucket;
   const collapsed = r.search.get("trend") === "collapsed";
+  const layout = useTrendLayout(collapsed);
   const parent = readTrendParent(r.search.get("parentRange"));
   // Keep the brush's complete domain while the page queries the selected window.
   const domain = {
@@ -157,9 +160,10 @@ export function TrendWorkspace() {
           <button
             className="text-button"
             aria-expanded={!collapsed}
-            onClick={() =>
-              patch({ trend: collapsed ? undefined : "collapsed" })
-            }
+            onClick={() => {
+              layout.capture();
+              patch({ trend: collapsed ? undefined : "collapsed" });
+            }}
           >
             {collapsed ? "展开趋势" : "收起趋势"}
             <ChevronDown size={14} />
@@ -167,9 +171,9 @@ export function TrendWorkspace() {
         </div>
       </div>
       <ErrorBox error={summary.error || trend.error} />
-      <div className={"atlas-trend-grid " + (collapsed ? "is-collapsed" : "")}>
-        {!collapsed && (
-          <div className="atlas-chart-panel">
+      <div ref={layout.ref} className={"atlas-trend-grid " + (collapsed ? "is-collapsed" : "")}>
+        {layout.present && (
+          <div className="atlas-chart-panel" inert={collapsed} aria-hidden={collapsed}>
             <div className="chart-toolbar">
               {bucket === "day" ? (
                 <Choice
@@ -185,7 +189,7 @@ export function TrendWorkspace() {
               ) : (
                 <small>单位：百万 Token · {r.timezone}</small>
               )}
-              <div className="segmented">
+              <Segmented value={bucket} label="趋势粒度" small>
                 {(["day", "hour"] as const).map((value) => (
                   <button
                     key={value}
@@ -196,17 +200,19 @@ export function TrendWorkspace() {
                     {value === "day" ? "按日" : "按小时"}
                   </button>
                 ))}
-              </div>
+              </Segmented>
             </div>
             <Loading isLoading={trend.isPending} />
             {trend.data && (
               <div
-                className="atlas-chart"
+                className="atlas-chart result-region"
+                aria-busy={trend.motion.pending}
                 onKeyUp={() => {
                   commitBrush(brush.current);
                   brush.current = null;
                 }}
               >
+                <Updating pending={trend.motion.pending} />
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     key={`${domain.from}/${parent || r.range === "custom" ? domain.to : "live"}/${bucket}`}
@@ -236,6 +242,7 @@ export function TrendWorkspace() {
                       tickFormatter={(n) => `${n}M`}
                     />
                     <Tooltip
+                      isAnimationActive={false}
                       cursor={{ fill: "var(--accent-soft)" }}
                       content={({ active, payload }) => {
                         const point = payload?.[0]?.payload as
@@ -277,7 +284,8 @@ export function TrendWorkspace() {
                         ) : null;
                       }}
                     />
-                    <Bar
+                    <MotionBar
+                      change={trend.motion} points={points} series={`${bucket}/${r.timezone}/million-tokens`}
                       dataKey="value"
                       onClick={(entry) => {
                         const point = entry as unknown as {
@@ -290,7 +298,6 @@ export function TrendWorkspace() {
                       fill="var(--blue)"
                       radius={[3, 3, 0, 0]}
                       maxBarSize={48}
-                      isAnimationActive={false}
                     />
                     {points.length > 1 && (
                       <Brush

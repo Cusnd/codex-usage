@@ -1,6 +1,6 @@
 # Third-party notices
 
-Codex Usage original code is licensed under Apache-2.0. Dependencies retain their own licenses. This inventory is generated from the locked production dependencies; bundled browser code and font assets retain the notices below.
+Codex Usage original code is licensed under Apache-2.0. Dependencies retain their own licenses. This inventory covers locked server runtime dependencies as well as browser libraries and font assets bundled at build time. Browser build dependencies retain the notices below even when they are not installed as runtime packages.
 
 The online synthetic example additionally bundles sql.js 1.14.2 (MIT), with its license distributed as `/sql-js-license.txt`. It runs SQLite in the visitor's browser and is excluded from the local application's production bundle and runtime dependencies.
 

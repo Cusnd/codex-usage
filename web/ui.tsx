@@ -8,6 +8,8 @@ import { compact, projectName } from "./api";
 import { Choice } from "./Choice";
 import { UsageBreakdown } from "./Usage";
 import { useData, useRange } from "./workspace";
+import { Collapse, MotionDetails, PresenceList, Segmented } from "./MotionPrimitives";
+import { markQueryMotion } from "./motion-state";
 export function time(at: string | null | undefined, zone = "America/New_York") {
   return at
     ? DateTime.fromISO(at).setZone(zone).toFormat("MM-dd HH:mm:ss")
@@ -89,11 +91,14 @@ export function FilterBar({ local = true }: { local?: boolean }) {
     to: r.filters.to,
   });
   const [customOpen, setCustomOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const advanced = useRef<HTMLDetailsElement>(null);
+  const customTrigger = useRef<HTMLButtonElement>(null);
   const [draftFrom, setDraftFrom] = useState(""),
     [draftTo, setDraftTo] = useState(""),
     [error, setError] = useState("");
   const beginCustom = () => {
+    setError("");
     setDraftFrom(
       DateTime.fromISO(r.filters.from!)
         .setZone(r.timezone)
@@ -125,6 +130,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
       to: to.toFormat("yyyy-MM-dd'T'HH:mm"),
     });
     setCustomOpen(false);
+    customTrigger.current?.focus();
   };
   const change = (key: "project" | "model" | "effort", value: string) =>
     r.update(
@@ -144,7 +150,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
     <div className="filter-surface compact-filters">
       <div className="filter-bar">
         <div className="field range-field">
-          <div className="segmented" role="group" aria-label="时间范围">
+          <Segmented value={r.range} label="时间范围">
             {[
               ["today", "今天"],
               ["7", "最近 7 天"],
@@ -163,6 +169,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
               </button>
             ))}
             <button
+              ref={customTrigger}
               aria-expanded={customOpen}
               aria-pressed={r.range === "custom"}
               className={r.range === "custom" ? "selected" : ""}
@@ -170,30 +177,22 @@ export function FilterBar({ local = true }: { local?: boolean }) {
             >
               自定义
             </button>
-          </div>
+          </Segmented>
         </div>
         {local && (
-          <details
+          <MotionDetails
             className="advanced-filters"
-            ref={advanced}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Escape" &&
-                !event.defaultPrevented &&
-                advanced.current
-              ) {
-                advanced.current.open = false;
-                advanced.current.querySelector("summary")?.focus();
-              }
-            }}
-          >
-            <summary>
+            detailsRef={advanced}
+            open={advancedOpen}
+            onOpenChange={setAdvancedOpen}
+            popup contentClassName="advanced-filter-panel"
+            summary={<>
               筛选
               {active
                 ? ` · ${(["project", "model", "effort"] as const).filter((k) => r.filters[k] || r.filters.unknown === k).length}`
                 : ""}
-            </summary>
-            <div className="advanced-filter-panel">
+            </>}
+          >
               <div className="advanced-filter-heading">
                 <strong>限定统计范围</strong>
                 <button
@@ -201,7 +200,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
                   aria-label="关闭筛选"
                   onClick={() => {
                     if (advanced.current) {
-                      advanced.current.open = false;
+                      setAdvancedOpen(false);
                       advanced.current.querySelector("summary")?.focus();
                     }
                   }}
@@ -246,11 +245,9 @@ export function FilterBar({ local = true }: { local?: boolean }) {
                   </div>
                 );
               })}
-            </div>
-          </details>
+          </MotionDetails>
         )}
-        <details className="range-summary">
-          <summary>
+        <MotionDetails className="range-summary" popup contentClassName="range-description" summary={<>
             {DateTime.fromISO(r.filters.from!)
               .setZone(r.timezone)
               .toFormat("MM-dd")}{" "}
@@ -258,8 +255,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
             {DateTime.fromISO(r.filters.to!)
               .setZone(r.timezone)
               .toFormat("MM-dd")}
-          </summary>
-          <div className="range-description">
+          </>}>
             {DateTime.fromISO(r.filters.from!)
               .setZone(r.timezone)
               .toFormat("yyyy-MM-dd HH:mm")}{" "}
@@ -269,10 +265,9 @@ export function FilterBar({ local = true }: { local?: boolean }) {
               .toFormat("yyyy-MM-dd HH:mm")}
             <br />
             {r.timezone} · 以此时区重新统计
-          </div>
-        </details>
+        </MotionDetails>
       </div>
-      {customOpen && (
+      <Collapse open={customOpen}>
         <form className="custom-range-form" onSubmit={applyCustom}>
           <label>
             开始时间
@@ -293,7 +288,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
             />
           </label>
           <button className="primary-button">应用时间范围</button>
-          <button type="button" onClick={() => setCustomOpen(false)}>
+          <button type="button" onClick={() => { setCustomOpen(false); customTrigger.current?.focus(); }}>
             取消
           </button>
           {error && (
@@ -302,16 +297,17 @@ export function FilterBar({ local = true }: { local?: boolean }) {
             </span>
           )}
         </form>
-      )}
-      {active && (
+      </Collapse>
+      <Collapse open={!!active} duration={160}>
         <div className="active-filters">
           <span>正在筛选</span>
-          {(["project", "model", "effort"] as const)
+          <PresenceList compact className="scope-chip-list" items={(["project", "model", "effort"] as const)
             .filter((k) => r.filters[k] || r.filters.unknown === k)
-            .map((k) => (
+            .map((key) => ({ key, value: r.filters[key], unknown: r.filters.unknown === key }))} itemKey={(item) => item.key}>
+            {({ key: k, value, unknown }) => (
               <button
                 key={k}
-                title={r.filters[k] || "未知"}
+                title={value || "未知"}
                 onClick={() =>
                   r.update({
                     [k]: undefined,
@@ -322,14 +318,15 @@ export function FilterBar({ local = true }: { local?: boolean }) {
               >
                 {k === "project" ? "项目" : k === "model" ? "模型" : "推理强度"}
                 ：
-                {r.filters.unknown === k
+                {unknown
                   ? "未知"
                   : k === "project"
-                    ? projectName(r.filters[k]!)
-                    : r.filters[k]}{" "}
+                    ? projectName(value!)
+                    : value}{" "}
                 <X size={13} aria-hidden="true" />
               </button>
-            ))}
+            )}
+          </PresenceList>
           <button
             className="clear-filters"
             onClick={() =>
@@ -344,7 +341,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
             清除全部筛选
           </button>
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }
@@ -385,6 +382,7 @@ export function Pagination({
     setSearch((old) => {
       const next = new URLSearchParams(old);
       next.set(param, String(value));
+      markQueryMotion(next, old);
       return next;
     });
   return (

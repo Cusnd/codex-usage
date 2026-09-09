@@ -4,6 +4,7 @@ import type { AgentUsage, Filter } from "../shared/contracts";
 import { Workspace, useData } from "./workspace";
 import { compact, exact } from "./api";
 import { CostValue, sessionTitle } from "./Usage";
+import { MotionDetails } from "./MotionPrimitives";
 import { ErrorBox, Loading } from "./ui";
 
 export function AgentUsagePanel({ id, filters }: { id: string; filters: Filter }) {
@@ -33,8 +34,7 @@ export function AgentUsagePanel({ id, filters }: { id: string; filters: Filter }
           ))}
         </div>
         {data.agents.length === 1 && <p className="agent-hint">未发现可识别的 subagent。</p>}
-        <details className="agent-details" open>
-          <summary>Agent 明细 · {data.agents.length} 个（含当前 agent）</summary>
+        <MotionDetails className="agent-details" defaultOpen duration={260} summary={<>Agent 明细 · {data.agents.length} 个（含当前 agent）</>}>
           <div className="agent-table-scroll" tabIndex={0} role="region" aria-label="Agent 用量明细表，可横向滚动">
             <table className="atlas-table agent-table">
               <thead><tr>
@@ -64,7 +64,7 @@ export function AgentUsagePanel({ id, filters }: { id: string; filters: Filter }
               </tr>)}</tbody>
             </table>
           </div>
-        </details>
+        </MotionDetails>
       </>}
     </section>
   );

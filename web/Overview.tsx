@@ -1,10 +1,9 @@
 import { AccountNotice } from "./AccountNotice";
 import { ArrowUpRight } from "lucide-react";
 import { DateTime } from "luxon";
-import { useContext } from "react";
+import { useContext, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
-  Area,
   AreaChart,
   CartesianGrid,
   Legend,
@@ -31,21 +30,27 @@ import {
   time,
 } from "./ui";
 import { Workspace, useData, useRange } from "./workspace";
+import { MotionDetails, ResultRegion, Segmented, Updating } from "./MotionPrimitives";
+import { MotionArea, QuotaProgress } from "./ChartMotion";
+import type { ResultMotion } from "./motion-state";
 
 export function Chart({
   rows,
   account = false,
   bucket = "day",
+  change,
 }: {
   rows: TrendRow[] | { time: string; totalTokens: string }[];
   account?: boolean;
   bucket?: "day" | "hour";
+  change: ResultMotion;
 }) {
   const zone = useContext(Workspace).settings.timezone;
-  const data = rows.map((row) => ({
+  const data = useMemo(() => rows.map((row) => ({
     ...row,
     totalPlot: Number(BigInt(row.totalTokens || "0") / 1000n) / 1000,
-  }));
+  })), [rows]);
+  const points = useMemo(() => data.map((row) => ({ time: row.time, value: row.totalPlot })), [data]);
   return (
     <div
       className="chart"
@@ -102,6 +107,7 @@ export function Chart({
             tickFormatter={(v) => v + "M"}
           />
           <Tooltip
+            isAnimationActive={false}
             content={({ active, payload }) =>
               active && payload?.length ? (
                 <div className="chart-tip">
@@ -125,7 +131,8 @@ export function Chart({
             }
           />
           <Legend verticalAlign="bottom" height={24} iconType="plainline" />
-          <Area
+          <MotionArea
+            change={change} points={points} series={`${account ? "account" : "local"}/${bucket}/${zone}/million-tokens`}
             type="monotone"
             dataKey="totalPlot"
             name="总 Token"
@@ -133,7 +140,6 @@ export function Chart({
             strokeWidth={2}
             dot={data.length === 1 ? { r: 4 } : false}
             fill={`url(#${account ? "accountFill" : "localFill"})`}
-            isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -152,7 +158,7 @@ export function LocalTrend() {
           <h2>消耗趋势</h2>
           <p>按{bucket === "day" ? "日" : "小时"}观察本机记录</p>
         </div>
-        <div className="segmented">
+        <Segmented value={bucket} label="趋势粒度" small>
           <button
             aria-pressed={bucket === "day"}
             className={bucket === "day" ? "selected" : ""}
@@ -167,11 +173,14 @@ export function LocalTrend() {
           >
             按小时
           </button>
-        </div>
+        </Segmented>
       </div>
       <ErrorBox error={q.error} />
       <Loading isLoading={q.isLoading} empty={q.data?.data.length === 0} />
-      {!!q.data?.data.length && <Chart rows={q.data.data} bucket={bucket} />}
+      <div className="result-region" aria-busy={q.motion.pending}>
+        <Updating pending={q.motion.pending} />
+        {!!q.data?.data.length && <Chart rows={q.data.data} bucket={bucket} change={q.motion} />}
+      </div>
     </section>
   );
 }
@@ -203,7 +212,7 @@ export function Overview() {
               分析消耗来源 <ArrowUpRight size={15} />
             </Link>
           </div>
-          <MetricsCards data={summary.data?.data} />
+          <ResultRegion change={summary.motion} pending={summary.motion.pending} animate={false}><MetricsCards data={summary.data?.data} /></ResultRegion>
           <ErrorBox error={summary.error} />
           <LocalTrend />
           <Notes response={summary.data} />
@@ -248,10 +257,11 @@ export function Overview() {
                         </strong>
                       </div>
                       {w.remainingPercent !== null && (
-                        <progress
-                          max="100"
+                        <QuotaProgress
+                          identity={`${b.id}/${name}/${w.resetsAt}`}
                           value={w.remainingPercent}
-                          aria-label={`${b.name} ${name}剩余额度`}
+                          label={`${b.name} ${name}剩余额度`}
+                          change={limits.motion}
                         />
                       )}
                       <small>
@@ -279,8 +289,7 @@ export function Overview() {
           )}
         </aside>
       </div>
-      <details className="panel account-chart">
-        <summary>官方原始每日记录（独立参考）</summary>
+      <MotionDetails className="panel account-chart" duration={260} summary="官方原始每日记录（独立参考）">
         <AccountNotice
           state={status?.accountHistory}
           label="账户每日历史"
@@ -306,6 +315,7 @@ export function Overview() {
         {account.data?.data.dailyUsageBuckets?.length ? (
           <Chart
             account
+            change={account.motion}
             rows={account.data.data.dailyUsageBuckets.map((x) => ({
               time: x.startDate,
               totalTokens: x.tokens,
@@ -332,7 +342,7 @@ export function Overview() {
             <b>{exact(account.data?.data.summary.longestStreakDays)} 天</b>
           </span>
         </div>
-      </details>
+      </MotionDetails>
     </>
   );
 }

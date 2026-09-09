@@ -150,7 +150,7 @@
   min-height: 34px;
   font-size: 12px;
 }
-.advanced-filters[open] > summary {
+.advanced-filters[data-expanded="true"] > summary {
   color: var(--blue);
   border-color: var(--blue);
 }

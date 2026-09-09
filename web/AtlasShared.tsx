@@ -6,6 +6,8 @@ import { projectName } from "./api";
 import { Choice } from "./Choice";
 import { FilterBar, time } from "./ui";
 import { useData, useRange, Workspace } from "./workspace";
+import { markQueryMotion } from "./motion-state";
+import { MotionDetails, PresenceList } from "./MotionPrimitives";
 
 export type Group = "project" | "model" | "effort";
 
@@ -34,6 +36,7 @@ export function useUrlPatch() {
       const next = new URLSearchParams(old);
       for (const [key, value] of Object.entries(patch))
         value === undefined ? next.delete(key) : next.set(key, value);
+      markQueryMotion(next, old);
       return next;
     });
 }
@@ -127,12 +130,13 @@ export function ActiveScope() {
       <span>
         {summary.data?.meta.exampleData ? "示例数据" : "本机记录"}
       </span>
-      {(["project", "model", "effort"] as const)
+      <PresenceList compact className="scope-chip-list" items={(["project", "model", "effort"] as const)
         .filter((key) => r.filters[key] || r.filters.unknown === key)
-        .map((key) => (
+        .map((key) => ({ key, value: r.filters[key], unknown: r.filters.unknown === key }))} itemKey={(item) => item.key}>
+        {({ key, value, unknown }) => (
           <button
             key={key}
-            title={r.filters[key]}
+            title={value}
             onClick={() =>
               r.update({
                 [key]: undefined,
@@ -142,14 +146,15 @@ export function ActiveScope() {
             }
           >
             {dimensions.find(([id]) => id === key)![1]}：
-            {r.filters.unknown === key
+            {unknown
               ? "未知"
               : key === "project"
-                ? projectName(r.filters[key]!)
-                : r.filters[key]}
+                ? projectName(value!)
+                : value}
             <X size={12} />
           </button>
-        ))}
+        )}
+      </PresenceList>
       <ScopeLabel filters={r.filters} />
     </div>
   );
@@ -158,17 +163,10 @@ export function ActiveScope() {
 export function RangeControls() {
   const r = useRange();
   return (
-    <details
+    <MotionDetails
       className="atlas-range-menu"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && !event.defaultPrevented) {
-          event.currentTarget.open = false;
-          event.currentTarget.querySelector("summary")?.focus();
-          event.stopPropagation();
-        }
-      }}
-    >
-      <summary>
+      popup contentClassName="atlas-filter-popover"
+      summary={<>
         <SlidersHorizontal size={15} />
         {r.range === "custom"
           ? "自定义时间"
@@ -176,10 +174,9 @@ export function RangeControls() {
             ? "今天"
             : `最近 ${r.range} 天`}
         <ChevronDown size={14} />
-      </summary>
-      <div className="atlas-filter-popover">
+      </>}
+    >
         <FilterBar />
-      </div>
-    </details>
+    </MotionDetails>
   );
 }
