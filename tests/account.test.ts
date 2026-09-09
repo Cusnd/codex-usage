@@ -259,7 +259,7 @@ test('macOS repeated short-lived RPC cleanup preserves upstream errors', { skip:
  }
 }));
 
-test('macOS shutdown terminates an uncooperative descendant after the grace period', { skip: process.platform !== 'darwin' }, () => fixture(async root => {
+test('macOS shutdown tolerates an inconclusive probe and terminates an uncooperative descendant', { skip: process.platform !== 'darwin' }, t => fixture(async root => {
  await writeAuth(root); await writeScenario(root, { hang: 'account/usage/read', grandchild: true, stubborn: true });
  const reader = nativeReader(root);
  const pending = reader.readUsage();
@@ -267,10 +267,21 @@ test('macOS shutdown terminates an uncooperative descendant after the grace peri
  await until(async () => { try { await access(path.join(root, 'rpc-grandchild-pid')); return true; } catch { return false; } });
  const parent = Number(await readFile(path.join(root, 'rpc-pid'), 'utf8'));
  const descendant = Number(await readFile(path.join(root, 'rpc-grandchild-pid'), 'utf8'));
+ const originalKill = process.kill.bind(process);
+ let inconclusiveProbes = 0;
+ t.mock.method(process, 'kill', (pid: number, signal?: number | NodeJS.Signals) => {
+  if (pid === -parent && signal === 0 && inconclusiveProbes === 0) {
+   inconclusiveProbes++;
+   throw Object.assign(new Error('Synthetic inconclusive liveness probe'), { code: 'EPERM' });
+  }
+  return originalKill(pid, signal);
+ });
  try {
   reader.close(); await rejected;
   await until(async () => !alive(parent) && !alive(descendant));
+  assert.equal(inconclusiveProbes, 1);
  } finally {
+  t.mock.restoreAll();
   reader.close();
   for (const pid of [parent, descendant]) { try { process.kill(pid, 'SIGKILL'); } catch {} }
  }

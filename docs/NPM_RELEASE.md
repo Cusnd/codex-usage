@@ -1,5 +1,11 @@
 # npm releases
 
+## Patch candidate — 0.1.4
+
+This follow-up fixes an intermittent macOS RPC cleanup failure discovered in a post-release main-branch run. A zero-signal process-group probe returning `EPERM` now keeps cleanup in its bounded wait/escalation path; actual termination signals retain their permission checks. The native regression injects the inconclusive probe into a real process group with a descendant that ignores SIGTERM, and verifies that cleanup still terminates it.
+
+Version 0.1.4 is prepared in the patch PR for review. The public `latest` release remains 0.1.3; no 0.1.4 tag or npm publication has been created.
+
 ## Cross-platform release completed — 0.1.3
 
 The candidate supports Windows x64 and macOS x64/arm64 with Node 22.13+ (22.x), 24.x and 26.x. The native compatibility matrix passed all 18 jobs for the implementation; see [compatibility status](MACOS_COMPATIBILITY.md). The independent `main` and `master` histories were joined by merge commit `b9556ab`, preserving the validated tree and both histories. Completed branches were retired; their worktree directories remain intact at detached commits.

@@ -47,6 +47,9 @@ export function openAccountRpc(command: CodexCommand, root: string, signal: Abor
           try { process.kill(group, signal); return true; }
           catch (error: any) {
             if (error.code === 'ESRCH') return false;
+            // A denied zero-signal probe is inconclusive, not a failed termination.
+            // Keep waiting; any necessary SIGKILL still goes through permission checks.
+            if (error.code === 'EPERM' && signal === 0) return true;
             if (error.code === 'EPERM') {
               // Darwin killpg skips zombies and can return EPERM for a group
               // whose last member is being reaped. Preserve real permission errors.
