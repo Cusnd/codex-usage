@@ -7,8 +7,8 @@
 .startup-state { color: var(--muted); font-size: 12px; min-width: 4em; text-align: right; }
 .startup-switch { display: grid; place-items: center; width: 48px; height: 44px; padding: 0; border: 0; background: transparent; border-radius: 4px; }
 .startup-switch:hover { background: transparent; }
-.startup-switch-track { display: block; width: 44px; height: 26px; padding: 3px; border-radius: 20px; background: #c5cbd4; transition: background 150ms ease; }
-.startup-switch-thumb { display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #171a2426; transition: transform 150ms ease; }
+.startup-switch-track { display: block; width: 44px; height: 26px; padding: 3px; border-radius: 20px; background: #c5cbd4; transition: background var(--motion-small) var(--motion-ease); }
+.startup-switch-thumb { display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #171a2426; transition: transform var(--motion-small) var(--motion-ease); }
 .startup-switch[aria-checked="true"] .startup-switch-track { background: var(--blue); }
 .startup-switch[aria-checked="true"] .startup-switch-thumb { transform: translateX(18px); }
 .startup-switch:disabled { cursor: wait; opacity: .55; }

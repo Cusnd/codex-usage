@@ -9,6 +9,8 @@ import { PriceSettings } from "./PriceSettings";
 import { SystemSettings } from "./SystemSettings";
 import { Header, SourceBadge, time } from "./ui";
 import { Workspace } from "./workspace";
+import { AdaptiveRegion } from "./MotionPrimitives";
+import { beginRefreshMotion, cancelRefreshMotion } from "./motion-state";
 
 export function SettingsPage() {
   const { settings, status } = useContext(Workspace);
@@ -29,6 +31,7 @@ export function SettingsPage() {
   }, [settings]);
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     const localInterval = Number(intervalDraft.local);
     const accountInterval = Number(intervalDraft.account);
     for (const [label, text, value, minimum] of [
@@ -50,6 +53,7 @@ export function SettingsPage() {
     }
     setSaving(true);
     setMessage("");
+    const ticket = beginRefreshMotion("local");
     try {
       const result = await mutate<Settings>(
         "settings",
@@ -64,6 +68,7 @@ export function SettingsPage() {
       await client.invalidateQueries({ queryKey: ["local"] });
       setMessage("设置已保存。");
     } catch (e) {
+      cancelRefreshMotion(ticket);
       setMessage((e as Error).message);
     } finally {
       setSaving(false);
@@ -139,6 +144,7 @@ export function SettingsPage() {
                 决定“今天”的起止时间和每日趋势分组，并重算所选范围的本地用量。
               </p>
             </div>
+            <AdaptiveRegion className="setting-control">
             {draft.timezoneMode === "system" ? (
               <div className="system-zone">
                 <strong>{settings.timezone}</strong>
@@ -168,6 +174,7 @@ export function SettingsPage() {
                 onChange={(value) => setDraft({ ...draft, timezone: value })}
               />
             )}
+            </AdaptiveRegion>
           </div>
           <PriceSettings draft={draft} setDraft={setDraft} />
           <p className="footnote">
@@ -175,7 +182,7 @@ export function SettingsPage() {
             {DateTime.now().setZone(settings.timezone).toFormat("ZZ")}
             ）。时区切换后会更新本地筛选、趋势与任务时间。自动采集仅在工作台打开期间触发。
           </p>
-          <button className="primary-button" disabled={saving}>
+          <button className="primary-button save-button" disabled={saving} aria-busy={saving}>
             {saving ? "保存中…" : "保存设置"}
           </button>
           <span role="status" className="save-message">

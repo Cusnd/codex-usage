@@ -22,6 +22,7 @@ import { SettingsPage } from "./SettingsPage";
 import { ErrorBox, Header, time } from "./ui";
 import { Workspace, defaultSettings } from "./workspace";
 import { currentTime, exampleMode } from './runtime';
+import { beginRefreshMotion, cancelRefreshMotion } from "./motion-state";
 
 export function App() {
   const location = useLocation();
@@ -67,6 +68,7 @@ export function App() {
   const [now, setNow] = useState(currentTime());
   const [refreshError, setRefreshError] = useState("");
   const [refreshMessage, setRefreshMessage] = useState('');
+  const [refreshRequested, setRefreshRequested] = useState(false);
   const previous = useRef<Record<string, string>>({});
   useEffect(() => {
     if (!status) return;
@@ -109,6 +111,9 @@ export function App() {
     return () => timers.forEach(clearInterval);
   }, [settings.localInterval, settings.accountInterval, client]);
   const refresh = async (source: string) => {
+    if (refreshRequested) return;
+    setRefreshRequested(true);
+    const ticket = beginRefreshMotion(source);
     setRefreshError("");
     setRefreshMessage('');
     try {
@@ -116,7 +121,10 @@ export function App() {
       await client.invalidateQueries({ queryKey: ["status"] });
       if (exampleMode) setRefreshMessage('示例数据已刷新。');
     } catch (e) {
+      cancelRefreshMotion(ticket);
       setRefreshError((e as Error).message);
+    } finally {
+      setRefreshRequested(false);
     }
   };
   return (
@@ -180,17 +188,18 @@ export function App() {
               <button
                 onClick={() => refresh("all")}
                 className={
-                  status?.local.running || status?.account.running
+                  refreshRequested || status?.local.running || status?.account.running
                     ? "refresh-running"
                     : undefined
                 }
-                aria-busy={!!(status?.local.running || status?.account.running)}
-                disabled={status?.local.running && status?.account.running}
+                aria-busy={!!(refreshRequested || status?.local.running || status?.account.running)}
+                disabled={refreshRequested || (status?.local.running && status?.account.running)}
               >
                 <RefreshCw size={15} aria-hidden="true" /> 刷新全部
               </button>
               <Choice
                 label="单独刷新来源"
+                disabled={refreshRequested}
                 value=""
                 placeholder="单独刷新"
                 options={[

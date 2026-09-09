@@ -4,6 +4,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
+import { MotionNavigation } from "./MotionPrimitives";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";
@@ -21,7 +22,7 @@ createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
       <BrowserRouter>
-        <App />
+        <MotionNavigation><App /></MotionNavigation>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

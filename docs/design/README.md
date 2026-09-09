@@ -2,6 +2,8 @@
 
 本地真实数据与在线示例共用同一套前端。公开截图均使用合成数据。
 
+- [ATLAS 交互动效规范、实现与验收（2026-09-09）](motion-2026-09-09.md)
+
 - [ATLAS 视觉系统、组件拆分与浏览器验收](atlas-refinement/README.md)
 - [本地真实模式与在线示例的共用前端验收](shared-frontend/README.md)
 - [README 截图与复现步骤](../images/README.md)

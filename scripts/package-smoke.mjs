@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, readdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { serviceGuardAddress } from '../dist/server/platform.js';
 import { createHash } from 'node:crypto';
@@ -45,6 +45,18 @@ try {
   }
   await install(tarball);
   cli = path.join(prefix, ...(windows ? [] : ['lib']), 'node_modules', packageName, 'bin/codex-usage.mjs');
+  // Inspect the complete installed tree, including nested and scoped dependencies.
+  const browserOnly = new Set(['@fontsource-variable/inter', '@tanstack/react-query', 'lucide-react', 'react', 'react-dom', 'react-router-dom', 'recharts']);
+  const inspectPackages = async directory => {
+    const manifest = await readFile(path.join(directory, 'package.json'), 'utf8').catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+    if (manifest) assert.ok(!browserOnly.has(JSON.parse(manifest).name), `Browser-only package installed: ${directory}`);
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) await inspectPackages(path.join(directory, entry.name));
+    }
+  };
+  await inspectPackages(path.join(prefix, ...(windows ? [] : ['lib']), 'node_modules'));
   assert.equal((await run('doctor', '--json')).node, process.version);
   assert.equal((await run('status', '--json')).running, false);
   const both = await Promise.all([run('start', '--json'), run('start', '--json')]);
@@ -57,6 +69,35 @@ try {
   const page = await fetch(base).then(r => r.text());
   assert.ok(page.includes('<html'));
   assert.equal((await fetch(base + page.match(/src="([^"]+\.js)"/)[1])).status, 200);
+  const checkAsset = async (url, mime) => {
+    const response = await fetch(url);
+    assert.equal(response.status, 200, url);
+    assert.match(response.headers.get('content-type') ?? '', mime, url);
+    const body = await response.text();
+    assert.ok(body.length > 0, url);
+    return body;
+  };
+  const styles = [...page.matchAll(/href="([^"]+\.css)"/g)];
+  assert.ok(styles.length, 'production CSS exists');
+  let fonts = 0;
+  for (const [, href] of styles) {
+    const url = new URL(href, base);
+    const css = await checkAsset(url, /text\/css/);
+    for (const [, font] of css.matchAll(/url\(["']?([^\s)"']+\.woff2)["']?\)/g)) {
+      await checkAsset(new URL(font, url), /font\/woff2/);
+      fonts++;
+    }
+  }
+  assert.ok(fonts > 0, 'bundled font assets exist');
+  const docsUrl = new URL('/docs/', base);
+  const docs = await checkAsset(docsUrl, /text\/html/);
+  const docAssets = [...docs.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)];
+  assert.ok(docAssets.some(([, asset]) => asset.endsWith('.js')), 'Swagger JS exists');
+  assert.ok(docAssets.some(([, asset]) => asset.endsWith('.css')), 'Swagger CSS exists');
+  for (const [, asset] of docAssets) {
+    await checkAsset(new URL(asset, docsUrl), asset.endsWith('.css') ? /text\/css/ : /javascript/);
+  }
+  assert.ok((await fetch(base + '/openapi.json').then(r => r.json())).openapi);
   assert.equal((await run('summary', '--days', '7', '--json')).meta.source, 'local');
   await run('refresh', '--source', 'local', '--wait', '--json');
   assert.equal((await fetch(base + '/_control/stop', { method: 'POST' })).status, 403);

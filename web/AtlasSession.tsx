@@ -1,5 +1,5 @@
-import { ArrowLeft, ArrowUpRight, ChevronRight, Copy } from "lucide-react";
-import { Fragment, useContext, useEffect, useState } from "react";
+import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy } from "lucide-react";
+import { Fragment, useContext } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import type {
   Filter,
@@ -27,6 +27,8 @@ import {
   UsageHeadings,
 } from "./Usage";
 import { useData, Workspace } from "./workspace";
+import { ExpandingRow, MotionDetails, ResultRegion, useHierarchyMotion } from "./MotionPrimitives";
+import { useCopyFeedback, useReveal } from "./motion";
 
 export function TurnTable({
   filters,
@@ -59,6 +61,7 @@ export function TurnTable({
   const visibleExpanded = q.data?.data.items.some(
     (row) => turnKey(row) === expanded,
   );
+  const rowsMotion = useReveal<HTMLTableSectionElement>(q.motion.revision, { ready: q.motion.animate, initial: true });
   let identity: [string, string | null] | null = null;
   try {
     const parsed = JSON.parse(expanded || "null");
@@ -134,6 +137,7 @@ export function TurnTable({
           </button>
         </div>
       )}
+      <ResultRegion change={q.motion} pending={q.motion.pending} animate={false}>
       <div
         className="table-scroll"
         tabIndex={0}
@@ -150,7 +154,7 @@ export function TurnTable({
               <th />
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={rowsMotion}>
             {q.data?.data.items.map((row) => (
               <Fragment key={turnKey(row)}>
                 <tr className={expanded === turnKey(row) ? "is-selected" : ""}>
@@ -171,6 +175,7 @@ export function TurnTable({
                   <td>
                     <button
                       className="text-button"
+                      aria-expanded={expanded === turnKey(row)}
                       onClick={() => expand(row)}
                       title={row.id || "轮次身份未提供"}
                     >
@@ -191,6 +196,7 @@ export function TurnTable({
                     ) : (
                       <button
                         className="text-button"
+                        aria-expanded={expanded === turnKey(row)}
                         onClick={() => expand(row)}
                       >
                         多模型 / 强度 · {row.composition.length}
@@ -209,9 +215,7 @@ export function TurnTable({
                     </button>
                   </td>
                 </tr>
-                {expanded === turnKey(row) && (
-                  <tr className="turn-expansion">
-                    <td colSpan={colspan}>
+                <ExpandingRow open={expanded === turnKey(row)} colSpan={colspan}>
                       <div className="turn-detail">
                         <UsageBreakdown data={row} />
                         <div className="turn-detail-bottom">
@@ -252,14 +256,13 @@ export function TurnTable({
                           </p>
                         ))}
                       </div>
-                    </td>
-                  </tr>
-                )}
+                </ExpandingRow>
               </Fragment>
             ))}
           </tbody>
         </table>
       </div>
+      </ResultRegion>
       <Pagination
         total={q.data?.data.total || 0}
         limit={20}
@@ -292,18 +295,14 @@ export function SessionPanel({
     threadId: id,
   });
   const location = useLocation();
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState("");
-  useEffect(() => {
-    setCopied(false);
-    setCopyError("");
-  }, [id]);
+  const { copied, error: copyError, copy } = useCopyFeedback(id);
+  const panelMotion = useHierarchyMotion<HTMLDivElement>(id, 1, !detail.isPending && !summary.isPlaceholderData);
   const data = full ? detail.data?.data.thread : summary.data?.data;
   const title = detail.data?.data.thread
     ? sessionTitle(detail.data.data.thread)
     : shortId(id);
   return (
-    <div className="session-panel">
+    <div className="session-panel" ref={panelMotion}>
       {onBack && (
         <button className="text-button back-to-directory" onClick={onBack}>
           <ArrowLeft size={15} />
@@ -319,17 +318,10 @@ export function SessionPanel({
             <span className="mono">{shortId(id)}</span>
             <button
               className="icon-button"
-              aria-label="复制 Session ID"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(id);
-                  setCopied(true);
-                } catch {
-                  setCopyError("复制失败，请手动复制任务 ID。");
-                }
-              }}
+              aria-label={copied ? "Session ID 已复制" : "复制 Session ID"}
+              onClick={() => copy(id)}
             >
-              <Copy size={14} />
+              <span className="feedback-icon" key={String(copied)}>{copied ? <Check size={14} /> : <Copy size={14} />}</span>
             </button>
             {copied && <small role="status">已复制</small>}
           </p>
@@ -368,8 +360,7 @@ export function SessionPanel({
       )}
       <AgentUsagePanel id={id} filters={full ? {} : filters} />
       {!!detail.data?.data.related.length && (
-        <details className="related-tasks">
-          <summary>关联任务 · {detail.data.data.related.length}</summary>
+        <MotionDetails className="related-tasks" summary={<>关联任务 · {detail.data.data.related.length}</>}>
           {detail.data.data.related.map((row) => (
             <Link
               key={`${row.id}:${row.relation}`}
@@ -388,7 +379,7 @@ export function SessionPanel({
               · {projectName(row.project)} · {shortId(row.id)}
             </Link>
           ))}
-        </details>
+        </MotionDetails>
       )}
       <Notes response={full ? detail.data : summary.data} />
     </div>

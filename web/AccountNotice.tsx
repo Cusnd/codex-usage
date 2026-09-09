@@ -1,5 +1,6 @@
 import type { AccountStatus } from "../shared/contracts";
 import { time } from "./ui";
+import { MotionDetails } from "./MotionPrimitives";
 
 export function AccountNotice({
   state,
@@ -28,11 +29,11 @@ export function AccountNotice({
               ? "已读取"
               : "尚未取得数据"}
       </strong>
-      <details
+      <MotionDetails
         className="account-source-details"
-        open={compact ? undefined : true}
+        defaultOpen={!compact}
+        summary="来源与更新时间"
       >
-        <summary>来源与更新时间</summary>
         {state?.provider && (
           <span>
             {state.provider === "http" ? "OAuth / HTTP" : "Codex App Server"}
@@ -44,7 +45,7 @@ export function AccountNotice({
           </p>
         )}
         <p>最近成功：{time(state?.updatedAt, timezone)}</p>
-      </details>
+      </MotionDetails>
       {state?.available && (state.stale || !state.identityConfirmed) && (
         <p>历史快照，不能视为当前账户的实时状态。</p>
       )}

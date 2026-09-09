@@ -1,8 +1,16 @@
-/* Feedback only: navigation and polling never animate whole content regions. */
-.motion-rule {
+/* ATLAS motion: selection travels, disclosures unfold, reading stays anchored. */
+:root {
+  --motion-feedback: 140ms;
+  --motion-small: 220ms;
+  --motion-panel: 260ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.motion-rule,
+.motion-segmented {
   position: relative;
 }
-.motion-rule:not([data-rule-ready])::after {
+.motion-rule:not([data-rule-ready])::after,
+.motion-segmented:not([data-rule-ready])::before {
   opacity: 0;
 }
 .motion-rule::after {
@@ -15,9 +23,37 @@
   transform: translateX(var(--rule-x, 0px));
   background: var(--blue);
   pointer-events: none;
-  transition:
-    transform 160ms ease,
-    width 160ms ease;
+}
+.motion-segmented::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--rule-width, 0px);
+  height: var(--rule-height, 0px);
+  transform: translate(var(--rule-x, 0px), var(--rule-y, 0px));
+  background: var(--surface);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px #20253118;
+  pointer-events: none;
+}
+.motion-rule[data-rule-animate="true"]::after,
+.motion-segmented[data-rule-animate="true"]::before {
+  transition: transform var(--motion-panel) var(--motion-ease), width var(--motion-panel) var(--motion-ease), height var(--motion-panel) var(--motion-ease);
+}
+.motion-segmented-small {
+  --motion-panel: 220ms;
+}
+.motion-segmented > button {
+  position: relative;
+  z-index: 1;
+}
+.motion-segmented[data-rule-ready] > button.selected {
+  background: transparent;
+  box-shadow: none;
+}
+.motion-segmented > button[aria-expanded="true"] {
+  box-shadow: inset 0 0 0 1px var(--blue);
 }
 .sidebar nav[data-rule-ready] a.active,
 .atlas-tabs[data-rule-ready] button.selected {
@@ -26,36 +62,100 @@
 button,
 input,
 a,
+summary,
+.atlas-directory-row,
+tbody tr,
 .atlas-search,
-.choice-caret {
+.choice-caret,
+button > svg,
+summary > svg {
   transition:
     color 140ms ease,
     background-color 140ms ease,
     border-color 140ms ease,
     box-shadow 140ms ease,
-    transform 140ms ease;
+    transform 220ms var(--motion-ease);
 }
+/* Inset shading presses the surface without moving its text or hit target. */
+button:enabled:active:not(.text-button):not(.atlas-directory-row):not(.startup-switch) {
+  box-shadow: inset 0 1px 0 #20253124, inset 0 0 0 999px #20253108;
+  transition-duration: 80ms;
+}
+button:disabled:hover { border-color: var(--input-border); }
 .icon-button[aria-expanded="true"] > svg {
   transform: rotate(90deg);
 }
 .atlas-time .text-button[aria-expanded="true"] > svg,
-.atlas-comparison[open] > summary > svg {
+.motion-details[data-expanded="true"] > summary > svg:last-child {
   transform: rotate(180deg);
 }
-@keyframes atlas-menu {
+.motion-details > summary {
+  list-style: none;
+}
+.motion-details > summary::-webkit-details-marker { display: none; }
+.motion-details > summary:not(:has(> svg))::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  margin-right: 9px;
+  vertical-align: 2px;
+  transition: transform var(--motion-small) var(--motion-ease);
+}
+.motion-details[data-expanded="true"] > summary:not(:has(> svg))::before { transform: rotate(45deg); }
+.motion-collapse,
+.motion-collapse-inner { min-width: 0; }
+.motion-collapse-inner { display: flow-root; }
+fieldset.motion-collapse-inner { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+fieldset.price-model { margin: 0; min-inline-size: 0; border: 0; border-top: 1px solid var(--line); }
+.atlas-trend-grid { position: relative; }
+.is-collapsed.atlas-trend-grid > .atlas-chart-panel { position: absolute; top: 0; left: 0; }
+[inert] { pointer-events: none; }
+.scope-chip-list { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.motion-chip { min-width: 0; max-width: 100%; }
+.result-region { position: relative; min-width: 0; }
+.updating-slot {
+  position: absolute;
+  right: 0;
+  top: -20px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  pointer-events: none;
+}
+.updating-slot:not(:empty) { padding-inline: 6px; background: var(--canvas); border-radius: 3px; }
+.save-button { min-width: 102px; }
+.feedback-icon { display: inline-flex; align-items: center; animation: atlas-feedback 160ms ease-out; }
+.copy-feedback { min-width: 3em; }
+.setting-control .choice { width: min(280px, 100%); }
+.motion-quota::-webkit-progress-value { transition: none; }
+.motion-quota[data-animate="true"]::-webkit-progress-value { transition: width 320ms ease-out; }
+.motion-quota::-moz-progress-bar { transition: none; }
+.motion-quota[data-animate="true"]::-moz-progress-bar { transition: width 320ms ease-out; }
+@keyframes atlas-feedback {
   from {
     opacity: 0;
-    transform: translateY(-3px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
-.choice-popup,
-.advanced-filters[open] .advanced-filter-panel,
-.atlas-range-menu[open] .atlas-filter-popover {
-  animation: atlas-menu 140ms ease;
+.save-message:not(:empty),
+.error-text,
+.startup-error {
+  animation: atlas-feedback 160ms ease-out;
+}
+/* Recharts measures hidden content first. Start only when its wrapper is actually visible. */
+.recharts-tooltip-wrapper[style*="visibility: visible"] .chart-tip,
+.recharts-tooltip-wrapper[style*="visibility: visible"] .atlas-tooltip {
+  animation: atlas-tooltip-enter 160ms ease-out;
+}
+@keyframes atlas-tooltip-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .loading-state {
   display: flex;
@@ -78,7 +178,18 @@ a,
 .refresh-running > svg {
   animation: atlas-sync 1400ms linear infinite;
 }
+@media (hover: hover) and (pointer: fine) {
+  .inline-link:hover > svg,
+  .detail-scope > a:hover > svg,
+  .access-domain:hover > svg { transform: translate(2px, -2px); }
+  .back-link:hover > svg,
+  .back-to-directory:hover > svg { transform: translateX(-2px); }
+}
+.inline-link > svg, .detail-scope > a > svg, .access-domain > svg, .back-link > svg, .back-to-directory > svg {
+  transition: transform var(--motion-feedback) var(--motion-ease);
+}
 @media (prefers-reduced-motion: reduce) {
+  .motion-quota::-webkit-progress-value, .motion-quota::-moz-progress-bar { transition: none !important; }
   *,
   *::before,
   *::after {
