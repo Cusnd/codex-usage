@@ -4,13 +4,15 @@ import { ArrowUpRight, Check, Copy, Globe2, Terminal } from 'lucide-react';
 import { api, mutate } from './api';
 import { exampleMode } from './runtime';
 import './system-settings.css';
+import { MotionDetails } from './MotionPrimitives';
+import { useCopyFeedback } from './motion';
 
 type Startup = { supported: boolean; enabled: boolean; conflict?: boolean };
 export function SystemSettings() {
   const query = useQuery({ queryKey: ['system', 'autostart'], queryFn: () => api<Startup>('system/autostart') });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const { copied, error: copyError, copy } = useCopyFeedback('open-command');
   const state = query.data?.data;
   const changeStartup = async () => {
     setBusy(true); setError('');
@@ -28,7 +30,7 @@ export function SystemSettings() {
       <div className="startup-control">
         <span className="startup-state" aria-live="polite">{exampleMode ? '本地应用专属' : busy ? '更新中…' : query.isPending ? '读取中…' : query.error ? '读取失败' : !state ? '状态未知' : !state.supported ? '当前系统不支持' : state.conflict ? '启动项冲突' : state.enabled ? '已开启' : '已关闭'}</span>
         <button id="autostart" className="startup-switch" type="button" role="switch" aria-labelledby="startup-label" aria-describedby="startup-description"
-          aria-checked={state?.enabled ?? false} disabled={busy || !state?.supported || !!state.conflict} onClick={changeStartup}>
+          aria-checked={state?.enabled ?? false} aria-busy={busy} disabled={busy || !state?.supported || !!state.conflict} onClick={changeStartup}>
           <span className="startup-switch-track"><span className="startup-switch-thumb" /></span>
         </button>
       </div>
@@ -42,16 +44,13 @@ export function SystemSettings() {
       </div>
       <div className="access-method">
         <div className="access-label"><Terminal size={15} aria-hidden="true" /><span>命令行入口</span></div>
-        <div className="access-command"><code>codex-usage</code><button type="button" className="copy-command" aria-label={copied ? '命令已复制' : '复制打开命令'} onClick={async () => {
-          try { await navigator.clipboard.writeText('codex-usage'); setCopied(true); }
-          catch { setError('复制失败，请手动选择 codex-usage 命令。'); }
-        }}>{copied ? <Check size={16} /> : <Copy size={16} />}</button><span className="copy-feedback" aria-live="polite">{copied ? '已复制' : ''}</span></div>
+        <div className="access-command"><code>codex-usage</code><button type="button" className="copy-command" aria-label={copied ? '命令已复制' : '复制打开命令'} onClick={() => copy('codex-usage')}><span className="feedback-icon" key={String(copied)}>{copied ? <Check size={16} /> : <Copy size={16} />}</span></button><span className="copy-feedback" aria-live="polite">{copied ? '已复制' : ''}</span></div>
+        {copyError && <p role="status" className="error-text">{copyError}</p>}
         <p>自动启动服务并打开页面，离线也能使用。</p>
       </div>
     </div>
-    <details className="access-details">
-      <summary>关于域名与本地访问</summary>
+    <MotionDetails className="access-details" summary="关于域名与本地访问">
       <p>域名需要联网，会跳转到当前设备的 <code>127.0.0.1:8765</code>，地址栏随后显示本地地址。它不能代替安装或启动服务，也不能从手机访问电脑。使用其他端口时，请直接打开对应的本地地址。</p>
-    </details>
+    </MotionDetails>
   </section>;
 }

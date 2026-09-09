@@ -28,6 +28,8 @@ import {
   sessionTitle,
 } from "./Usage";
 import { Workspace, useData, useRange } from "./workspace";
+import { ResultRegion, useHierarchyMotion } from "./MotionPrimitives";
+import { useReveal } from "./motion";
 
 export function SessionList({
   filters,
@@ -51,6 +53,7 @@ export function SessionList({
     offset: offsetOf(search, "sessionOffset"),
     limit: 20,
   });
+  const rowsMotion = useReveal<HTMLTableSectionElement>(q.motion.revision, { ready: q.motion.animate, initial: true });
   return (
     <section className={directory ? "session-directory" : "session-ledger"}>
       <div className="session-tools">
@@ -85,6 +88,7 @@ export function SessionList({
             : undefined
         }
       />
+      <ResultRegion change={q.motion} pending={q.motion.pending} animate={directory}>
       {directory ? (
         <div className="atlas-directory-list">
           {q.data?.data.items.map((row, index) => (
@@ -137,7 +141,7 @@ export function SessionList({
                 <th />
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={rowsMotion}>
               {q.data?.data.items.map((row) => (
                 <tr
                   key={row.id}
@@ -174,6 +178,7 @@ export function SessionList({
           </table>
         </div>
       )}
+      </ResultRegion>
       <Pagination
         total={q.data?.data.total || 0}
         limit={20}
@@ -228,6 +233,8 @@ export function GroupWorkspace({ view }: { view: Group }) {
     key !== undefined && !conflict,
   );
   const session = r.search.get("session") || undefined;
+  const detailMotion = useHierarchyMotion<HTMLDivElement>(`${selected}/${session || ""}`, key === undefined ? 0 : session ? 2 : 1, key === undefined || !summary.isPending);
+  const directoryMotion = useReveal<HTMLElement>(selected || "", { direction: -1, ready: key === undefined });
   const label = dimensions.find(([id]) => id === view)![1];
   return (
     <div
@@ -235,7 +242,7 @@ export function GroupWorkspace({ view }: { view: Group }) {
         "atlas-master-detail " + (key !== undefined ? "has-selection" : "")
       }
     >
-      <section className="atlas-directory">
+      <section className="atlas-directory" ref={directoryMotion}>
         <div className="atlas-section-bar">
           <h2>{label}索引</h2>
           <small>按消耗排序</small>
@@ -245,6 +252,7 @@ export function GroupWorkspace({ view }: { view: Group }) {
           isLoading={groups.isPending}
           empty={groups.data?.data.total === 0}
         />
+        <ResultRegion change={groups.motion} pending={groups.motion.pending}>
         <div className="atlas-directory-list">
           {groups.data?.data.items.map((row, index) => (
             <button
@@ -288,13 +296,14 @@ export function GroupWorkspace({ view }: { view: Group }) {
             </button>
           ))}
         </div>
+        </ResultRegion>
         <Pagination
           total={groups.data?.data.total || 0}
           param="groupOffset"
           limit={20}
         />
       </section>
-      <div className="atlas-detail">
+      <div className="atlas-detail" ref={detailMotion}>
         {key === undefined ? (
           <div className="atlas-empty">
             <span>从一个{label}开始</span>

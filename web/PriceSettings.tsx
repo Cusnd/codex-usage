@@ -2,6 +2,9 @@ import type { ModelPrice, Settings } from "../shared/contracts";
 import { useData } from "./workspace";
 import { ErrorBox } from "./ui";
 import { X, Plus, RotateCcw } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { MotionDetails, PresenceList } from "./MotionPrimitives";
+import { useReveal } from "./motion";
 
 type PricingInfo = {
   prices: ModelPrice[];
@@ -32,6 +35,22 @@ export function PriceSettings({
 }) {
   const info = useData<PricingInfo>("pricing");
   const prices = draft.modelPrices || [];
+  const [open, setOpen] = useState(Boolean(draft.costEnabled));
+  useEffect(() => setOpen(Boolean(draft.costEnabled)), [draft.costEnabled]);
+  const keys = useRef<string[]>([]);
+  while (keys.current.length < prices.length) keys.current.push(crypto.randomUUID());
+  if (keys.current.length > prices.length) keys.current.length = prices.length;
+  const focusNext = useRef<string | "add" | undefined>(undefined);
+  const root = useRef<HTMLElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const [reset, setReset] = useState(0);
+  const resetMotion = useReveal<HTMLDivElement>(reset);
+  useLayoutEffect(() => {
+    if (!focusNext.current) return;
+    if (focusNext.current === "add") addButton.current?.focus();
+    else root.current?.querySelector<HTMLInputElement>(`[data-model-row="${focusNext.current}"] input`)?.focus();
+    focusNext.current = undefined;
+  }, [prices.length]);
   const change = (index: number, patch: Partial<ModelPrice>) =>
     setDraft({
       ...draft,
@@ -40,7 +59,7 @@ export function PriceSettings({
       ),
     });
   return (
-    <section className="price-settings">
+    <section className="price-settings" ref={root}>
       <div className="setting-row">
         <div>
           <label htmlFor="costEnabled">显示参考成本</label>
@@ -55,10 +74,9 @@ export function PriceSettings({
           }
         />
       </div>
-      <details open={draft.costEnabled || undefined}>
-        <summary>
+      <MotionDetails form open={open} onOpenChange={setOpen} duration={260} summary={<>
           模型参考单价 <span>USD / 百万 Token</span>
-        </summary>
+        </>}>
         <p className="footnote">
           按 Standard API 文本 Token
           价格估算，不代表订阅账单；不计工具费用、Fast／Batch／Flex
@@ -81,17 +99,20 @@ export function PriceSettings({
             type="button"
             className="text-button"
             disabled={!info.data}
-            onClick={() =>
-              setDraft({ ...draft, modelPrices: info.data!.data.prices })
-            }
+            onClick={() => {
+              keys.current = info.data!.data.prices.map(() => crypto.randomUUID());
+              setReset((value) => value + 1);
+              setDraft({ ...draft, modelPrices: info.data!.data.prices });
+            }}
           >
             <RotateCcw size={14} />
             恢复官方预置
           </button>
         </div>
-        <div className="price-model-list">
-          {prices.map((p, index) => (
-            <div className="price-model" key={index}>
+        <div ref={resetMotion}>
+        <PresenceList key={reset} className="price-model-list" items={prices.map((price, index) => ({ price, index, id: keys.current[index] }))} itemKey={(row) => row.id}>
+          {({ price: p, index, id }, _position, present) => (
+            <fieldset className="price-model" data-model-row={id} disabled={!present}>
               <div className="price-model-name">
                 <label>
                   模型 ID
@@ -107,12 +128,14 @@ export function PriceSettings({
                   type="button"
                   className="icon-button"
                   aria-label={`移除模型 ${p.model}`}
-                  onClick={() =>
+                  onClick={() => {
+                    focusNext.current = keys.current[index + 1] || keys.current[index - 1] || "add";
+                    keys.current.splice(index, 1);
                     setDraft({
                       ...draft,
                       modelPrices: prices.filter((_, n) => n !== index),
-                    })
-                  }
+                    });
+                  }}
                 >
                   <X size={16} />
                 </button>
@@ -133,8 +156,7 @@ export function PriceSettings({
                   </label>
                 ))}
               </div>
-              <details>
-                <summary>长上下文价格</summary>
+              <MotionDetails form summary="长上下文价格">
                 <label className="price-threshold">
                   单请求输入超过此 Token 数时应用
                   <input
@@ -167,14 +189,18 @@ export function PriceSettings({
                     </label>
                   ))}
                 </div>
-              </details>
-            </div>
-          ))}
+              </MotionDetails>
+            </fieldset>
+          )}
+        </PresenceList>
         </div>
         <button
+          ref={addButton}
           type="button"
           className="text-button"
-          onClick={() =>
+          onClick={() => {
+            const id = crypto.randomUUID();
+            keys.current.push(id); focusNext.current = id;
             setDraft({
               ...draft,
               modelPrices: [
@@ -192,8 +218,8 @@ export function PriceSettings({
                   longOutput: null,
                 },
               ],
-            })
-          }
+            });
+          }}
         >
           <Plus size={15} />
           添加模型
@@ -202,7 +228,7 @@ export function PriceSettings({
           空白表示未配置，0 表示明确免费。模型 ID
           精确匹配，不自动把未知模型或版本映射成其他模型。
         </p>
-      </details>
+      </MotionDetails>
     </section>
   );
 }

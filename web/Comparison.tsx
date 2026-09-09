@@ -4,6 +4,8 @@ import { useRange, useData } from "./workspace";
 import { Choice } from "./Choice";
 import { time, ErrorBox, Pagination, Notes } from "./ui";
 import { compact, exact, percent } from "./api";
+import { Updating } from "./MotionPrimitives";
+import { useReveal } from "./motion";
 export function ComparisonSection() {
   const location = useLocation();
   const r = useRange();
@@ -13,6 +15,7 @@ export function ComparisonSection() {
     groupBy: comparisonGroup,
   });
   const summary = useData<Metrics>("local/summary", r.filters);
+  const rows = useReveal<HTMLTableSectionElement>(`${comparison.motion.revision}:${r.search.get("compareOffset") || 0}`, { ready: !!comparison.data && !comparison.motion.pending, initial: true });
   return (
     <section className="comparison-body">
       <div className="panel-heading">
@@ -35,6 +38,7 @@ export function ComparisonSection() {
         />
       </div>
       <ErrorBox error={comparison.error} />
+      <Updating pending={comparison.motion.pending} />
       {comparison.data && (
         <>
           <div className="comparison-head">
@@ -60,7 +64,7 @@ export function ComparisonSection() {
                   <th className="numeric">变化率</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={rows}>
                 {comparison.data.data.items
                   .slice(
                     Number(r.search.get("compareOffset") || 0),

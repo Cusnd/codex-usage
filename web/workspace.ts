@@ -6,6 +6,8 @@ import type { Settings, Status, Filter } from "../shared/contracts";
 import { dataQuery } from "./data-query";
 import { resolveTrendBucket } from "../shared/time-range";
 import { currentTime } from './runtime';
+import { markQueryMotion } from "./motion-state";
+import { useResultMotion } from "./motion-data";
 export const defaultSettings: Settings = {
   localInterval: 60,
   accountInterval: 300,
@@ -24,7 +26,7 @@ export function useData<T>(
 ) {
   const { settings } = useContext(Workspace);
   const [search] = useSearchParams();
-  return useQuery({
+  const query = useQuery({
     enabled,
     ...dataQuery<T>(
       route,
@@ -32,7 +34,10 @@ export function useData<T>(
       settings.timezone,
       search.get("range") !== "custom",
     ),
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === route ? previous : undefined,
   });
+  const change = useResultMotion(query, search, route.startsWith("account") ? "account" : "local");
+  return { ...query, motion: change };
 }
 export function useRange() {
   const [search, setSearch] = useSearchParams();
@@ -86,6 +91,7 @@ export function useRange() {
       }
       for (const [k, v] of Object.entries(patch))
         v ? next.set(k, v) : next.delete(k);
+      markQueryMotion(next, previous);
       return next;
     });
   return {
