@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { CodexCommand } from "./codex-command.js";
 import { AccountError } from "./account-credentials.js";
@@ -45,7 +45,20 @@ export function openAccountRpc(command: CodexCommand, root: string, signal: Abor
         const group = -child.pid;
         const signalGroup = (signal: NodeJS.Signals | 0) => {
           try { process.kill(group, signal); return true; }
-          catch (error: any) { if (error.code === 'ESRCH') return false; throw error; }
+          catch (error: any) {
+            if (error.code === 'ESRCH') return false;
+            if (error.code === 'EPERM') {
+              // Darwin killpg skips zombies and can return EPERM for a group
+              // whose last member is being reaped. Preserve real permission errors.
+              const processes = execFileSync('/bin/ps', ['-axo', 'pgid=,stat='], { encoding: 'utf8', timeout: 3000 });
+              const live = processes.split('\n').some(line => {
+                const [pgid, state] = line.trim().split(/\s+/);
+                return Number(pgid) === -group && state && !state.startsWith('Z');
+              });
+              if (!live) return false;
+            }
+            throw error;
+          }
         };
         child.stdin.end();
         if (signalGroup('SIGTERM')) {

@@ -247,6 +247,18 @@ test('invalid explicit CLI or unsupported login never sends OAuth HTTP',()=>fixt
  await assert.rejects(keyring.readLimits(),(e:any)=>e.code==='UNSUPPORTED_STORE');keyring.close();assert.equal(fetches,0);
 }));
 
+test('macOS repeated short-lived RPC cleanup preserves upstream errors', { skip: process.platform !== 'darwin' }, () => fixture(async root => {
+ await writeAuth(root); await writeScenario(root, { fail: 'account/usage/read' });
+ for (let i = 0; i < 20; i++) {
+  const reader = nativeReader(root);
+  try {
+   await assert.rejects(reader.readUsage(), (e: any) => e.code === 'UNSUPPORTED_METHOD');
+   const pid = Number(await readFile(path.join(root, 'rpc-pid'), 'utf8'));
+   await until(async () => !alive(pid));
+  } finally { reader.close(); }
+ }
+}));
+
 test('macOS shutdown terminates an uncooperative descendant after the grace period', { skip: process.platform !== 'darwin' }, () => fixture(async root => {
  await writeAuth(root); await writeScenario(root, { hang: 'account/usage/read', grandchild: true, stubborn: true });
  const reader = nativeReader(root);
