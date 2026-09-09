@@ -2,6 +2,8 @@
 
 Version 0.1.3 supports macOS Apple Silicon (`arm64`) and Intel (`x64`). Version 0.1.2 and earlier support Windows only. Platform validation uses native GitHub Actions runners for both Mac architectures.
 
+Version 0.1.4 fixes an intermittent RPC cleanup failure when a process-group liveness probe is inconclusive during exit. Cleanup continues to wait and terminate remaining descendants while preserving permission checks for actual signals.
+
 ## Install on a Mac
 
 Use Node.js 22.13+ (22.x), 24.x, or 26.x and npm, with a macOS version supported by that Node distribution. No private Node installer, Homebrew formula or DMG is supplied. Use an existing writable npm prefix.
@@ -9,7 +11,7 @@ Use Node.js 22.13+ (22.x), 24.x, or 26.x and npm, with a macOS version supported
 Install with an existing supported Node/npm:
 
 ```sh
-npm install --global @esoren/codex-usage@0.1.3
+npm install --global @esoren/codex-usage@0.1.4
 codex-usage doctor --json
 codex-usage start --json
 codex-usage summary --days 7 --json
@@ -35,7 +37,7 @@ npm pack
 Install the actual archive printed by `npm pack` using its absolute path:
 
 ```sh
-npm install --global /absolute/path/to/esoren-codex-usage-0.1.3.tgz
+npm install --global /absolute/path/to/esoren-codex-usage-0.1.4.tgz
 codex-usage doctor --json
 codex-usage start --json
 codex-usage summary --days 7 --json
@@ -43,7 +45,7 @@ codex-usage skill install
 codex-usage
 ```
 
-When receiving an archive from someone else, verify its supplied SHA-256 using `shasum -a 256 /absolute/path/to/candidate.tgz`. For registry updates, use `npm install --global @esoren/codex-usage` and verify that the installed version is 0.1.3 or later.
+When receiving an archive from someone else, verify its supplied SHA-256 using `shasum -a 256 /absolute/path/to/candidate.tgz`. For registry updates, use `npm install --global @esoren/codex-usage` and verify that the installed version is 0.1.4 or later.
 
 If the command is missing, inspect `npm prefix --global` and invoke `"$(npm prefix --global)/bin/codex-usage"`. Do not add `sudo` to work around an unwritable system prefix; use a user-owned npm prefix or an existing user-managed Node installation.
 
