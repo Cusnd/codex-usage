@@ -4,6 +4,12 @@ export async function api<T>(
   params: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<ApiResponse<T>> {
+  if (import.meta.env?.MODE === 'showcase') {
+    signal?.throwIfAborted();
+    const adapter = await (await import('../showcase/browser')).exampleAdapter();
+    signal?.throwIfAborted();
+    return await adapter.request(route, params) as ApiResponse<T>;
+  }
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params))
     if (value !== undefined && value !== null && value !== "")
@@ -22,6 +28,10 @@ export async function mutate<T>(
   body: unknown,
   method = "POST",
 ): Promise<ApiResponse<T>> {
+  if (import.meta.env?.MODE === 'showcase') {
+    const adapter = await (await import('../showcase/browser')).exampleAdapter();
+    return await adapter.request(route, {}, method, body) as ApiResponse<T>;
+  }
   const response = await fetch("/api/" + route, {
     method,
     headers: { "Content-Type": "application/json" },

@@ -8,11 +8,11 @@ A local dashboard for understanding your Codex activity. Follow a usage spike fr
 
 Windows x64 · Local-first · Apache-2.0
 
-Try the [interactive product showcase](https://codex-usage-showcase.sorenliu.workers.dev) with synthetic data before installing. Your own usage is available in the local app.
+Try the [live example](https://codex-usage-showcase.sorenliu.workers.dev) before installing. It runs the same React frontend with synthetic records, including task and turn details, agent teams, filters, and browser-local cost settings. Your own usage is available in the local app.
 
-![Seven days of Codex usage, with a daily trend, token composition, and project breakdown](docs/images/analysis.png)
+![Codex Usage overview with seven days of activity, token composition, daily trend, and synthetic account limits](docs/images/overview.png)
 
-*A week of activity across four example projects. Screenshots use synthetic data in the real application; the current UI is in Chinese.*
+*119.21M tokens across 28 tasks and 92 turns. Captured from the live example using the same frontend as the local app. All usage and account limits shown are synthetic; the current UI is in Chinese.*
 
 ## Follow the numbers to the work
 
@@ -24,7 +24,7 @@ Start with the daily trend, open a day to see its hours, and narrow the view by 
 
 A task can delegate work, and those subagents can delegate again. View **the current agent, all subagents, and the team total** separately, then open any agent to inspect its turns. Each row shows that agent's own usage, so a busy child does not disappear inside its parent's number.
 
-![Agent team usage showing the current agent, two direct subagents, and a nested subagent](docs/images/agent-team.png)
+![Task details with individual turns and an expanded agent team, including two direct subagents and one nested subagent](docs/images/agent-team.png)
 
 *One example task: 18.2M tokens from the current agent, 30.4M from its descendants, and 48.6M for the team. Chinese UI; synthetic data.*
 
@@ -84,6 +84,7 @@ Open a fresh agent task if the newly installed Skill is not discovered yet. Firs
 | A repeatable installation procedure for an agent | [Agent installation guide](docs/INSTALL_FOR_AGENTS.md) |
 | CLI/API behavior, counting rules, and data sources | [Technical reference](docs/TECHNICAL_REFERENCE.md) |
 | Development and contribution checks | [Contributing](CONTRIBUTING.md) |
+| Building the interactive example and reproducing its screenshots | [Example frontend](showcase/README.md) · [Screenshot guide](docs/images/README.md) |
 
 Found a problem? [Open an issue](https://github.com/Cusnd/codex-usage/issues) with reproduction steps and sanitized errors.
 

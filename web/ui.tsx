@@ -1,13 +1,13 @@
-import { UsageBreakdown } from "./Usage";
-import { useState, useEffect, useRef } from "react";
-import type { ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Cloud, Database, X } from "lucide-react";
 import { DateTime } from "luxon";
-import { Database, Cloud, X, ChevronLeft, ChevronRight } from "lucide-react";
-import type { Metrics, Filters, ApiResponse } from "../shared/contracts";
+import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { ApiResponse, Filters, Metrics } from "../shared/contracts";
 import { compact, projectName } from "./api";
 import { Choice } from "./Choice";
-import { useRange, useData } from "./workspace";
+import { UsageBreakdown } from "./Usage";
+import { useData, useRange } from "./workspace";
 export function time(at: string | null | undefined, zone = "America/New_York") {
   return at
     ? DateTime.fromISO(at).setZone(zone).toFormat("MM-dd HH:mm:ss")
@@ -50,15 +50,19 @@ export function ErrorBox({ error }: { error: Error | null | undefined }) {
 export function Loading({
   isLoading,
   empty = false,
+  emptyMessage = "这个范围内还没有可统计记录。可以调整时间范围或刷新本地记录。",
 }: {
   isLoading: boolean;
   empty?: boolean;
+  emptyMessage?: string;
 }) {
   return isLoading ? (
-    <div className="empty loading-state" role="status">正在读取用量…</div>
+    <div className="empty loading-state" role="status">
+      正在读取用量…
+    </div>
   ) : empty ? (
-    <div className="empty">
-      这个范围内还没有可统计记录。可以调整时间范围或刷新本地记录。
+    <div className="empty" role="status">
+      {emptyMessage}
     </div>
   ) : null;
 }

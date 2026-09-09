@@ -12,9 +12,8 @@ import type {
   ThreadDetail,
   AgentUsage,
 } from "../shared/contracts.js";
-import { Store } from "./db.js";
-import { label, ratio } from "./util.js";
-import { tokenFields } from "./importer.js";
+import type { Store } from "./db.js";
+import { label, ratio, tokenFields } from "../shared/query-values.js";
 import { estimateCost } from "./pricing.js";
 
 const camel = [
@@ -114,7 +113,7 @@ function metrics(r: Record<string, any>): Metrics {
   return result;
 }
 export class Queries {
-  constructor(private store: Store) {}
+  constructor(private store: Pick<Store, "all" | "one" | "settings">) {}
   private costs(
     f: QueryFilter,
     expressions: string[] = [],

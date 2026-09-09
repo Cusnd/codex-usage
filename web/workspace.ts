@@ -5,6 +5,7 @@ import { DateTime } from "luxon";
 import type { Settings, Status, Filter } from "../shared/contracts";
 import { dataQuery } from "./data-query";
 import { resolveTrendBucket } from "../shared/time-range";
+import { currentTime } from './runtime';
 export const defaultSettings: Settings = {
   localInterval: 60,
   accountInterval: 300,
@@ -13,7 +14,7 @@ export const defaultSettings: Settings = {
 };
 export const Workspace = createContext({
   settings: defaultSettings,
-  now: Date.now(),
+  now: currentTime(),
   status: undefined as Status | undefined,
 });
 export function useData<T>(

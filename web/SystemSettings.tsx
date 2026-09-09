@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Check, Copy, Globe2, Terminal } from 'lucide-react';
 import { api, mutate } from './api';
+import { exampleMode } from './runtime';
 import './system-settings.css';
 
 type Startup = { supported: boolean; enabled: boolean; conflict?: boolean };
@@ -22,10 +23,10 @@ export function SystemSettings() {
     <div className="startup-row">
       <div className="startup-copy">
         <h3 id="startup-label">登录 Windows 后后台启动</h3>
-        <p id="startup-description">安静地启动本地服务，不弹出浏览器。关闭网页后仍可随时访问。</p>
+        <p id="startup-description">{exampleMode ? '示例站无法管理设备启动项；安装本地应用后可用。' : '安静地启动本地服务，不弹出浏览器。关闭网页后仍可随时访问。'}</p>
       </div>
       <div className="startup-control">
-        <span className="startup-state" aria-live="polite">{busy ? '更新中…' : query.isPending ? '读取中…' : !state ? '状态未知' : state.enabled ? '已开启' : '已关闭'}</span>
+        <span className="startup-state" aria-live="polite">{exampleMode ? '本地应用专属' : busy ? '更新中…' : query.isPending ? '读取中…' : !state ? '状态未知' : state.enabled ? '已开启' : '已关闭'}</span>
         <button id="autostart" className="startup-switch" type="button" role="switch" aria-labelledby="startup-label" aria-describedby="startup-description"
           aria-checked={state?.enabled ?? false} disabled={busy || !state?.supported || !!state.conflict} onClick={changeStartup}>
           <span className="startup-switch-track"><span className="startup-switch-thumb" /></span>
@@ -36,8 +37,8 @@ export function SystemSettings() {
     <div className="access-methods">
       <div className="access-method">
         <div className="access-label"><Globe2 size={15} aria-hidden="true" /><span>浏览器入口</span></div>
-        <a className="access-domain" href="https://usage.esoren.com" rel="noreferrer">usage.esoren.com<ArrowUpRight size={17} aria-hidden="true" /></a>
-        <p>服务启动后，输入域名即可打开本机工作台。</p>
+        {exampleMode ? <span className="access-domain">usage.esoren.com</span> : <a className="access-domain" href="https://usage.esoren.com" rel="noreferrer">usage.esoren.com<ArrowUpRight size={17} aria-hidden="true" /></a>}
+        <p>{exampleMode ? '安装本地应用后使用；示例站不会连接你的本机服务。' : '服务启动后，输入域名即可打开本机工作台。'}</p>
       </div>
       <div className="access-method">
         <div className="access-label"><Terminal size={15} aria-hidden="true" /><span>命令行入口</span></div>

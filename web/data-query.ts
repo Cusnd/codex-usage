@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { currentTime } from './runtime';
 
 // A rolling range is one query, even as its upper bound advances.
 // Keep explicit custom dates, filters and pagination in the cache identity.
@@ -13,6 +14,6 @@ export function dataQuery<T>(
   return {
     queryKey: [source, route, live ? { ...params, to: { live: true } } : params, timezone],
     queryFn: ({ signal }: { signal: AbortSignal }) =>
-      api<T>(route, live ? { ...params, to: new Date().toISOString() } : params, signal),
+      api<T>(route, live ? { ...params, to: new Date(currentTime()).toISOString() } : params, signal),
   };
 }

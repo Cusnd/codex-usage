@@ -1,0 +1,29 @@
+/* ATLAS: one palette, one type scale, shared by pages and chart primitives. */
+:root {
+  font-family:
+    "Inter Variable", "Segoe UI Variable Text", "Segoe UI",
+    "Microsoft YaHei UI", sans-serif;
+  font-size: 14px;
+  font-synthesis: none;
+  color: var(--ink);
+  background: var(--canvas);
+  --canvas: #f5f6f8;
+  --surface: #fff;
+  --ink: #202531;
+  --muted: #667085;
+  --line: #e2e5eb;
+  --blue: #354fc4;
+  --accent-hover: #293fa3;
+  --accent-soft: #edf0fc;
+  --hover: #f0f2f7;
+  --input-border: #cbd1dc;
+  --success: #247653;
+  --warning: #885b17;
+  --danger: #b23e45;
+  --chart-input: #8294e2;
+  --chart-cache: #354fc4;
+  --chart-output: #aa79a9;
+  --chart-account: #78859d;
+  --radius: 6px;
+  --shadow: 0 8px 32px #20253112, 0 2px 6px #20253108;
+}

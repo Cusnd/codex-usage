@@ -1,11 +1,16 @@
-import React from "react";
 import "@fontsource-variable/inter";
-import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
+import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
-import "./style.css";
-import "./atlas.css";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/components.css";
+import "./styles/layout.css";
+import "./styles/analysis.css";
+import "./styles/settings.css";
+import "./styles/responsive.css";
 import "./motion.css";
 const client = new QueryClient({
   defaultOptions: {

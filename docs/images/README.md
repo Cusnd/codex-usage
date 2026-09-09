@@ -1,23 +1,21 @@
 # Public screenshot reproduction
 
-These are captures of the real production UI with synthetic data. They replace the old long analysis capture and settings preview in the product README. Do not use the screenshots under historical design reports as public demo data; some reports used local records.
+The README images were captured on September 8, 2026 from the [published interactive example](https://codex-usage-showcase.sorenliu.workers.dev/). It uses the same React frontend as the local application, with deterministic synthetic usage and account data. Never capture the personal local service for public documentation.
 
 ## Prepare
 
-Run `npm run build`, then `npx tsx scripts/design-preview.ts`. The isolated server defaults to `http://127.0.0.1:8766`, uses an in-memory database and an empty temporary Codex directory, and never reads personal accounts. It verifies 119.21M tokens, 28 tasks, 92 turns, and a four-agent family.
+Use the published example, or run `npm run showcase:build` followed by `npx wrangler dev --config showcase/wrangler.jsonc --port 8877`. See the [example frontend guide](../../showcase/README.md).
 
-## Analysis
+Use America/New_York, disable reference costs, and select recent seven days. The example clock is fixed at `2026-09-08T18:00:00Z`. The fixture has 119,210,000 tokens, 28 tasks and 92 turns; account windows are synthetic as well. Wait for loaded records and fonts before capturing, and move the pointer away from interactive charts.
 
-- Open `/analysis?range=custom&from=2026-09-02T04:00:00Z&to=2026-09-09T04:00:00Z` on the preview server.
-- Set the viewport to 1280 × 1100. Select the first project, `codex-usage`, so the task list replaces the empty selection prompt.
-- Wait for the task rows, loaded fonts, and chart animation to settle. Move the pointer away from charts and controls.
-- Capture the `main` element as `analysis.png`. This includes the complete trend, composition, four projects, and four tasks without a page footer or clipped rows.
+## Overview
 
-## Agent team
+Open `/` at a 1440px viewport width. Capture the first 1100 CSS pixels of the page at 2x density as `overview.png`. Verify 119.21M tokens, 28 / 92 sessions and turns, the daily trend, and the clearly labeled synthetic account windows. The saved PNG is 2880 × 2200 pixels.
 
-- Open `/threads/example-session-01?range=custom&from=2026-09-02T04:00:00Z&to=2026-09-09T04:00:00Z`.
-- Set the viewport to 1040 × 900 and scroll `.agent-usage` into view. Wait for all four agent rows and fonts to load.
-- Capture that region with 18 pixels of vertical padding and the full viewport width as `agent-team.png`.
-- Verify the three totals: 18.2M current agent, 30.4M descendants, 48.6M team. The two direct children include one child with its own nested child.
+## Task and agent team
 
-Store intermediate captures under ignored `output/playwright/`, inspect them at typical GitHub reading width, then copy the final PNG files here. Do not stretch, reconstruct, or replace the application UI with a mockup. The public showcase's interactive example is separately identified as a curated example, not a screenshot.
+Open `/threads/example-session-01` at a 1440px viewport width. Keep the agent details expanded and capture the first 1800 CSS pixels at 2x density as `agent-team.png`. This includes the task's six turns and all four agent rows. The saved PNG is 2880 × 3600 pixels.
+
+Verify the team totals: 18.2M current agent, 30.4M descendants, 48.6M team. Two direct children include one child with its own nested child. Each agent row reports its own usage.
+
+Inspect the actual screenshots before publishing; do not reconstruct the UI as a mockup. Current source captures and browser validation are recorded in the [shared frontend report](../design/shared-frontend/README.md). Historical design screenshots are not an approved source for public product screenshots.

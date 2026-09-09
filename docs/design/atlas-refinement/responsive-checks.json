@@ -1,0 +1,237 @@
+[
+  {
+    "detailVisible": "block",
+    "overflow": 0,
+    "page": "analysis-project",
+    "width": 1440
+  },
+  {
+    "detailVisible": "block",
+    "overflow": 0,
+    "page": "analysis-project",
+    "width": 1280
+  },
+  {
+    "detailVisible": "block",
+    "overflow": 0,
+    "page": "analysis-project",
+    "width": 1024
+  },
+  {
+    "detailVisible": "block",
+    "overflow": 0,
+    "page": "analysis-project",
+    "width": 768
+  },
+  {
+    "detailVisible": "block",
+    "overflow": 0,
+    "page": "analysis-project",
+    "width": 390
+  },
+  {
+    "overflow": 0,
+    "page": "session-expanded",
+    "tableColumns": 7,
+    "width": 1440
+  },
+  {
+    "overflow": 0,
+    "page": "session-expanded",
+    "tableColumns": 7,
+    "width": 1280
+  },
+  {
+    "overflow": 0,
+    "page": "session-expanded",
+    "tableColumns": 7,
+    "width": 1024
+  },
+  {
+    "overflow": 0,
+    "page": "session-expanded",
+    "tableColumns": 7,
+    "width": 768
+  },
+  {
+    "overflow": 0,
+    "page": "session-expanded",
+    "tableColumns": 7,
+    "width": 390
+  },
+  {
+    "page": "threads",
+    "overflow": 0,
+    "width": 1440
+  },
+  {
+    "page": "threads",
+    "overflow": 0,
+    "width": 1280
+  },
+  {
+    "page": "threads",
+    "overflow": 0,
+    "width": 1024
+  },
+  {
+    "page": "threads",
+    "overflow": 0,
+    "width": 768
+  },
+  {
+    "page": "threads",
+    "overflow": 0,
+    "width": 390
+  },
+  {
+    "page": "settings",
+    "overflow": 0,
+    "width": 1440
+  },
+  {
+    "page": "settings",
+    "overflow": 0,
+    "width": 1280
+  },
+  {
+    "page": "settings",
+    "overflow": 0,
+    "width": 1024
+  },
+  {
+    "page": "settings",
+    "overflow": 0,
+    "width": 768
+  },
+  {
+    "page": "settings",
+    "overflow": 0,
+    "width": 390
+  },
+  {
+    "page": "global-turn-cost",
+    "overflow": 0,
+    "width": 1440
+  },
+  {
+    "page": "global-turn-cost",
+    "overflow": 0,
+    "width": 1280
+  },
+  {
+    "page": "global-turn-cost",
+    "overflow": 0,
+    "width": 1024
+  },
+  {
+    "page": "global-turn-cost",
+    "overflow": 0,
+    "width": 768
+  },
+  {
+    "page": "global-turn-cost",
+    "overflow": 0,
+    "width": 390
+  },
+  {
+    "page": "overview-cost",
+    "overflow": 0,
+    "width": 1440
+  },
+  {
+    "page": "overview-cost",
+    "overflow": 0,
+    "width": 1280
+  },
+  {
+    "page": "overview-cost",
+    "overflow": 0,
+    "width": 1024
+  },
+  {
+    "page": "overview-cost",
+    "overflow": 0,
+    "width": 768
+  },
+  {
+    "page": "overview-cost",
+    "overflow": 0,
+    "width": 390
+  },
+  {
+    "page": "overview-final",
+    "overflow": 0,
+    "width": 1440
+  },
+  {
+    "page": "overview-final",
+    "overflow": 0,
+    "width": 1280
+  },
+  {
+    "page": "overview-final",
+    "overflow": 0,
+    "width": 1024
+  },
+  {
+    "page": "overview-final",
+    "overflow": 0,
+    "width": 768
+  },
+  {
+    "page": "overview-final",
+    "overflow": 0,
+    "width": 390
+  },
+  {
+    "page": "session-final",
+    "overflow": 0,
+    "width": 1440
+  },
+  {
+    "page": "session-final",
+    "overflow": 0,
+    "width": 1280
+  },
+  {
+    "page": "session-final",
+    "overflow": 0,
+    "width": 1024
+  },
+  {
+    "page": "session-final",
+    "overflow": 0,
+    "width": 768
+  },
+  {
+    "page": "session-final",
+    "overflow": 0,
+    "width": 390
+  },
+  {
+    "page": "standalone-final",
+    "overflow": 0,
+    "width": 1440
+  },
+  {
+    "page": "standalone-final",
+    "overflow": 0,
+    "width": 1280
+  },
+  {
+    "page": "standalone-final",
+    "overflow": 0,
+    "width": 1024
+  },
+  {
+    "page": "standalone-final",
+    "overflow": 0,
+    "width": 768
+  },
+  {
+    "page": "standalone-final",
+    "overflow": 0,
+    "width": 390
+  }
+]

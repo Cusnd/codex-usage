@@ -1,0 +1,371 @@
+/* Breakpoints change layout, not the meaning or availability of data. */
+@media (max-width: 1300px) {
+  .app-shell {
+    padding-inline: 24px;
+    grid-template-columns: 1fr auto;
+  }
+  .sidebar {
+    gap: 32px;
+  }
+  .sidebar nav {
+    gap: 24px;
+  }
+  .topbar .timezone-link {
+    display: none;
+  }
+  .atlas-trend-grid {
+    grid-template-columns: minmax(0, 1fr) 200px;
+    gap: 24px;
+  }
+  .atlas-total {
+    padding-left: 24px;
+  }
+  .atlas-master-detail {
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 24px;
+  }
+  .atlas-directory {
+    padding-right: 20px;
+  }
+}
+@media (max-width: 1199px) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .overview-account .limits-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+  }
+  .source-status-grid {
+    grid-template-columns: 1fr;
+  }
+  .session-ledger .session-tools {
+    flex-wrap: wrap;
+  }
+}
+@media (min-width: 901px) {
+  .atlas-detail > .back-to-directory {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .app-shell {
+    display: block;
+    padding-inline: 22px;
+  }
+  .sidebar {
+    justify-content: space-between;
+    gap: 20px;
+    height: 64px;
+  }
+  .topbar {
+    min-height: 40px;
+  }
+  .topbar .timezone-link {
+    display: inline-flex;
+  }
+  .main-shell > main {
+    padding-top: 24px;
+  }
+  .atlas-master-detail {
+    display: block;
+  }
+  .atlas-directory {
+    padding: 0;
+    border: 0;
+  }
+  .atlas-directory-list {
+    max-height: none;
+  }
+  .atlas-master-detail > .atlas-detail {
+    display: none;
+  }
+  .atlas-master-detail.has-selection > .atlas-directory {
+    display: none;
+  }
+  .atlas-master-detail.has-selection > .atlas-detail {
+    display: block;
+  }
+  .atlas-time {
+    padding: 16px 16px 0;
+  }
+  .atlas-trend-grid {
+    grid-template-columns: minmax(0, 1fr) 172px;
+    gap: 16px;
+  }
+  .atlas-total {
+    padding-left: 16px;
+  }
+  .atlas-total > strong {
+    font-size: 30px;
+  }
+  .atlas-chart {
+    height: 220px;
+  }
+  .atlas-filter-popover {
+    width: min(640px, calc(100vw - 44px));
+  }
+}
+@media (max-width: 700px) {
+  .compact-filters {
+    position: relative;
+  }
+  .compact-filters .advanced-filters {
+    position: static;
+  }
+  .compact-filters .advanced-filter-panel {
+    top: 100%;
+    left: 0;
+    width: 100%;
+  }
+  .compact-filters .range-description {
+    left: auto;
+    right: 0;
+  }
+  .setting-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .setting-row > .choice {
+    width: 100%;
+    max-width: 320px;
+  }
+  .session-ledger .session-tools .atlas-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  button,
+  .choice-trigger,
+  .segmented button,
+  .atlas-search input,
+  .atlas-search button {
+    min-height: 40px;
+  }
+  .advanced-filters > summary,
+  .atlas-range-menu > summary {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+  }
+}
+@media (max-width: 560px) {
+  .app-shell {
+    padding-inline: 16px;
+  }
+  .sidebar {
+    height: auto;
+    flex-wrap: wrap;
+    padding-top: 20px;
+    gap: 12px;
+  }
+  .sidebar nav {
+    width: 100%;
+    height: 44px;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .topbar {
+    min-height: 44px;
+  }
+  .topbar .actions {
+    gap: 0;
+    flex-wrap: nowrap;
+  }
+  .topbar .timezone-link {
+    font-size: 10px;
+    max-width: 150px;
+    overflow: hidden;
+  }
+  .topbar .timezone-link svg {
+    width: 12px;
+  }
+  .topbar button {
+    padding: 6px;
+    font-size: 11px;
+  }
+  .topbar .choice {
+    width: 90px;
+  }
+  .main-shell > main {
+    padding: 24px 0 32px;
+  }
+  .page-header p {
+    font-size: 12px;
+  }
+  .atlas-page-heading {
+    gap: 12px;
+  }
+  .atlas-page-heading .page-header p {
+    max-width: 210px;
+  }
+  .atlas-range-menu > summary {
+    padding: 6px 8px;
+  }
+  .atlas-range-menu > summary > svg:first-child {
+    display: none;
+  }
+  .atlas-filter-popover {
+    width: calc(100vw - 48px);
+    padding: 16px;
+  }
+  .filter-bar {
+    gap: 8px;
+  }
+  .segmented button {
+    padding-inline: 10px;
+  }
+  .range-summary {
+    font-size: 11px;
+  }
+  .custom-range-form label,
+  .custom-range-form input {
+    width: 100%;
+  }
+  .atlas-scope-chips .scope-label {
+    width: 100%;
+  }
+  .overview-grid {
+    gap: 24px;
+  }
+  .overview-local .usage-breakdown,
+  .usage-breakdown {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .overview-account {
+    padding: 16px;
+  }
+  .overview-trend .chart {
+    height: 240px;
+  }
+  .atlas-trend-grid {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 16px;
+  }
+  .atlas-total {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    border: 0;
+    padding: 0;
+    align-items: baseline;
+  }
+  .atlas-total > strong {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 32px;
+    margin: 4px 0 8px;
+  }
+  .atlas-total dl {
+    grid-column: 2;
+    grid-row: 1/3;
+    margin: 0;
+    gap: 0 16px;
+  }
+  .atlas-total dt,
+  .atlas-total dd {
+    border: 0;
+    padding: 4px 0;
+  }
+  .atlas-total > small {
+    grid-column: 1/-1;
+  }
+  .atlas-chart {
+    height: 200px;
+  }
+  .chart-toolbar {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .chart-toolbar > .choice {
+    width: 100%;
+  }
+  .chart-toolbar .choice-trigger {
+    font-size: 11px;
+    min-height: 32px;
+  }
+  .atlas-time .usage-breakdown strong {
+    font-size: 19px;
+  }
+  .atlas-tabs {
+    gap: 0;
+    justify-content: space-between;
+  }
+  .atlas-tabs button {
+    padding-inline: 6px;
+    font-size: 12px;
+  }
+  .atlas-empty {
+    padding: 24px 0;
+    min-height: 200px;
+  }
+  .atlas-detail-heading {
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .atlas-detail-heading h2 {
+    font-size: 22px;
+  }
+  .detail-total {
+    text-align: left;
+  }
+  .detail-scope > a {
+    margin-left: 0;
+  }
+  .session-panel .usage-breakdown {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .atlas-table .session-name {
+    max-width: 220px;
+  }
+  .turn-detail {
+    padding: 16px;
+  }
+  .turn-detail-bottom {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .turn-detail-bottom > div + div {
+    border: 0;
+    padding: 0;
+  }
+  .agent-totals {
+    grid-template-columns: 1fr;
+  }
+  .agent-totals > div,
+  .agent-totals > div:first-child {
+    padding: 12px 16px;
+  }
+  .agent-totals > div:last-child {
+    border-radius: 6px;
+  }
+  .agent-totals strong {
+    font-size: 22px;
+  }
+  .price-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .price-model-name label {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .price-model-name input {
+    width: 220px;
+  }
+  .price-threshold {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .comparison-head {
+    gap: 16px;
+  }
+  .comparison-head > small {
+    margin-left: 0;
+  }
+  footer {
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+  }
+}

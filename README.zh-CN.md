@@ -8,11 +8,11 @@
 
 Windows x64 · 本地优先 · Apache-2.0
 
-安装前可以先体验使用合成数据的[在线产品展示](https://codex-usage-showcase.sorenliu.workers.dev)。查看自己的用量时，请使用本地应用。
+安装前可以先体验[在线示例](https://codex-usage-showcase.sorenliu.workers.dev)：与本地应用使用同一套 React 前端，接入合成记录，可操作任务、轮次、Agent 团队、筛选和仅保存在当前浏览器的成本设置。查看自己的真实用量时，请使用本地应用。
 
-![七日用量分析：每日趋势、Token 构成与项目分布](docs/images/analysis.png)
+![新版用量总览：七日用量、Token 构成、每日趋势与合成账户额度](docs/images/overview.png)
 
-*四个示例项目的一周活动。截图来自真实应用界面，全部使用合成数据；当前界面为中文。*
+*28 个任务、92 个轮次，共 119.21M Token。截图来自在线示例，与本地应用使用同一套前端；用量和账户额度均为合成数据，当前界面为中文。*
 
 ## 从数字找到具体工作
 
@@ -24,7 +24,7 @@ Windows x64 · 本地优先 · Apache-2.0
 
 一个任务可以把工作交给子 Agent，子 Agent 也可以继续委派。分别查看**当前 Agent、所有子 Agent 和整个团队的合计**，再进入任意 Agent 查看轮次。每一行只展示该 Agent 自身的用量，方便辨认工作究竟发生在哪里。
 
-![Agent 团队明细：当前 Agent、两个直接子 Agent 与一个嵌套子 Agent](docs/images/agent-team.png)
+![任务轮次与展开的 Agent 团队明细：当前 Agent、两个直接子 Agent 与一个嵌套子 Agent](docs/images/agent-team.png)
 
 *一个示例任务：当前 Agent 消耗 18.2M Token，后代合计 30.4M，团队合计 48.6M。截图为中文界面，数据均为合成示例。*
 
@@ -84,6 +84,7 @@ codex-usage skill install
 | 供 Agent 执行的完整安装步骤 | [Agent 安装指南](docs/INSTALL_FOR_AGENTS.md) |
 | CLI/API、统计口径与数据来源 | [技术参考（英文）](docs/TECHNICAL_REFERENCE.md) |
 | 开发环境与贡献检查 | [贡献指南（英文）](CONTRIBUTING.md) |
+| 构建完整交互示例、复现公开截图 | [示例前端说明（英文）](showcase/README.md) · [截图复现（英文）](docs/images/README.md) |
 
 发现问题可前往 [Issues](https://github.com/Cusnd/codex-usage/issues)，提供复现步骤和脱敏错误信息。
 
