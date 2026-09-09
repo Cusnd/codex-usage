@@ -189,7 +189,8 @@ try {
   if (windows) {
     // Removing instance.json acknowledges shutdown before Windows necessarily releases
     // every process handle. Do not delete installed files while a test child can use them.
-    const snapshot = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "$deadline = [DateTime]::UtcNow.AddSeconds(15); do { $remaining = @(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($env:CODEX_USAGE_TEST_ROOT) }); if ($remaining.Count -eq 0) { break }; Start-Sleep -Milliseconds 200 } while ([DateTime]::UtcNow -lt $deadline); $remaining | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress"], { env: { ...env, CODEX_USAGE_TEST_ROOT: root }, timeout: 20000 });
+    // Match the unique directory name: Node resolves RUNNER~1 to its long path.
+    const snapshot = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "$deadline = [DateTime]::UtcNow.AddSeconds(15); do { $remaining = @(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($env:CODEX_USAGE_TEST_DIRECTORY_NAME) }); if ($remaining.Count -eq 0) { break }; Start-Sleep -Milliseconds 200 } while ([DateTime]::UtcNow -lt $deadline); $remaining | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress"], { env: { ...env, CODEX_USAGE_TEST_DIRECTORY_NAME: path.basename(root) }, timeout: 20000 });
     assert.equal(snapshot.stdout.trim(), '', `Synthetic Node processes did not exit: ${snapshot.stdout}`);
   }
   await rm(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 1000 });
