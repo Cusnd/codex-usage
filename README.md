@@ -6,9 +6,9 @@ A local dashboard for understanding your Codex activity. Follow a usage spike fr
 
 [Explore the live example](https://codex-usage-showcase.sorenliu.workers.dev) · [Get started](#get-started) · [User guide](docs/USER_GUIDE.md) · [简体中文](README.zh-CN.md)
 
-Windows x64 · Local-first · Apache-2.0
+Windows x64 · macOS Apple Silicon / Intel · Local-first · Apache-2.0
 
-The source now includes macOS Apple Silicon and Intel compatibility, verified by native GitHub Actions jobs on both architectures. See [macOS compatibility](docs/MACOS_COMPATIBILITY.md) for candidate installation and run records. The published 0.1.2 package remains Windows-only; this compatibility update has not been published to npm.
+Version 0.1.3 adds macOS Apple Silicon and Intel support, verified by native GitHub Actions jobs on both architectures. See [macOS compatibility](docs/MACOS_COMPATIBILITY.md) for installation and run records. Version 0.1.2 and earlier support Windows only.
 
 Try the [live example](https://codex-usage-showcase.sorenliu.workers.dev) before installing. It runs the same React frontend with synthetic records, including task and turn details, agent teams, filters, and browser-local cost settings. Your own usage is available in the local app.
 
@@ -54,7 +54,7 @@ The Skill queries the local service through the CLI. Its answers retain the time
 
 The [installation guide](docs/INSTALL_FOR_AGENTS.md) covers verified downloads and a user-level Node setup when needed.
 
-**Already have Node.js 22.13+ (22.x), 24.x, or 26.x on Windows x64?** Install the public npm package:
+**Already have Node.js 22.13+ (22.x), 24.x, or 26.x on Windows x64 or macOS x64/arm64?** Install the public npm package:
 
 ```powershell
 npm install -g @esoren/codex-usage

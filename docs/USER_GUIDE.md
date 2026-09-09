@@ -4,13 +4,13 @@
 
 ## Install and open
 
-Codex Usage supports Windows x64 and requires Node.js 22.13+ (22.x), 24.x, or 26.x. Local statistics work without the Codex CLI; account features depend on an existing supported Codex login.
+Codex Usage 0.1.3 supports Windows x64 and macOS x64/arm64, and requires Node.js 22.13+ (22.x), 24.x, or 26.x. Local statistics work without the Codex CLI; account features depend on an existing supported Codex login.
 
 The easiest route is to give an agent the [installation guide](INSTALL_FOR_AGENTS.md). Its installer verifies the release and can provide a user-level Node runtime. Installation requires internet access to download the package and its dependencies; the web app is already built.
 
 ### Manual installation
 
-The source adds macOS Apple Silicon/Intel compatibility; published 0.1.2 is still Windows-only. On a Mac follow [candidate installation and validation status](MACOS_COMPATIBILITY.md), using existing supported Node/npm. CLI examples without PowerShell variables also work in zsh/bash. The private-runtime installer and legacy archive example are Windows-only.
+On a Mac, use version 0.1.3 or later and follow [installation and validation status](MACOS_COMPATIBILITY.md), using existing supported Node/npm. CLI examples without PowerShell variables also work in zsh/bash. The private-runtime installer and legacy archive example are Windows-only.
 
 ```powershell
 npm install -g @esoren/codex-usage

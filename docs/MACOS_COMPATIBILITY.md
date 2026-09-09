@@ -1,10 +1,23 @@
-# macOS compatibility — candidate, not yet released
+# macOS compatibility
 
-The source adds macOS Apple Silicon (`arm64`) and Intel (`x64`) compatibility. The published `@esoren/codex-usage@0.1.2` remains Windows-only. This update does not publish a new package or establish macOS support solely from Windows tests.
+Version 0.1.3 supports macOS Apple Silicon (`arm64`) and Intel (`x64`). Version 0.1.2 and earlier support Windows only. Platform validation uses native GitHub Actions runners for both Mac architectures.
 
-## Install the candidate on a Mac
+## Install on a Mac
 
 Use Node.js 22.13+ (22.x), 24.x, or 26.x and npm, with a macOS version supported by that Node distribution. No private Node installer, Homebrew formula or DMG is supplied. Use an existing writable npm prefix.
+
+Install with an existing supported Node/npm:
+
+```sh
+npm install --global @esoren/codex-usage@0.1.3
+codex-usage doctor --json
+codex-usage start --json
+codex-usage summary --days 7 --json
+codex-usage skill install
+codex-usage
+```
+
+### Build an archive from source
 
 From this checkout, check each command's exit status before continuing:
 
@@ -19,10 +32,10 @@ npm run package:smoke
 npm pack
 ```
 
-Install the actual archive printed by `npm pack` using its absolute path. The source version is unchanged, so the filename may still contain `0.1.2`:
+Install the actual archive printed by `npm pack` using its absolute path:
 
 ```sh
-npm install --global /absolute/path/to/esoren-codex-usage-0.1.2.tgz
+npm install --global /absolute/path/to/esoren-codex-usage-0.1.3.tgz
 codex-usage doctor --json
 codex-usage start --json
 codex-usage summary --days 7 --json
@@ -30,7 +43,7 @@ codex-usage skill install
 codex-usage
 ```
 
-Do not substitute the registry's Windows-only 0.1.2 for the locally built candidate. When receiving an archive from someone else, verify its supplied SHA-256 using `shasum -a 256 /absolute/path/to/candidate.tgz`. After a compatible release is verified and published, installation will use `npm install --global @esoren/codex-usage`.
+When receiving an archive from someone else, verify its supplied SHA-256 using `shasum -a 256 /absolute/path/to/candidate.tgz`. For registry updates, use `npm install --global @esoren/codex-usage` and verify that the installed version is 0.1.3 or later.
 
 If the command is missing, inspect `npm prefix --global` and invoke `"$(npm prefix --global)/bin/codex-usage"`. Do not add `sudo` to work around an unwritable system prefix; use a user-owned npm prefix or an existing user-managed Node installation.
 
@@ -67,6 +80,6 @@ Data, logs and Skill backups remain. To migrate an old cache, stop its old servi
 - Each Windows x64 job passed type checks, 55 tests (3 macOS-only cases skipped), build and both smoke suites. The local Windows baseline also passed build and both smoke suites. Browser-control acceptance verified task/turn navigation, platform-neutral settings text and the isolated startup switch (off → on → off).
 - macOS LaunchAgent: package smoke validates the actual plist with `plutil`, bootstraps a uniquely labelled copy in the login domain `gui/<uid>`, waits for the launcher to exit while its service survives, verifies stop does not restart, and removes the job. Smoke tests do not change real login items.
 - macOS desktop: browser opening, logout/login and OS background-item approval are optional follow-up checks; they are not the compatibility completion gate. The native CI matrix validates the Node backend and real launchd lifecycle.
-- npm publication: not performed by this update.
+- Exact release archive and registry verification are tracked in the repository's [npm release record](https://github.com/Cusnd/codex-usage/blob/main/docs/NPM_RELEASE.md).
 
 Compatibility completion is based on a successful native CI matrix: Windows x64 and macOS arm64/x64, with real npm installation, backend tests, production assets/API and launchd/service lifecycle checks. Keep existing browser regression checks for the shared web frontend. If additional desktop spot checks are needed, use browser-control tooling with synthetic records and an isolated startup directory; no physical Mac is required to complete the backend compatibility update.

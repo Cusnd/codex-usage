@@ -6,9 +6,9 @@
 
 [在线示例](https://codex-usage-showcase.sorenliu.workers.dev) · [开始使用](#开始使用) · [使用指南](docs/USER_GUIDE.zh-CN.md) · [English](README.md)
 
-Windows x64 · 本地优先 · Apache-2.0
+Windows x64 · macOS Apple Silicon / Intel · 本地优先 · Apache-2.0
 
-当前源码已加入 macOS Apple Silicon 和 Intel 适配，并通过两种架构的原生 GitHub Actions 验证，候选包安装和运行记录见 [macOS 兼容说明](docs/MACOS_COMPATIBILITY.md)。已发布的 0.1.2 仍仅支持 Windows；此次适配尚未发布到 npm。
+0.1.3 版本新增 macOS Apple Silicon 和 Intel 支持，并通过两种架构的原生 GitHub Actions 验证，安装和运行记录见 [macOS 兼容说明](docs/MACOS_COMPATIBILITY.md)。0.1.2 及更早版本仅支持 Windows。
 
 安装前可以先体验[在线示例](https://codex-usage-showcase.sorenliu.workers.dev)：与本地应用使用同一套 React 前端，接入合成记录，可操作任务、轮次、Agent 团队、筛选和仅保存在当前浏览器的成本设置。查看自己的真实用量时，请使用本地应用。
 
@@ -54,7 +54,7 @@ Skill 通过 CLI 查询本地服务。回答会保留时间范围、来源和数
 
 [安装文档](docs/INSTALL_FOR_AGENTS.md)包含下载校验步骤，需要时会配置用户级 Node 环境。
 
-**已经在 Windows x64 上安装 Node.js 22.13+（22.x）、24.x 或 26.x？** 直接安装公开的 npm 包：
+**已经在 Windows x64 或 macOS x64/arm64 上安装 Node.js 22.13+（22.x）、24.x 或 26.x？** 直接安装公开的 npm 包：
 
 ```powershell
 npm install -g @esoren/codex-usage

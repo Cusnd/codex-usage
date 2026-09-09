@@ -1,8 +1,10 @@
 # npm release plan
 
-## macOS source candidate — not published
+## Cross-platform release candidate — 0.1.3
 
-The source adds Windows x64 + macOS x64/arm64 compatibility. Published 0.1.2 remains Windows-only. Before a future publication, require successful native Windows and both Mac architecture CI matrices, record the run in [compatibility status](MACOS_COMPATIBILITY.md), then select a new version and verify the exact archive. Desktop spot checks are optional follow-up, not a compatibility release gate. This update does not publish a new package.
+The candidate supports Windows x64 and macOS x64/arm64 with Node 22.13+ (22.x), 24.x and 26.x. The native compatibility matrix passed all 18 jobs for the implementation; see [compatibility status](MACOS_COMPATIBILITY.md). The independent `main` and `master` histories were joined by merge commit `b9556ab`, preserving the validated tree and both histories. Completed branches were retired; their worktree directories remain intact at detached commits.
+
+Version 0.1.3 is undergoing final CI and exact-archive verification. Publication is not yet confirmed. Evidence is stored under `release-artifacts/npm-esoren-0.1.3/`. Desktop spot checks are optional follow-up, not a compatibility release gate.
 
 ## First release completed — 2026-09-09
 
@@ -23,8 +25,8 @@ Published publicly after npm browser authentication. The official registry now r
 ## Release target
 
 - Public scoped npm package: `@esoren/codex-usage`; CLI remains `codex-usage`.
-- Candidate version: `0.1.2`, subject to availability under the chosen scope.
-- Supported platform: Windows x64, Node.js 22.13+ (22.x), 24.x, or 26.x.
+- Candidate version: `0.1.3`, subject to availability under the chosen scope.
+- Supported platforms: Windows x64 and macOS x64/arm64, Node.js 22.13+ (22.x), 24.x, or 26.x.
 - Ship the CLI, compiled server/shared code, built web assets, Skill, runtime helper, license and user documentation.
 - Keep existing GitHub Release installation working while adding npm installation.
 
@@ -56,7 +58,7 @@ The final publish is performed after the package target and candidate are review
 
 Allow time for npm's publish-time scan before treating an initial registry 404 as a failed publish. npm documents a typical delay of about five minutes, sometimes 15 minutes or more. `npm dist-tag ls @esoren/codex-usage` can work while the package is still unavailable. Do not republish or change the version merely because the first download is not yet available. See [npm publish-time scanning](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/).
 
-After publication, read back `name`, `version`, `dist.integrity`, `bin`, `engines`, `os`, and `cpu` with `npm view` against the official registry. Download the exact registry version with `npm pack @esoren/codex-usage@0.1.2`, compare integrity with the candidate, and run the isolated package smoke test against the downloaded archive.
+After publication, read back `name`, `version`, `dist.integrity`, `bin`, `engines`, `os`, and `cpu` with `npm view` against the official registry. Download the exact registry version with `npm pack @esoren/codex-usage@0.1.3`, compare integrity with the candidate, and run the isolated package smoke test against the downloaded archive.
 
 Users with the supported runtime can then run:
 

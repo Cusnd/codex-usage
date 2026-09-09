@@ -2,11 +2,11 @@
 
 [Product overview](../README.md) · [User guide](USER_GUIDE.md) · [Technical reference](TECHNICAL_REFERENCE.md)
 
-Use this procedure when the user asks you to install Codex Usage. Reading this document alone does not authorize installation. Supported release: Windows x64, Node.js 22.13+ (22.x), 24.x, or 26.x. The application reads local Codex records; it does not invoke a model or upload usage history.
+Use this procedure when the user asks you to install Codex Usage. Reading this document alone does not authorize installation. Version 0.1.3 supports Windows x64 and macOS x64/arm64 with Node.js 22.13+ (22.x), 24.x, or 26.x. The application reads local Codex records; it does not invoke a model or upload usage history.
 
 ## Install from npm with an existing Node runtime
 
-**macOS candidate:** the source targets x64/arm64, but registry version 0.1.2 remains Windows-only. Follow [candidate installation](MACOS_COMPATIBILITY.md) using existing supported Node/npm. Inspect `command -v node`, `command -v codex-usage`, `node -p 'process.arch'`, and `npm prefix --global`; install the verified candidate with `npm install --global /absolute/path/to/candidate.tgz`, then run the common CLI checks in section 3. Sections 1–2 are Windows-only.
+**macOS x64/arm64:** use version 0.1.3 or later and follow [Mac installation](MACOS_COMPATIBILITY.md) using existing supported Node/npm. Inspect `command -v node`, `command -v codex-usage`, `node -p 'process.arch'`, and `npm prefix --global`; install with `npm install --global @esoren/codex-usage`, then run the common CLI checks in section 3. Sections 1–2 are Windows-only.
 
 On macOS doctor must report `darwin` and `x64` or `arm64`, `webAssets: true`, and a verified service after start. Data/logs default to `~/Library/Application Support/CodexUsage`; Codex records and Skills use `~/.codex` or explicit overrides. If the CLI is missing, invoke `"$(npm prefix --global)/bin/codex-usage"`. Use a writable user prefix rather than `sudo`. Every command must succeed before continuing.
 

@@ -4,13 +4,13 @@
 
 ## 安装与打开
 
-当前支持 Windows x64，需要 Node.js 22.13+（22.x）、24.x 或 26.x。本地统计不要求安装 Codex CLI；账户功能依赖现有且受支持的 Codex 登录。
+0.1.3 版本支持 Windows x64 和 macOS x64/arm64，需要 Node.js 22.13+（22.x）、24.x 或 26.x。本地统计不要求安装 Codex CLI；账户功能依赖现有且受支持的 Codex 登录。
 
 推荐把 [Agent 安装指南](INSTALL_FOR_AGENTS.md)交给 Agent。安装器会校验发布包，必要时配置用户级 Node 环境。安装需要联网下载发布包和依赖，网页已经预构建。
 
 ### 手动安装
 
-当前源码已加入 macOS Apple Silicon/Intel 适配，但已发布的 0.1.2 仍为 Windows 版本。Mac 请按[候选包安装和验证状态](MACOS_COMPATIBILITY.md)使用已有的兼容 Node/npm。不含 PowerShell 变量的 CLI 示例也适用于 zsh/bash；私有运行时安装器和旧归档示例仅用于 Windows。
+Mac 请使用 0.1.3 或更高版本，按[安装和验证状态](MACOS_COMPATIBILITY.md)使用已有的兼容 Node/npm。不含 PowerShell 变量的 CLI 示例也适用于 zsh/bash；私有运行时安装器和旧归档示例仅用于 Windows。
 
 ```powershell
 npm install -g @esoren/codex-usage

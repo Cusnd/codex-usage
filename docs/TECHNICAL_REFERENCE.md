@@ -6,9 +6,9 @@ This document describes the local application's interfaces and counting rules. F
 
 ## Runtime and storage
 
-Windows x64 and Node.js 22.13+ (22.x), 24.x, or 26.x are the supported runtime. SQLite is provided by Node; no separate database or Python installation is required. Web assets are resolved relative to the installed package, independently of the working directory.
+Version 0.1.3 supports Windows x64 and macOS x64/arm64 with Node.js 22.13+ (22.x), 24.x, or 26.x. SQLite is provided by Node; no separate database or Python installation is required. Web assets are resolved relative to the installed package, independently of the working directory.
 
-The source also targets macOS x64/arm64; see [validation status](MACOS_COMPATIBILITY.md). The required macOS version follows the selected Node distribution. Data defaults to `~/Library/Application Support/CodexUsage`, overridden by `CODEX_USAGE_DATA_DIR`; original records use `~/.codex`, overridden by `CODEX_HOME`.
+For macOS, see [validation status](MACOS_COMPATIBILITY.md). The required macOS version follows the selected Node distribution. Data defaults to `~/Library/Application Support/CodexUsage`, overridden by `CODEX_USAGE_DATA_DIR`; original records use `~/.codex`, overridden by `CODEX_HOME`.
 
 Windows starters hold a named pipe. macOS holds an exclusive loopback listener at `49152 + first_uint16_be(SHA256(realpath(dataRoot))) % 16384`. Starters for the same real directory share a guard regardless of HTTP port; the kernel releases it on crash. Hash collisions or foreign listeners fail closed with details in `service.log`. No alternate guard is selected and no foreign process is killed. The guard has no control API. If a custom HTTP port equals the guard port, select a different HTTP port.
 
