@@ -21,13 +21,19 @@ export function alive(pid: number) { try { process.kill(pid, 0); return true; } 
 export const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export async function control(record: Instance, action = 'identity') {
   if (action === 'stop') await control(record, 'identity');
-  const response = await fetch(`http://127.0.0.1:${record.port}/_control/${action}`, {
-    method: 'POST', headers: { Authorization: `Bearer ${record.token}` }, signal: AbortSignal.timeout(2000),
-  });
-  if (!response.ok) throw new Error('Service identity could not be verified. No process was stopped.');
-  const body = await response.json() as any;
-  if (body.pid !== record.pid || body.version !== record.version) throw new Error('Service identity mismatch.');
-  return body;
+  const controller = new AbortController();
+  // AbortSignal.timeout is unref'ed. A short-lived CLI must stay alive while
+  // a disconnected control request is pending, even after detaching its child.
+  const deadline = setTimeout(() => controller.abort(new Error('Service control timed out.')), 2000);
+  try {
+    const response = await fetch(`http://127.0.0.1:${record.port}/_control/${action}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${record.token}` }, signal: controller.signal,
+    });
+    if (!response.ok) throw new Error('Service identity could not be verified. No process was stopped.');
+    const body = await response.json() as any;
+    if (body.pid !== record.pid || body.version !== record.version) throw new Error('Service identity mismatch.');
+    return body;
+  } finally { clearTimeout(deadline); }
 }
 function powershell(script: string) {
   const prelude = "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); ";

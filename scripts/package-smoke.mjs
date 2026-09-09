@@ -168,7 +168,12 @@ try {
   // Occupied port is not silently changed and the foreign listener survives.
   const foreign = createServer(socket => socket.destroy());
   await new Promise(r => foreign.listen(port, '127.0.0.1', r));
-  try { await assert.rejects(run('start', '--json')); assert.ok(foreign.listening); }
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await assert.rejects(run('start', '--json'), error => Boolean(error.stderr?.includes('"code":"CLI_ERROR"')));
+      assert.ok(foreign.listening);
+    }
+  }
   finally { await new Promise(r => foreign.close(r)); }
   console.log('PASS: package install, arbitrary cwd, concurrent/repeated start, API/assets, JSON, refresh, identity/version mismatch, same-origin startup, hidden launcher, Skill, reinstall/data preservation, migration, stale recovery, stop, port conflict.');
 } catch (error) {
@@ -186,5 +191,12 @@ try {
   if (cli) { try { await run('stop', '--json'); } catch {} }
   const resolved = path.resolve(root);
   assert.ok(resolved.startsWith(path.resolve(os.tmpdir()) + path.sep) && path.basename(resolved).startsWith('codex-package-'));
+  if (windows) {
+    // Removing instance.json acknowledges shutdown before Windows necessarily releases
+    // every process handle. Do not delete installed files while a test child can use them.
+    // Match the unique directory name: Node resolves RUNNER~1 to its long path.
+    const snapshot = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "$deadline = [DateTime]::UtcNow.AddSeconds(15); do { $remaining = @(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($env:CODEX_USAGE_TEST_DIRECTORY_NAME) }); if ($remaining.Count -eq 0) { break }; Start-Sleep -Milliseconds 200 } while ([DateTime]::UtcNow -lt $deadline); $remaining | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress"], { env: { ...env, CODEX_USAGE_TEST_DIRECTORY_NAME: path.basename(root) }, timeout: 20000 });
+    assert.equal(snapshot.stdout.trim(), '', `Synthetic Node processes did not exit: ${snapshot.stdout}`);
+  }
   await rm(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 1000 });
 }
