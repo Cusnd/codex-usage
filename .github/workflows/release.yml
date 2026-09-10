@@ -1,0 +1,51 @@
+name: Cloud release
+run-name: Release ${{ inputs.version }} from ${{ inputs.source_sha }}
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Prepared package version (without v)
+        required: true
+        type: string
+      branch:
+        description: Uploaded task branch with a PR to develop
+        required: true
+        type: string
+      source_sha:
+        description: Full immutable task commit SHA
+        required: true
+        type: string
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency:
+  group: cloud-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Complete authorized release
+        run: node scripts/cloud-release.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_BRANCH: ${{ inputs.branch }}
+          RELEASE_SOURCE_SHA: ${{ inputs.source_sha }}
+      - name: Preserve release progress
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-artifacts/cloud-release.json
+          if-no-files-found: ignore
+          retention-days: 90

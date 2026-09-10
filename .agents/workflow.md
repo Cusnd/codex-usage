@@ -3,10 +3,10 @@
 本文是本项目分支、提交、集成和发布流程的统一说明。正常流程为：
 
 ```text
-codex/<任务名> → develop → main → 推送版本标签 → 发布工作流 → npm
+明确发布指令 → 准备版本并上传 → 启动云端任务 → CI → develop → main → 标签 → npm → 同步 develop
 ```
 
-以下是项目约定。标签发布由 `.github/workflows/publish.yml` 执行，核验并复用 `windows.yml` 已完成的平台检查结果。工作流需先进入 GitHub，npm Trusted Publisher 也需完成绑定，之后推送版本标签才会自动发布。
+自动发布由 `.github/workflows/release.yml` 统一编排，复用 `windows.yml` 的平台检查和 `publish.yml` 的 npm 发布。普通提交和 PR 合并不启动自动发布；手动推送版本标签仍可启动 npm 发布。
 
 ## 分支
 
@@ -87,35 +87,23 @@ Git 标签定位源码提交；npm 包版本对应 `package.json` 的 `version`�
 
 发布工作流按版本后缀选择 npm 渠道。`v*` 会同时匹配正式版本和预发布版本，不能仅靠这个触发条件区分渠道。
 
-### 简短示例
+### 自动发布
 
-以下以 `0.1.4` 为例，实际执行时替换为本次版本。
-
-在版本准备任务中更新版本，随后按正常提交和 PR 流程进入 `develop`，再进入 `main`：
+用户说“自动发布”即授权本次发布。启动前准备版本号、锁文件和发布说明；未指定版本时，普通修复默认递增 patch。推送任务分支并创建指向 develop 的 PR，然后在 main 上调用统一入口：
 
 ```powershell
-npm version 0.1.4 --no-git-tag-version
-# 更新发布说明，并将版本修改与锁文件一并提交。
-# 提交标题：release: prepare 0.1.4
+gh workflow run release.yml --ref main -f version=0.1.7 -f branch=codex/release-0.1.7 -f source_sha=<完整40位提交SHA>
 ```
 
-发布 PR 合并后，获取并查看准备发布的 `main` 提交：
+版本号与分支仅为示例，替换为本次已上传内容。入口需要先随代码集成到 main；新入口的首次安装不需要发版。确认对应运行已进入执行状态后，回复“已开始自动发布”并附运行链接。
 
-```powershell
-git switch main
-git pull --ff-only origin main
-git log -1 --oneline
-node -p "require('./package.json').version"
-```
+云端依次完成：校验来源与版本 → 复用或运行精确文件树 CI → 任务 PR squash merge 到 develop → 发布 PR merge commit 合入 main → 创建附注标签 → 显式启动并等待 npm 发布和 registry 验证 → 同步 develop。手动 CI 的 revision 参数用于固定实际合并候选提交。
 
-当前提交为选定的发布提交时，创建并推送标签：
+整个流程只依赖 GitHub 云端。CI 未通过时不执行相关合并；工作流摘要和 cloud-release artifact 记录阶段、来源、PR、CI 及发布结果。普通运行不逐步播报，完成或失败时说明结果和相关链接。
 
-```powershell
-git tag -a v0.1.4 -m "Release 0.1.4"
-git push origin v0.1.4
-```
+重新运行相同输入即可复用已合并 PR、标签及成功发布记录。npm 子任务失败时先查看并恢复该任务，再重跑主任务。发布成功后的分支同步失败仅表示收尾未完成。
 
-只在本地创建标签不会触发远端发布。标签推送后，跟进发布工作流和 npm 上的版本、渠道结果。
+入口使用仓库 GITHUB_TOKEN 的 contents、pull-requests 和 actions 写权限，npm 继续使用现有 OIDC 绑定，无需新增长期 token。GitHub 仓库需允许 Actions 创建 PR。
 
 ## npm 自动发布配置
 
