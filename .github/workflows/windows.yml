@@ -1,13 +1,19 @@
 name: Windows and macOS checks
+run-name: ${{ inputs.revision && format('Release checks {0}', inputs.revision) || format('Compatibility {0}', github.ref_name) }}
 on:
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
+    inputs:
+      revision:
+        description: Exact commit to validate (optional)
+        required: false
+        type: string
 permissions:
   contents: read
   actions: read
 concurrency:
-  group: compatibility-${{ github.workflow }}-${{ github.ref }}
+  group: compatibility-${{ github.workflow }}-${{ inputs.revision || github.ref }}
   cancel-in-progress: true
 jobs:
   inspect:
@@ -19,11 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.revision || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/ci-reuse.test.mjs
+      - run: node --test tests/ci-reuse.test.mjs tests/cloud-release.test.mjs
       - id: validation
         run: node scripts/ci-reuse.mjs lookup
         env:
@@ -45,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.revision || github.sha }}
           path: workspace/中文 project
       - uses: actions/setup-node@v4
         with:
