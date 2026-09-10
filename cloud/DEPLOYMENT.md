@@ -29,15 +29,16 @@
 | CUA 320 px, 390 px and 1280 px viewports | Passed: cards retained, no horizontal overflow, unknown values preserved, past reset time marked as awaiting confirmation |
 | Background collection with the synthetic dashboard tabs closed | Passed: observed a new collection and subsequent cloud receipt after closing the tabs |
 | Real local Codex account collection | Passed through App Server with confirmed identity and two quota buckets; private values are not included in this record |
-| Public HTTPS/DB/configuration health | Passed using the public DNS answer with the original HTTPS hostname and certificate verification |
-| Real GitHub login, binding and production quota receipt | Pending local DNS resolution and browser authorization |
+| Public HTTPS/DB/configuration health | Passed over normal DNS/HTTPS after clearing the local DNS cache; deployed HTML hash matches the built cloud entry |
+| Real GitHub permission screen | Passed: authorized the intended app with public data only, no repository scopes |
+| Real GitHub callback, binding and production quota receipt | Pending: in-app browser blocks callback navigation with ERR_BLOCKED_BY_CLIENT / inspector; another browser requires the user's workflow exception |
 | Physical phone acceptance | Not performed; narrow browser viewports are the tested coverage |
 
-At verification time the computer's DNS path through Mihomo returned NXDOMAIN for the newly created hostname, while Cloudflare and Google DNS-over-HTTPS both returned its public addresses. Requesting `/api/health` with that address and the original TLS hostname returned `{"ok":true,"schemaVersion":1,"loginConfigured":true}`. The custom domain and proxied DNS record are present in Cloudflare. A normal browser login has not yet been verified; do not treat health or mocked OAuth tests as proof that the real GitHub callback works.
+The computer initially retained an NXDOMAIN result for the new hostname. Clearing Mihomo's DNS cache restored resolution; normal HTTPS requests from curl and Node now return `{"ok":true,"schemaVersion":1,"loginConfigured":true}`. The custom domain, proxied DNS record and deployed asset content are verified. The real GitHub authorization page shows the intended app and public identity scope. The in-app browser then blocks `/auth/github/callback`; CUA network diagnostics report `net::ERR_BLOCKED_BY_CLIENT` with blocked reason `inspector`. The production login session has not yet been verified; do not treat health or mocked OAuth tests as proof that the callback works.
 
 ## Complete the production check
 
-After local DNS is refreshed, start the built local app with an isolated data directory, use `cloud connect` or Settings → 云端查看, and complete the real GitHub approval and binding. Verify that the cloud page shows the same quota windows and the original collection time, with a later cloud receipt time. Update this record with the actual result. The implementation's upload credential must remain local and must not be pasted into a browser, log or this record.
+Use the built local app with an isolated data directory, use `cloud connect` or Settings → 云端查看, and complete GitHub login and binding in a user-approved browser that allows the callback. Verify that the cloud page shows the same quota windows and the original collection time, with a later cloud receipt time. Update this record with the actual result. The implementation's upload credential must remain local and must not be pasted into a browser, log or this record.
 
 ## Rollback
 
