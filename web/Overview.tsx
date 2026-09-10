@@ -1,4 +1,5 @@
 import { AccountNotice } from "./AccountNotice";
+import { QuotaCards } from './QuotaCards';
 import { ArrowUpRight } from "lucide-react";
 import { DateTime } from "luxon";
 import { memo, useContext, useMemo, useState } from "react";
@@ -246,57 +247,7 @@ export function Overview() {
             timezone={r.timezone}
           />
           <ErrorBox error={limits.error} />
-          <div className="limits-grid">
-            {limits.data?.data.buckets.map((b) => (
-              <section className="panel limit-panel" key={b.id}>
-                <h2>{b.name}</h2>
-                {(
-                  [
-                    ["主窗口", b.primary],
-                    ["次窗口", b.secondary],
-                  ] as const
-                ).map(([name, w]) =>
-                  w ? (
-                    <div className="limit-window" key={name}>
-                      <div>
-                        <span>
-                          {w.windowDurationMins
-                            ? `${w.windowDurationMins >= 1440 ? w.windowDurationMins / 1440 + " 天" : w.windowDurationMins / 60 + " 小时"}窗口`
-                            : name}
-                        </span>
-                        <strong>
-                          {w.remainingPercent === null
-                            ? "未知"
-                            : w.remainingPercent.toFixed(0)}
-                          <small>
-                            {w.remainingPercent === null ? "" : "% 剩余"}
-                          </small>
-                        </strong>
-                      </div>
-                      {w.remainingPercent !== null && (
-                        <QuotaProgress
-                          identity={`${b.id}/${name}/${w.resetsAt}`}
-                          value={w.remainingPercent}
-                          label={`${b.name} ${name}剩余额度`}
-                          change={limits.motion}
-                        />
-                      )}
-                      <small>
-                        已用{" "}
-                        {w.usedPercent === null
-                          ? "未知"
-                          : w.usedPercent.toFixed(1) + "%"}{" "}
-                        ·{" "}
-                        {w.resetsAt
-                          ? time(w.resetsAt, r.timezone) + " 重置"
-                          : "重置时间未知"}
-                      </small>
-                    </div>
-                  ) : null,
-                )}
-              </section>
-            ))}
-          </div>
+          <QuotaCards buckets={limits.data?.data.buckets || []} formatTime={at => time(at, r.timezone)} progress={props => <QuotaProgress {...props} change={limits.motion} />} />
           {!limits.data?.data.buckets.length && (
             <div className="notice">
               {status?.accountLimits.running

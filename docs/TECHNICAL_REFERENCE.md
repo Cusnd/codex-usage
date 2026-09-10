@@ -89,6 +89,18 @@ Responses use `{ data, meta }`. ISO time boundaries must include an offset. `pro
 
 Account response metadata carries independent update time, warnings, provider, account ID, identity confirmation, and stale state. Window `usedPercent` and `remainingPercent` may be null. SQL aggregation and sorting happen server-side.
 
+## Cloud quota protocol
+
+`CloudSync` constructs an explicit version 1 whitelist from a verified limits observation. A per-binding HMAC makes the account reference opaque; it is not the Codex account ID. The local SQLite outbox holds only the newest snapshot and retry state. The device bearer and HMAC salt live in the separate private `cloud-credentials.json`, never in local API responses or logs. The local backend schedules collection independently of browser tabs, preserving saved intervals.
+
+Local `/api/cloud/status`, `POST /api/cloud/connect`, `PATCH /api/cloud/settings` and `DELETE /api/cloud/connection` manage this collector. CLI equivalents are `cloud connect|status|pause|resume|disconnect`, with `--json`; connect accepts `--name`, `--no-open` and `--wait`.
+
+The independent `cloud` package runs a native Worker, D1 and Static Assets at `quota.esoren.com`. GitHub OAuth uses state plus S256 PKCE with no repository scopes; it discards the provider token after reading the stable GitHub user ID. Its own session lasts 30 days with Secure, HttpOnly, SameSite=Lax cookies. Public pages contain no credentials. Device credentials can upload and revoke their own device, but cannot read quota pages or other users' data. Browser changes require same-origin requests, private responses are not cacheable, and every data query derives the owner from authentication.
+
+The local client generates its proposed device token and submits its hash with the device name. A 10-minute binding request has a separate hashed polling secret. Browser confirmation atomically replaces any previous main device and removes its old snapshot. D1 stores only device token hashes. `PUT /api/v1/snapshot` atomically claims a per-user 60-second write window and enforces monotonic sequence numbers; identical retries acknowledge the original receipt, while stale versions and too-fast new writes receive 409 and 429/Retry-After. `collectedAt` is never replaced by cloud receipt time. Disconnect and account deletion revoke access and delete the corresponding snapshot.
+
+Cloud frontend/Worker dependency boundaries are checked during build/deploy. Cloud development dependencies have their own lockfile and are excluded from the npm production package. See [cloud operations](../cloud/README.md) for deployment, validation and rollback.
+
 ## CLI and Skill
 
 The CLI supports opening, starting, inspecting, and stopping the service; summary, breakdown, task, turn, agent, and comparison queries; refresh; diagnostics; startup management; cache migration; and Skill installation. See the [user guide](USER_GUIDE.md) and `codex-usage --help` for entry points. Query JSON also includes `query`, recording effective boundaries and filters.

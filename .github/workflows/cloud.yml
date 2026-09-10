@@ -1,0 +1,35 @@
+name: Cloud quota
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'cloud/**'
+      - 'web/cloud/**'
+      - 'web/QuotaCards.tsx'
+      - 'web/styles/**'
+      - 'shared/cloud.ts'
+      - 'shared/contracts.ts'
+      - 'vite.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/cloud.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cloud:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cloud/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix cloud
+      - run: npm run cloud:build
+      - run: npm run cloud:check
+      - run: npm run cloud:test

@@ -7,6 +7,7 @@ import { Choice } from "./Choice";
 import { AccountNotice } from "./AccountNotice";
 import { PriceSettings } from "./PriceSettings";
 import { SystemSettings } from "./SystemSettings";
+import { CloudSettings } from './CloudSettings';
 import { Header, SourceBadge, time } from "./ui";
 import { Workspace } from "./workspace";
 import { AdaptiveRegion } from "./MotionPrimitives";
@@ -81,6 +82,7 @@ export function SettingsPage() {
         description="控制更新频率，查看当前数据的覆盖与状态。"
       />
       <SystemSettings />
+      <CloudSettings />
       <section className="panel settings-panel">
         <h2>刷新与时间</h2>
         <form onSubmit={save}>
@@ -180,7 +182,7 @@ export function SettingsPage() {
           <p className="footnote">
             当前生效：{settings.timezone}（UTC
             {DateTime.now().setZone(settings.timezone).toFormat("ZZ")}
-            ）。时区切换后会更新本地筛选、趋势与任务时间。自动采集仅在工作台打开期间触发。
+            ）。时区切换后会更新本地筛选、趋势与任务时间。后台服务运行期间持续按设置采集，关闭网页不影响自动刷新。
           </p>
           <button className="primary-button save-button" disabled={saving} aria-busy={saving}>
             {saving ? "保存中…" : "保存设置"}

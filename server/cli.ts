@@ -36,7 +36,7 @@ async function ensureService() {
   }
   throw new Error(`Service failed to become ready. Port ${port} may be occupied. Inspect ${path.join(dataRoot, 'service.log')}.`);
 }
-async function request(route: string, body?: unknown) {
+async function request(route: string, body?: unknown, method = body === undefined ? 'GET' : 'POST') {
   let url = base;
   if (process.env.CODEX_USAGE_URL) {
     const override = new URL(process.env.CODEX_USAGE_URL);
@@ -44,7 +44,7 @@ async function request(route: string, body?: unknown) {
     url = override.origin;
   }
   const response = await fetch(`${url}/api/${route}`, {
-    ...(body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+    method, ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
     signal: AbortSignal.timeout(15000),
   });
   const result = await response.json() as any;
@@ -79,7 +79,7 @@ async function main() {
     if (!arg.startsWith('--')) { positional.push(arg); continue; }
     const key = arg.slice(2);
     if (flags[key] !== undefined && key !== 'unknowns') throw new Error(`Duplicate option: ${arg}`);
-    if (['json', 'wait', 'help'].includes(key)) flags[key] = true;
+    if (['json', 'wait', 'help', 'no-open'].includes(key)) flags[key] = true;
     else {
       if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`Missing value for ${arg}`);
       const value = argv[++i];
@@ -88,11 +88,11 @@ async function main() {
   }
   const output = (value: unknown) => console.log(JSON.stringify(value, null, flags.json ? undefined : 2));
   if (['--version', 'version'].includes(command)) return console.log(version);
-  if (['--help', 'help'].includes(command) || flags.help) return console.log('codex-usage [open|start|stop|status|doctor|autostart enable/disable/status|skill install/uninstall|migrate --from FILE|refresh --source local/account/all --wait|summary|trend|breakdown|compare|threads|thread|turns|agents|limits|usage] [--days N] [--id ID] [--json]\nDefault: open local Web. Queries start the service without opening a browser. Set PORT/CODEX_USAGE_DATA_DIR explicitly for an isolated instance.');
+  if (['--help', 'help'].includes(command) || flags.help) return console.log('codex-usage [open|start|stop|status|doctor|autostart enable/disable/status|skill install/uninstall|migrate --from FILE|refresh --source local/account/all --wait|summary|trend|breakdown|compare|threads|thread|turns|agents|limits|usage] [--days N] [--id ID] [--json]\ncodex-usage cloud connect [--name NAME] [--no-open] [--wait] [--json]\ncodex-usage cloud status|pause|resume|disconnect [--json]\nDefault: open local Web. Queries start the service without opening a browser. Set PORT/CODEX_USAGE_DATA_DIR explicitly for an isolated instance.');
   const filters = ['from', 'to', 'days', 'project', 'model', 'effort', 'threadId', 'thread-id', 'unknown', 'unknowns'];
   const paging = ['limit', 'offset'];
   const options: Record<string, string[]> = {
-    open: [], start: [], stop: [], status: [], doctor: [], autostart: [], skill: [], migrate: ['from'],
+    open: [], start: [], stop: [], status: [], doctor: [], autostart: [], skill: [], migrate: ['from'], cloud: ['name', 'no-open', 'wait'],
     refresh: ['source', 'wait', 'timeout'], summary: filters, trend: [...filters, 'bucket'],
     breakdown: [...filters, ...paging, 'groupBy', 'group-by'],
     compare: [...filters, 'groupBy', 'group-by', 'baselineFrom', 'baseline-from', 'baselineTo', 'baseline-to'],
@@ -102,7 +102,30 @@ async function main() {
   };
   if (!options[command]) throw new Error('Unknown command. Run codex-usage --help.');
   for (const key of Object.keys(flags)) if (key !== 'json' && !options[command].includes(key)) throw new Error(`Option --${key} is not supported by ${command}.`);
-  if (positional.length !== (['autostart', 'skill'].includes(command) ? 1 : 0)) throw new Error('Unexpected or missing command arguments. Run codex-usage --help.');
+  if (positional.length !== (['autostart', 'skill', 'cloud'].includes(command) ? 1 : 0)) throw new Error('Unexpected or missing command arguments. Run codex-usage --help.');
+  if (command === 'cloud') {
+    const action = positional[0];
+    if (!['connect', 'status', 'pause', 'resume', 'disconnect'].includes(action)) throw new Error('Use cloud connect|status|pause|resume|disconnect.');
+    if (action !== 'connect' && Object.keys(flags).some(key => key !== 'json')) throw new Error('Only cloud connect accepts --name, --no-open, and --wait.');
+    if (!process.env.CODEX_USAGE_URL) await ensureService();
+    let result = action === 'connect' ? await request('cloud/connect', typeof flags.name === 'string' ? { deviceName: flags.name } : {})
+      : action === 'disconnect' ? await request('cloud/connection', undefined, 'DELETE')
+      : ['pause', 'resume'].includes(action) ? await request('cloud/settings', { enabled: action === 'resume' }, 'PATCH') : await request('cloud/status');
+    if (action === 'connect' && result.data.binding && !flags['no-open'] && !flags.json) {
+      const url = new URL(result.data.binding.verificationUrl);
+      if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname))) throw new Error('Invalid cloud verification URL.');
+      const mac = process.platform === 'darwin';
+      const opener = spawn(mac ? '/usr/bin/open' : 'rundll32.exe', mac ? [url.href] : ['url.dll,FileProtocolHandler', url.href], { detached: true, stdio: 'ignore', windowsHide: true });
+      opener.on('error', () => console.error('Open the verificationUrl from this response to finish binding.')); opener.unref();
+    }
+    if (action === 'connect' && flags.wait && result.data.binding) {
+      console.error(`Confirm code ${result.data.binding.userCode} at ${result.data.binding.verificationUrl}`);
+      const expires = Date.parse(result.data.binding.expiresAt);
+      while (result.data.binding && Date.now() < expires) { await delay(2000); result = await request('cloud/status'); }
+      if (!result.data.connected) process.exitCode = 1;
+    }
+    return output(result);
+  }
   if (command === 'autostart') return output(positional[0] === 'status' ? autostartStatus() : ['enable', 'disable'].includes(positional[0]) ? setAutostart(positional[0] === 'enable') : (() => { throw new Error('Use autostart enable|disable|status'); })());
   if (command === 'skill') return output(skill(positional[0]));
   if (command === 'doctor') {

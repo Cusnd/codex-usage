@@ -89,27 +89,6 @@ export function App() {
       }
     }
   }, [status, client]);
-  useEffect(() => {
-    void mutate("refresh", { source: "all", force: false })
-      .then(() => client.invalidateQueries({ queryKey: ["status"] }))
-      .catch((e) => setRefreshError(e.message));
-  }, [client]);
-  useEffect(() => {
-    const timers: ReturnType<typeof setInterval>[] = [];
-    for (const key of ["local", "account"] as const) {
-      const seconds =
-        key === "local" ? settings.localInterval : settings.accountInterval;
-      if (seconds)
-        timers.push(
-          setInterval(() => {
-            void mutate("refresh", { source: key, force: false })
-              .then(() => client.invalidateQueries({ queryKey: ["status"] }))
-              .catch((e) => setRefreshError(e.message));
-          }, seconds * 1000),
-        );
-    }
-    return () => timers.forEach(clearInterval);
-  }, [settings.localInterval, settings.accountInterval, client]);
   const refresh = async (source: string) => {
     if (refreshRequested) return;
     setRefreshRequested(true);
@@ -154,7 +133,7 @@ export function App() {
           </nav>
           <div className="sidebar-footer">
             <span className="live-dot" />
-            {exampleMode ? '合成示例' : '本机运行'}<small>{exampleMode ? '查询在浏览器内运行' : '数据留在这台电脑'}</small>
+            {exampleMode ? '合成示例' : '本机运行'}<small>{exampleMode ? '查询在浏览器内运行' : '用量历史保存在本机'}</small>
             <a href={exampleMode ? 'https://github.com/Cusnd/codex-usage/blob/main/docs/TECHNICAL_REFERENCE.md' : '/docs'} target="_blank" rel="noreferrer">
               <BookOpen size={16} /> API 文档 <ArrowUpRight size={14} />
             </a>

@@ -75,6 +75,7 @@ Open a fresh agent task if the newly installed Skill is not discovered yet. Firs
 
 - **Local history stays local.** The app reads your Codex records without modifying them and does not upload usage history. Its cache contains usage metadata, including task titles and project paths, rather than chat bodies or tool output.
 - **Account limits are a separate view.** Available account features use your existing Codex login. Local token activity and account-level snapshots cover different things and are not added together.
+- **Optional cloud quota viewing.** Bind one main device with GitHub to view its latest quota snapshot at [quota.esoren.com](https://quota.esoren.com), including the original collection time while the computer is offline. Sync is off by default and excludes local usage history and Codex credentials. This branch's sync client is pending npm release; see the [cloud setup guide](docs/USER_GUIDE.md#view-quotas-from-another-device).
 - **Reference costs are estimates.** Optional API pricing does not represent your ChatGPT subscription bill. Incomplete records or unknown prices remain marked as incomplete.
 - **Coverage follows your records.** Results reflect recognizable history retained on this computer; they are not a complete multi-device account ledger.
 

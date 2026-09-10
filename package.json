@@ -32,6 +32,9 @@
   },
   "scripts": {
     "showcase:build": "node scripts/build-showcase.mjs",
+    "cloud:build": "vite build --mode cloud",
+    "cloud:check": "npm --prefix cloud run check",
+    "cloud:test": "npm --prefix cloud test",
     "dev": "node scripts/dev.mjs",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
     "prepack": "npm run build 1>&2",

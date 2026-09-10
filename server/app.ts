@@ -14,6 +14,8 @@ import { Queries } from "./queries.js";
 import { Importer } from "./importer.js";
 import { AccountReader, type AccountSource } from "./account.js";
 import { Refresh } from "./refresh.js";
+import { RefreshScheduler } from './refresh-scheduler.js';
+import { CloudSync } from './cloud-sync.js';
 import { officialPrices, pricingSource, pricingCheckedAt } from "./pricing.js";
 import { dataRoot, packageRoot, autostartStatus, setAutostart } from './runtime.js';
 
@@ -25,6 +27,9 @@ export async function createApp(
     logger?: boolean;
     accountReader?: AccountSource;
     exampleData?: boolean;
+    cloudCredentialFile?: string | null;
+    cloudOrigin?: string;
+    cloudFetch?: typeof fetch;
     managed?: { token: string; version: string; shutdown: () => Promise<void> };
   } = {},
 ) {
@@ -55,6 +60,12 @@ export async function createApp(
     ),
     options.accountReader || new AccountReader({ root: options.codexHome }),
   );
+  const scheduler = new RefreshScheduler(refresh, () => store.settings());
+  const cloud = new CloudSync(store, {
+    credentialFile: options.cloudCredentialFile !== undefined ? options.cloudCredentialFile : options.database === ':memory:' ? null : path.join(path.dirname(options.database || path.join(dataRoot, 'usage.sqlite')), 'cloud-credentials.json'),
+    observation: () => refresh.cloudObservation(), origin: options.cloudOrigin || process.env.CODEX_USAGE_CLOUD_ORIGIN, fetch: options.cloudFetch,
+  });
+  refresh.onLimits(async () => { await cloud.capture(); void cloud.tick(); });
   await app.register(swagger, {
     openapi: {
       info: {
@@ -168,6 +179,14 @@ export async function createApp(
     };
   };
   app.get("/openapi.json", async () => app.swagger());
+  app.get('/api/cloud/status', async () => wrap(cloud.status(), 'settings'));
+  app.post<{ Body: { deviceName?: string } }>('/api/cloud/connect', {
+    schema: { body: Type.Object({ deviceName: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })) }, { additionalProperties: false }) },
+  }, async req => wrap(await cloud.connect(req.body.deviceName), 'settings'));
+  app.patch<{ Body: { enabled: boolean } }>('/api/cloud/settings', {
+    schema: { body: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }) },
+  }, async req => wrap(await cloud.setEnabled(req.body.enabled), 'settings'));
+  app.delete('/api/cloud/connection', async () => wrap(await cloud.disconnect(), 'settings'));
   app.get('/api/system/autostart', async () => wrap(autostartStatus(), 'settings'));
   app.post<{ Body: { enabled: boolean } }>('/api/system/autostart', {
     schema: { body: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }) },
@@ -269,6 +288,8 @@ export async function createApp(
           { statusCode: 400 },
         );
       store.saveSettings(next);
+      scheduler.reschedule();
+      await cloud.capture();
       return wrap(next, "settings");
     },
   );
@@ -566,10 +587,12 @@ export async function createApp(
     );
   }
   app.addHook("onClose", async () => {
+    scheduler.close();
+    await cloud.close();
     await refresh.close();
     store.close();
   });
   await app.ready();
-  if (options.startup !== false) refresh.trigger("all", true);
-  return { app, store, queries, refresh };
+  if (options.startup !== false) { refresh.trigger("all", true); scheduler.start(); cloud.start(); }
+  return { app, store, queries, refresh, scheduler, cloud };
 }

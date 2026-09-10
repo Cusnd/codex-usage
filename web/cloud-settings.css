@@ -1,0 +1,71 @@
+.cloud-settings .panel-heading h2,
+.cloud-settings .panel-heading a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cloud-settings .panel-heading a {
+  font-size: 12px;
+}
+.cloud-settings-times {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  font-size: 12px;
+  margin: 22px 0;
+}
+.cloud-settings-times dt {
+  color: var(--muted);
+}
+.cloud-settings-times dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.cloud-binding-code {
+  display: block;
+  font-family: monospace;
+  font-size: 27px;
+  letter-spacing: 4px;
+  margin: 14px 0;
+}
+.cloud-connect-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 22px 0;
+  flex-wrap: wrap;
+}
+.cloud-connect-row label {
+  font-size: 12px;
+}
+.cloud-disconnect {
+  margin: 20px 0;
+}
+.cloud-settings .notice .primary-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+@media (max-width: 680px) {
+  .cloud-settings .panel-heading {
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .cloud-settings-times {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .cloud-settings-times dd {
+    margin-bottom: 10px;
+  }
+  .cloud-connect-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .cloud-settings .setting-row {
+    gap: 16px;
+  }
+  .cloud-disconnect .notice button {
+    margin: 6px 0;
+  }
+}

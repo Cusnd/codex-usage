@@ -99,9 +99,33 @@ Replace `TASK_ID` with an actual task ID. Queries start the local service when n
 
 Account limits and local token activity are separate. Account limits can work through a compatible Codex CLI or supported existing file login; daily account history requires a CLI that supports that capability. Either account feature can be unavailable while local statistics still work. Inspect each source's status and timestamp in Settings; old snapshots are marked as such.
 
-The app updates on startup. While the page is open, default intervals are 60 seconds for local records and 300 seconds for account data. Change them separately in Settings; use 0 to disable automatic refresh. Closing the page stops its periodic requests, though an in-progress import can finish.
+The service updates once on startup and owns periodic refresh even with every browser tab closed. Defaults remain 60 seconds for local records and 300 seconds for account data. Change them separately in Settings; account intervals accept 60–86400 seconds, and 0 disables periodic refresh. Existing settings are preserved, changes immediately reschedule the next check, and waking the computer runs due work once without replaying missed intervals. Manual refresh keeps its existing behavior. Stopping the service stops collection.
 
 Set the timezone to follow the system or specify an IANA timezone manually. Local day boundaries, trends, and task times follow that choice. Official account daily buckets retain their source dates and appear separately. Existing installations retain their saved timezone behavior.
+
+## View quotas from another device
+
+Cloud viewing is available at [quota.esoren.com](https://quota.esoren.com). The local sync feature in this branch has not yet been published to npm; use a build containing `codex-usage cloud` until its release.
+
+1. On the collecting computer, open **Settings → 云端查看**, optionally name the device, and select **连接 GitHub 云端**. Or run `codex-usage cloud connect --name "My laptop"`.
+2. Sign in to GitHub on the binding page, compare its code and device name with the local app, and confirm. A code expires after 10 minutes. Binding enables sync; it is off beforehand.
+3. Open the cloud site on your phone or another computer and sign in with the same GitHub account. Each cloud user has one main device. Replacing it revokes the old device and clears its snapshot before the new device uploads.
+
+The page shows the latest successfully uploaded quota windows, their original collection time, and a separate cloud receipt time. Closing or sleeping the collecting computer leaves that snapshot available; it does not keep the underlying quota current. If a reset time has passed, **等待更新确认** means a new reading is needed, not that remaining quota has become 100%. Missing values stay unknown. Visible cloud pages reload the stored snapshot every 60 seconds; hidden tabs pause polling. **重新读取快照** does not trigger collection on your computer.
+
+Local refresh settings continue to control collection. Uploads are limited to one new snapshot per cloud user per 60 seconds, including repeated manual local refreshes. While waiting, the service keeps only the newest result. Pending uploads survive restarts and retry network failures with backoff. Collection errors and upload errors are distinct; a confirmed account can retain its earlier values with an error label. Changing or losing account identity removes the previous account's pending values.
+
+```powershell
+codex-usage cloud connect --name "My laptop" --no-open --json
+codex-usage cloud status --json
+codex-usage cloud pause
+codex-usage cloud resume
+codex-usage cloud disconnect
+```
+
+`connect --json` returns the verification URL without opening a browser; add `--wait` to wait for confirmation. Pause keeps the cloud snapshot. Disconnect stops sending, revokes the device and deletes its snapshot; when offline it reports pending revocation and retains the credential only to retry that operation. Keep the service running or revoke the device from the cloud page to finish. The cloud page also supports deleting the cloud account's data and logging out; logout leaves device syncing enabled.
+
+Only quota windows, an opaque account reference, device name, and collection status are synced. Codex credentials, raw account identifiers, chats, task titles, project paths, local usage history and the SQLite cache stay local. GitHub login identifies the cloud user; no repository scopes are requested. Treat the local `cloud-credentials.json` as a secret and do not attach it to bug reports. The public example remains synthetic, and `usage.esoren.com` remains the local dashboard shortcut.
 
 ## Start and stop
 
