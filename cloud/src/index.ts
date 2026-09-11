@@ -73,6 +73,16 @@ export default {
           event: "request_failed",
           path: pathname,
           code: "INTERNAL_ERROR",
+          errorType:
+            error instanceof Error &&
+            /^(Error|TypeError|RangeError|TimeoutError|AbortError)$/.test(error.name)
+              ? error.name
+              : "UnknownError",
+          // Source positions identify failures without recording exception text,
+          // request URLs, OAuth codes, cookies, or upstream credentials.
+          source: error instanceof Error
+            ? (error.stack?.match(/(?:index\.js|auth\.ts|http\.ts):\d+:\d+/g) || []).slice(0, 4)
+            : [],
         }),
       );
       return json(

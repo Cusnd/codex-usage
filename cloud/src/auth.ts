@@ -35,18 +35,26 @@ function returnPath(value: string | null) {
   return "/";
 }
 async function githubFetch(url: string, init: RequestInit): Promise<unknown> {
-  const response = await fetch(url, {
-    ...init,
-    redirect: "error",
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok)
+  try {
+    const response = await fetch(url, {
+      ...init,
+      // workerd rejects redirect: "error". Manual mode prevents credentials
+      // from following a redirect, which is rejected by the status check.
+      redirect: "manual",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error("Upstream status rejected");
+    const body = await readJson(response);
+    if (!body || typeof body !== "object" || Array.isArray(body))
+      throw new Error("Upstream response rejected");
+    return body;
+  } catch {
     throw new HttpError(
       502,
       "GITHUB_UNAVAILABLE",
       "GitHub 登录暂时不可用，请重新尝试。",
     );
-  return readJson(response);
+  }
 }
 export async function authRoute(
   request: Request,

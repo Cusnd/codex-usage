@@ -448,6 +448,10 @@ it("OAuth uses state+PKCE, rejects forged state, requests minimal scope, and dis
   const upstream = vi
     .spyOn(globalThis, "fetch")
     .mockImplementation(async (input, init) => {
+      // Validate options in the real workerd Request implementation before
+      // replacing only the upstream response with a fixture.
+      const outbound = new Request(String(input), init);
+      expect(outbound.redirect).toBe("manual");
       if (input === "https://github.com/login/oauth/access_token") {
         expect(
           new URLSearchParams(String(init?.body)).get("code_verifier"),
@@ -504,6 +508,33 @@ it("OAuth uses state+PKCE, rejects forged state, requests minimal scope, and dis
   expect((await callback()).status).toBe(400);
   expect(upstream).toHaveBeenCalledTimes(2);
 });
+it.each(["redirect", "http-error", "network", "null", "invalid-json"])(
+  "OAuth rejects an upstream %s without following redirects, leaking errors, or creating a session",
+  async (failure) => {
+    const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const outbound = new Request(String(input), init);
+      expect(outbound.redirect).toBe("manual");
+      if (failure === "network") throw new TypeError("SYNTHETIC-PRIVATE-UPSTREAM-ERROR");
+      if (failure === "redirect") return new Response(null, { status: 302, headers: { Location: "https://unexpected.example/receive" } });
+      if (failure === "http-error") return new Response("SYNTHETIC-PRIVATE-UPSTREAM-ERROR", { status: 503 });
+      if (failure === "null") return Response.json(null);
+      return new Response("SYNTHETIC-PRIVATE-UPSTREAM-ERROR");
+    });
+    const start = await request("/auth/github");
+    const state = new URL(start.headers.get("Location")!).searchParams.get("state")!;
+    const response = await request(
+      "/auth/github/callback?state=" + state + "&code=synthetic",
+      "GET", undefined, undefined, { Cookie: STATE_COOKIE + "=" + state },
+    );
+    expect(response.status).toBe(502);
+    const result = await response.text();
+    expect(result).toContain("GITHUB_UNAVAILABLE");
+    expect(result).not.toContain("SYNTHETIC-PRIVATE-UPSTREAM-ERROR");
+    expect(response.headers.get("Set-Cookie")).toBe(null);
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(await env.DB.prepare("SELECT * FROM sessions LIMIT 1").first()).toBe(null);
+  },
+);
 it("cleanup removes expired sessions, OAuth states and pairing codes", async () => {
   const a = await actor(),
     p = await pending();
