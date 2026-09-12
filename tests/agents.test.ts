@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { Store } from "../server/db.js";
-import { Importer } from "../server/importer.js";
-import { Queries } from "../server/queries.js";
-import { createApp } from "../server/app.js";
-import { json } from "../server/util.js";
+import { Store } from "../modules/storage/sqlite.js";
+import { StreamingImporter as Importer } from "../modules/collection/importer.js";
+import { Queries } from "../modules/analytics/sqlite.js";
+import { createApp } from "../apps/local/app.js";
+import { json } from '../modules/foundation/values.js';
 
 const at = "2026-09-08T04:01:00Z";
 const meta = (id: string, parent?: string, fork?: string) => ({
@@ -33,8 +33,9 @@ async function fixture(fn: (s: Store, i: Importer, q: Queries, dir: string) => P
   await mkdir(path.join(dir, "sessions"));
   await mkdir(path.join(dir, "archived_sessions"));
   const store = new Store(":memory:");
-  try { await fn(store, new Importer(store, dir), new Queries(store), dir); }
-  finally { store.close(); await rm(dir, { recursive: true, force: true }); }
+  const importer = new Importer(store, dir);
+  try { await fn(store, importer, new Queries(store), dir); }
+  finally { await importer.close(); store.close(); await rm(dir, { recursive: true, force: true }); }
 }
 async function log(dir: string, name: string, rows: unknown[], archive = false) {
   const file = path.join(dir, archive ? "archived_sessions" : "sessions", `${name}.jsonl`);

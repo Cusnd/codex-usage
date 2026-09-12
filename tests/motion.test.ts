@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { settleResult, settlePlot, chartTransition, markQueryMotion, readMotionTicket, beginRefreshMotion, cancelRefreshMotion, type ResultSnapshot, type ChartSnapshot, type PlotSnapshot } from '../web/motion-state';
-import { animateMotion, cancelMotion } from '../web/motion';
-import { createCurveInterpolator, interpolateCurve, prepareCurveTransition } from '../web/curve-interpolation';
+import { settleResult, settlePlot, chartTransition, markQueryMotion, readMotionTicket, beginRefreshMotion, cancelRefreshMotion, type ResultSnapshot, type ChartSnapshot, type PlotSnapshot } from '../modules/web/motion/motion-state.js';
+import { animateMotion, cancelMotion } from '../modules/web/motion/motion.js';
+import { createCurveInterpolator, interpolateCurve, prepareCurveTransition } from '../modules/web/motion/curve-interpolation.js';
 
 const empty: ResultSnapshot = { data: undefined, at: 0, used: 0, revision: 0, initial: true, animate: false };
 test('cached animation survives an identical refetch and query status changes', () => {

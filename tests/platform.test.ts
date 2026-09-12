@@ -4,10 +4,10 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, chmod, realpath } fro
 import path from 'node:path';
 import os from 'node:os';
 import { createServer } from 'node:net';
-import { projectPath } from '../server/util.js';
-import { browserCommand, defaultDataRoot, serviceGuardAddress, supportedPlatform } from '../server/platform.js';
-import { macAutostart, launchAgentPlist } from '../server/mac-autostart.js';
-import { resolveCodexCommand } from '../server/codex-command.js';
+import { projectPath } from '../modules/platform/node/util.js';
+import { browserCommand, defaultDataRoot, serviceGuardAddress, supportedPlatform } from '../modules/platform/node/platform.js';
+import { macAutostart, launchAgentPlist } from '../modules/platform/node/mac-autostart.js';
+import { resolveCodexCommand } from '../modules/accounts/command.js';
 
 test('project paths follow their source platform, preserving POSIX case and roots', () => {
   for (const [input, expected] of [

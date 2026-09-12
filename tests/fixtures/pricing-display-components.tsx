@@ -1,11 +1,12 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { EstimatedCost, Metrics, Settings } from '../../shared/contracts';
-import { PriceSettings } from '../../web/PriceSettings';
-import { SettingsPage } from '../../web/SettingsPage';
-import { CostValue, UsageBreakdown, UsageHeadings, formatCostAmount } from '../../web/Usage';
-import { useData } from '../../web/workspace';
-import { pricingInfo } from '../../shared/pricing';
+import type { EstimatedCost, Settings } from '../../modules/contracts/settings.js';
+import type { Metrics } from '../../modules/contracts/query.js';
+import { PriceSettings } from '../../modules/web/features/settings/PriceSettings.js';
+import { SettingsPage } from '../../modules/web/features/settings/SettingsPage.js';
+import { CostValue, UsageBreakdown, UsageHeadings, formatCostAmount } from '../../modules/web/widgets/Usage.js';
+import { useData } from '../../modules/web/data/workspace.js';
+import { pricingInfo } from '../../modules/settings/pricing.js';
 import { hooks } from './pricing-display-hooks';
 
 export { hooks, pricingInfo, formatCostAmount };

@@ -10,13 +10,13 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { Store } from "../server/db.js";
-import { Importer } from "../server/importer.js";
-import { Queries } from "../server/queries.js";
-import { createApp } from "../server/app.js";
-import { json, parseJson } from "../server/util.js";
-import { bucketRange, bucketTimes } from "../shared/time-range.js";
-import { officialPrices } from "../server/pricing.js";
+import { Store } from "../modules/storage/sqlite.js";
+import { StreamingImporter as Importer } from "../modules/collection/importer.js";
+import { Queries } from "../modules/analytics/sqlite.js";
+import { createApp } from "../apps/local/app.js";
+import { json, parseJson } from '../modules/foundation/values.js';
+import { bucketRange, bucketTimes } from "../modules/foundation/time-range.js";
+import { officialPrices } from "../modules/settings/catalog.js";
 
 const usage = (n: number | bigint) => ({
   input_tokens: n,
@@ -79,9 +79,11 @@ async function fixture(
   await mkdir(path.join(dir, "sessions"));
   await mkdir(path.join(dir, "archived_sessions"));
   const store = new Store(":memory:");
+  const importer = new Importer(store, dir);
   try {
-    await fn(store, new Importer(store, dir), dir, new Queries(store));
+    await fn(store, importer, dir, new Queries(store));
   } finally {
+    await importer.close();
     store.close();
     await rm(dir, { recursive: true, force: true });
   }

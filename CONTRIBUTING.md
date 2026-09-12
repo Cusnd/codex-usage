@@ -2,6 +2,8 @@
 
 Help people understand their Codex activity without losing the context behind the numbers. Start with the [user guide](docs/USER_GUIDE.md) for behavior and the [technical reference](docs/TECHNICAL_REFERENCE.md) for data contracts.
 
+Read the [module architecture and parallel development guide](docs/ARCHITECTURE.md) before choosing ownership for a change. `modules.json` declares public entrypoints, runtime boundaries, dependencies and existing regression suites. Use `npm run test:module -- <module-id>` for focused work; contract changes also require consumer validation. Architecture checks run as part of normal check, test and build commands.
+
 ## Develop locally
 
 Use Windows x64 or macOS x64/arm64 with Node.js 22.13+ (22.x), 24.x, or 26.x:

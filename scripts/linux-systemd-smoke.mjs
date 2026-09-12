@@ -22,7 +22,7 @@ export async function linuxSystemdSmoke({ root, env, cli, run, base }) {
   const unit = await readFile(file, 'utf8');
   assert.match(unit, /Type=simple/);
   assert.match(unit, /Restart=no/);
-  assert.ok(unit.includes('dist/server/index.js'));
+  assert.ok(unit.includes('dist/apps/local/index.js'));
   assert.ok(!unit.includes('codex-usage.mjs" start'));
   await exec('systemd-analyze', ['--user', 'verify', file], { env });
   const name = `codex-usage-test-${createHash('sha256').update(root).digest('hex').slice(0, 16)}.service`;

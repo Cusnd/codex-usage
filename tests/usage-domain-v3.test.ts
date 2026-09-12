@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {consumeProjected,initialContext,initialLegacyState,nextContext,projectRecord} from '../shared/usage-domain/normalize.js';
-import {applyCandidateMutations,canonicalize,reconcileTurns} from '../shared/usage-domain/canonical.js';
-import {applyMetricDeltas,exactTotal,type MetricRow} from '../shared/usage-domain/metrics.js';
-import type {Observation,Candidate,DependencyView} from '../shared/usage-domain/types.js';
-import {stableJson,validProjectedRecord} from '../shared/sync-v3.js';
+import {consumeProjected,initialContext,initialLegacyState,nextContext,projectRecord} from '../modules/usage/normalize.js';
+import {applyCandidateMutations,canonicalize,reconcileTurns} from '../modules/usage/canonical.js';
+import {applyMetricDeltas,exactTotal,type MetricRow} from '../modules/usage/metrics.js';
+import type {Observation,Candidate,DependencyView} from '../modules/usage/types.js';
+import { stableJson } from '../modules/contracts/sync.js';
+import { validProjectedRecord } from '../modules/sync/protocol/validate-upload.js';
 
 const dependencies:DependencyView={parentStatus:()=> 'complete',parentHasSignature:()=>false};
 function observation(id:string,amount:string,response:string|null='r'):Observation {

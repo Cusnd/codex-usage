@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveTrendBucket } from "../shared/time-range.js";
+import { resolveTrendBucket } from "../modules/foundation/time-range.js";
 
 const zone = "America/New_York";
 const from = "2026-09-08T04:00:00Z";

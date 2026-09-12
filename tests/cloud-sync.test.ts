@@ -1,15 +1,15 @@
 import {versionedFetch} from './fixtures/versioned-fetch.js';
-import {SYNC_VERSION} from '../shared/cloud-version.js';
+import {SYNC_VERSION} from '../modules/contracts/cloud-version.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Store } from "../server/db.js";
-import { CloudSync } from "../server/cloud-sync.js";
-import {cloudSnapshot} from '../server/account-sync.js';
-import type { LimitObservation } from "../server/refresh.js";
-import { isCloudSnapshot, type CloudSnapshot } from "../shared/cloud.js";
+import { Store } from "../modules/storage/sqlite.js";
+import { CloudSync } from "../modules/sync/upload/session.js";
+import {cloudSnapshot} from '../modules/accounts/publisher.js';
+import type { LimitObservation } from "../modules/accounts/refresh.js";
+import { isCloudSnapshot, type CloudSnapshot } from "../modules/contracts/cloud.js";
 
 const baseTime = Date.parse("2026-09-10T00:00:00.000Z");
 function observation(patch: Partial<LimitObservation> = {}): LimitObservation {
@@ -86,7 +86,7 @@ function fixture(serverBuild:()=>string|null=()=>SYNC_VERSION) {
     uploads.push(JSON.parse(String(init.body)).quota);
     return Response.json({acceptedSequence:uploads.at(-1)!.sequence});
   }) as typeof fetch;
-  const uploader={status:()=>({error:null,collectedAt:null,uploadedAt:null,nextUploadAt:null,pendingBatches:0}),takeNextTickDelayMs:()=>1000,tick:async()=>{},cancel(){},unbind:async()=>{},close:async()=>{}} as unknown as import('../server/sync-v3/uploader.js').V3Uploader;
+  const uploader={status:()=>({error:null,collectedAt:null,uploadedAt:null,nextUploadAt:null,pendingBatches:0}),takeNextTickDelayMs:()=>1000,tick:async()=>{},cancel(){},unbind:async()=>{},close:async()=>{}} as unknown as import('../modules/sync/upload/uploader.js').V3Uploader;
   const options = {
     uploader,
     credentialFile: path.join(directory, "cloud-credentials.json"),

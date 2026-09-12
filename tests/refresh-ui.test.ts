@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { dataQuery } from "../web/data-query";
+import { dataQuery } from "../modules/web/data/data-query.js";
 
 const params = { from: "2026-09-08T04:00:00Z", to: "2026-09-08T12:00:00Z" };
 const query = (to: string) => dataQuery<string>("local/summary", { ...params, to }, "America/New_York", true);

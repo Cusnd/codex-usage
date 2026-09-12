@@ -8,4 +8,4 @@ if (!(process.platform === 'win32' && process.arch === 'x64') && !(['darwin', 'l
   console.error(`Codex Usage supports Windows x64 and macOS/Linux x64/arm64; current platform: ${process.platform}/${process.arch}.`);
   process.exit(1);
 }
-await import('../dist/server/cli.js');
+await import('../dist/apps/local/cli.js');

@@ -1,12 +1,13 @@
 import {env} from 'cloudflare:workers';
 import {expect,it} from 'vitest';
 import {gzipSync} from 'node:zlib';
-import {sha256} from '../src/http';
-import {advanceJobs} from '../src/v3/jobs';
-import {currentDevice,receive,receipt} from '../src/v3/store';
-import {hashBytes} from '../src/v3/codec';
-import {queryBudget,QueryBudgetExhausted} from '../src/v3/query-budget';
-import {stableJson,validUploadBatch,type UploadBatch} from '../../shared/sync-v3';
+import {sha256} from '../../modules/platform/worker/http.js';
+import {advanceJobs} from '../../modules/sync/jobs/jobs.js';
+import {currentDevice,receive,receipt} from '../../modules/sync/publication/store.js';
+import {hashBytes} from '../../modules/sync/apply/codec.js';
+import {queryBudget,QueryBudgetExhausted} from '../../modules/sync/jobs/query-budget.js';
+import { stableJson, type UploadBatch } from '../../modules/contracts/sync.js';
+import { validUploadBatch } from '../../modules/sync/protocol/validate-upload.js';
 import {actor,batch} from './performance-fixture';
 
 function counted(base:D1Database) {

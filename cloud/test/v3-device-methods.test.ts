@@ -2,11 +2,11 @@ import {MatchingRequest} from './matching-build';
 import { env } from 'cloudflare:workers';
 import { expect, it } from 'vitest';
 import { gzipSync } from 'node:zlib';
-import worker from '../src/index';
-import { SESSION_COOKIE, sha256, token } from '../src/http';
-import { initialContext, normalizeTokens } from '../../shared/usage-domain/normalize';
-import { stableJson, V3_CONTENT_TYPE, type UploadBatch } from '../../shared/sync-v3';
-import { advanceJobs } from '../src/v3/jobs';
+import worker from '../../apps/cloud/index.js';
+import { SESSION_COOKIE, sha256, token } from '../../modules/platform/worker/http.js';
+import { initialContext, normalizeTokens } from '../../modules/usage/normalize.js';
+import { stableJson, V3_CONTENT_TYPE, type UploadBatch } from '../../modules/contracts/sync.js';
+import { advanceJobs } from '../../modules/sync/jobs/jobs.js';
 
 const origin='https://quota.esoren.com';
 async function fixture(){

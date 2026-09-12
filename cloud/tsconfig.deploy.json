@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src", "worker-configuration.d.ts"]
+  "include": [
+    "../apps/cloud",
+    "worker-configuration.d.ts"
+  ]
 }

@@ -4,11 +4,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createApp } from '../server/app.js';
-import { AccountError, type AccountSource } from '../server/account.js';
-import type { CloudAccountSnapshot } from '../shared/cloud-accounts.js';
-import { Store } from '../server/db.js';
-import { AccountSync } from '../server/account-sync.js';
+import { createApp } from '../apps/local/app.js';
+import { AccountError, type AccountSource } from '../modules/accounts/reader.js';
+import type { CloudAccountSnapshot } from '../modules/contracts/cloud-accounts.js';
+import { Store } from '../modules/storage/sqlite.js';
+import { AccountSync } from '../modules/accounts/publisher.js';
 
 function deferred(){let resolve!:()=>void;const promise=new Promise<void>(done=>resolve=done);return{promise,resolve};}
 async function setup(){

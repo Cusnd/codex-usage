@@ -1,9 +1,9 @@
 import {matchingDevice,MatchingRequest} from './matching-build';
 import { env } from 'cloudflare:workers';
 import { expect, it } from 'vitest';
-import worker from '../src/index';
-import { SESSION_COOKIE,sha256,token } from '../src/http';
-import type { CloudAccountSnapshot } from '../../shared/cloud-accounts';
+import worker from '../../apps/cloud/index.js';
+import { SESSION_COOKIE,sha256,token } from '../../modules/platform/worker/http.js';
+import type { CloudAccountSnapshot } from '../../modules/contracts/cloud-accounts.js';
 
 const origin='https://quota.esoren.com';
 async function actor(){const user=crypto.randomUUID(),session=token();await env.DB.prepare('INSERT INTO users(id,github_id,login,created_at) VALUES(?,?,?,?)').bind(user,user,'fixture-user',Date.now()).run();

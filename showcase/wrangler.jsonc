@@ -1,7 +1,0 @@
-{
-  "name": "codex-usage-showcase",
-  "account_id": "522109d0e13773ea8c916cb599f91f06",
-  "compatibility_date": "2026-09-08",
-  "workers_dev": true,
-  "assets": { "directory": "./build", "not_found_handling": "single-page-application" }
-}

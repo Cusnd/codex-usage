@@ -4,7 +4,7 @@ The README images were captured on September 8, 2026 from the [published interac
 
 ## Prepare
 
-Use the published example, or run `npm run showcase:build` followed by `npx wrangler dev --config showcase/wrangler.jsonc --port 8877`. See the [example frontend guide](../../showcase/README.md).
+Use the published example, or run `npm run showcase:build` followed by `npx wrangler dev --config apps/apps/showcase/wrangler.jsonc --port 8877`. See the [example frontend guide](../../showcase/README.md).
 
 Use America/New_York, disable reference costs, and select recent seven days. The example clock is fixed at `2026-09-08T18:00:00Z`. The fixture has 119,210,000 tokens, 28 tasks and 92 turns; account windows are synthetic as well. Wait for loaded records and fonts before capturing, and move the pointer away from interactive charts.
 

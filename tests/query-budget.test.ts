@@ -10,8 +10,8 @@ test('parallel materialization observes every budget rejection without leaking a
     cwd:fileURLToPath(new URL('..',import.meta.url)),encoding:'utf8',timeout:10000,
     input:`
       import assert from 'node:assert/strict';
-      import {queryBudget,QueryBudgetExhausted} from './cloud/src/v3/query-budget.ts';
-      import {materializeCanonical} from './cloud/src/v3/apply.ts';
+      import {queryBudget,QueryBudgetExhausted} from './modules/sync/jobs/query-budget.ts';
+      import {materializeCanonical} from './modules/sync/apply/apply.ts';
       const unhandled=[],sent={reads:0,batches:0};
       process.on('unhandledRejection',error=>unhandled.push(String(error)));
       const base={

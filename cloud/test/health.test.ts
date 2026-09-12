@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { expect, it, vi } from 'vitest';
-import worker from '../src/index';
+import worker from '../../apps/cloud/index.js';
 
 it('reports v3 readiness only when the current storage shape is available', async () => {
   const request = () => worker.fetch(new Request('https://quota.esoren.com/api/health'), env);

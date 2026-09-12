@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { Store } from '../server/db.js';
-import { Queries } from '../server/queries.js';
-import { officialPrices } from '../shared/pricing.js';
-import type { SyncEvent, SyncThread } from '../shared/cloud-accounts.js';
+import { Store } from '../modules/storage/sqlite.js';
+import { Queries } from '../modules/analytics/sqlite.js';
+import { officialPrices } from '../modules/settings/pricing.js';
+import type { SyncEvent, SyncThread } from '../modules/contracts/cloud-accounts.js';
 
 const thread=(id:string,parent:string|null=null):SyncThread=>({id,title:'任务 '+id,titleUpdatedAt:null,project:'/home/person/project',source:'cli',parentId:parent,subagentParentId:parent,forkedFromId:null});
 const event=(id:string,tid='root',tokens='100'):SyncEvent=>({event_key:'response:'+id,thread_id:tid,turn_id:'turn-'+id,response_id:id,

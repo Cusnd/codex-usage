@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath, readdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { serviceGuardAddress } from '../dist/server/platform.js';
+import { serviceGuardAddress } from '../dist/modules/platform/node/platform.js';
 import { createHash } from 'node:crypto';
 import { captureProcess as exec } from './capture-process.mjs';
 import { createServer } from 'node:net';

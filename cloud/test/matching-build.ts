@@ -1,4 +1,4 @@
-import { SYNC_HEADER, SYNC_VERSION } from '../../shared/cloud-version';
+import { SYNC_HEADER, SYNC_VERSION } from '../../modules/contracts/cloud-version.js';
 /** Transport/domain tests assume an upgraded client; version-gate.test uses raw Requests. */
 export class MatchingRequest extends Request {
   constructor(input: RequestInfo | URL, init?: RequestInit) {

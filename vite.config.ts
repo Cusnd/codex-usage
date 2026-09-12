@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 export default defineConfig(({mode}) => ({
-  root: mode === 'cloud' ? 'web/cloud' : "web",
+  root: mode === 'cloud' ? 'apps/web-cloud' : mode === 'showcase' ? 'apps/showcase' : 'apps/web-local',
   plugins: [react(), {
     name: 'verify-data-boundary',
     generateBundle(_options, bundle) {
@@ -9,17 +9,17 @@ export default defineConfig(({mode}) => ({
         if (chunk.type !== 'chunk') continue;
         for (const raw of Object.keys(chunk.modules)) {
           const id = raw.replaceAll('\\', '/');
-          if (mode === 'cloud' && /\/(server|showcase|sql\.js)\/|\/cloud\/src\//.test(id))
+          if (mode === 'cloud' && /\/apps\/(local|cloud|showcase)\/|\/sql\.js\/|\/modules\/(storage|collection|platform\/node|accounts\/(reader|rpc|credentials|command))\//.test(id))
             this.error(`Private local module in cloud application: ${id}`);
-          if (mode === 'showcase' && /\/server\//.test(id) && !/\/server\/(queries|pricing)\.ts$/.test(id))
+          if (mode === 'showcase' && /\/(?:apps\/local|modules\/(?:storage|collection|platform\/node))\//.test(id))
             this.error(`Private server module in showcase: ${id}`);
-          if (mode !== 'showcase' && /\/(showcase|sql\.js)\//.test(id))
+          if (mode !== 'showcase' && /\/(apps\/showcase|sql\.js)\//.test(id))
             this.error(`Example module in production application: ${id}`);
         }
       }
     },
   }],
-  build: { outDir: mode === 'cloud' ? '../../cloud/build' : mode === 'showcase' ? '../showcase/build' : "../dist/web", emptyOutDir: true },
+  build: { outDir: mode === 'cloud' ? '../../cloud/build' : mode === 'showcase' ? '../../showcase/build' : '../../dist/web', emptyOutDir: true },
   server: {
     host: "127.0.0.1",
     port: 5173,

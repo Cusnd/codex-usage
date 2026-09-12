@@ -89,6 +89,7 @@ codex-usage skill install
 | 供 Agent 执行的完整安装步骤 | [Agent 安装指南](docs/INSTALL_FOR_AGENTS.md) |
 | CLI/API、统计口径与数据来源 | [技术参考（英文）](docs/TECHNICAL_REFERENCE.md) |
 | 开发环境与贡献检查 | [贡献指南（英文）](CONTRIBUTING.md) |
+| 模块分工、依赖约束与并行开发 | [架构说明](docs/ARCHITECTURE.md) |
 | 构建完整交互示例、复现公开截图 | [示例前端说明（英文）](showcase/README.md) · [截图复现（英文）](docs/images/README.md) |
 
 发现问题可前往 [Issues](https://github.com/Cusnd/codex-usage/issues)，提供复现步骤和脱敏错误信息。

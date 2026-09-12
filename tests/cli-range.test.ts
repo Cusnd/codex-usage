@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recentCalendarRange } from '../shared/time-range.js';
+import { recentCalendarRange } from '../modules/foundation/time-range.js';
 
 test('CLI recent days end now and use calendar midnights across DST', () => {
   const now = Date.parse('2026-11-01T18:00:00Z');

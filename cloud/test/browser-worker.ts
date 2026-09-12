@@ -1,10 +1,10 @@
-// Local-only browser acceptance entry. Production always deploys src/index.ts.
-import worker from "../src/index";
-import { SESSION_COOKIE, setCookie, sha256, token } from "../src/http";
-import { sessionUser } from '../src/auth';
-import {initialContext,normalizeTokens} from '../../shared/usage-domain/normalize';
-import { stableJson,EXTRACTOR_VERSION,V3_CONTENT_TYPE } from '../../shared/sync-v3';
-import { SYNC_HEADER, SYNC_VERSION } from '../../shared/cloud-version';
+// Local-only browser acceptance entry. Production always deploys apps/cloud/index.ts.
+import worker from "../../apps/cloud/index.js";
+import { SESSION_COOKIE, setCookie, sha256, token } from "../../modules/platform/worker/http.js";
+import { sessionUser } from '../../apps/cloud/auth.js';
+import {initialContext,normalizeTokens,projectRecord} from '../../modules/usage/normalize.js';
+import { stableJson, EXTRACTOR_VERSION, V3_CONTENT_TYPE } from '../../modules/contracts/sync.js';
+import { SYNC_HEADER, SYNC_VERSION } from '../../modules/contracts/cloud-version.js';
 
 async function versionFixture(request:Request,env:Env):Promise<Response|null> {
   const url=new URL(request.url),base='/api/test/version';
@@ -24,14 +24,16 @@ async function versionFixture(request:Request,env:Env):Promise<Response|null> {
     return Response.json({created:true},{headers:{'Set-Cookie':setCookie(SESSION_COOKIE,session,86400)}});
   }
   const user=await sessionUser(request,env);if(!user.id.startsWith('v3-browser-'))return new Response('Synthetic user required',{status:403});
-  const credential='v'.repeat(43);await env.DB.prepare('UPDATE devices SET token_hash=? WHERE id=?').bind(await sha256(credential),user.id).run();
+  const credential=token();await env.DB.prepare('UPDATE devices SET token_hash=? WHERE id=?').bind(await sha256(credential),user.id).run();
   const headers={Authorization:'Bearer '+credential,[SYNC_HEADER]:url.pathname===base+'/old'?'3.1.1':SYNC_VERSION};
   const handshake=await worker.fetch(new Request(url.origin+'/api/v3/collector/handshake',{method:'POST',headers}),env);
   if(url.pathname===base+'/old'||!handshake.ok)return handshake;
-  const context={...initialContext('test-thread'),turn_id:'test-turn',model:'gpt-6-astra'},record={type:'token_usage_record',timestamp:new Date().toISOString(),payload:{thread_id:'test-thread',turn_id:'test-turn',response_id:'test-response',usage:normalizeTokens({input_tokens:'70000',output_tokens:'2000',total_tokens:'72000'})}};
+  const context={...initialContext('test-thread'),turn_id:'test-turn',model:'gpt-6-astra',cwd:'/synthetic/refactor'},record={type:'token_usage_record',timestamp:new Date().toISOString(),payload:{thread_id:'test-thread',turn_id:'test-turn',response_id:'test-response',usage:normalizeTokens({input_tokens:'70000',output_tokens:'2000',total_tokens:'72000'})}};
   if(!await env.DB.prepare('SELECT 1 FROM v3_receipts WHERE user_id=? LIMIT 1').bind(user.id).first()){
-    const records=[{observation_id:await sha256(stableJson([user.id,'source',1,0])),record_revision:1,source_id:'source',generation:1,locator:0,byte_end:100,prefix_hash:await sha256(stableJson(record)),session_trusted:true,origin:{kind:'execution' as const,device_id:user.id},context,record}];
-    const batch={protocol:3,schema_version:1,extractor_version:EXTRACTOR_VERSION,collector_id:user.id,producer_epoch:'test-epoch',lane:'live',lane_seq:1,batch_id:crypto.randomUUID(),records_hash:await sha256(stableJson(records)),records,metadata:[],sources:[{source_id:'source',generation:1,kind:'session',from_cursor:0,to_cursor:100,snapshot_eof:100,context_hash:await sha256(stableJson(context)),context,replace_start:true,replace_end:true,generation_complete:true,available:true,trailing_bytes:0}]};
+    // Include a real projected session record so task metadata and Agent queries can be accepted too.
+    const sessionRecord=projectRecord({type:'session_meta',timestamp:record.timestamp,payload:{id:'test-thread',cwd:context.cwd,source:'cli'}}).record;
+    const records=await Promise.all([sessionRecord,record].map(async(record,index)=>({observation_id:await sha256(stableJson([user.id,'source',1,index*100])),record_revision:1,source_id:'source',generation:1,locator:index*100,byte_end:(index+1)*100,prefix_hash:await sha256(stableJson(record)),session_trusted:true,origin:{kind:'execution' as const,device_id:user.id},context,record})));
+    const batch={protocol:3,schema_version:1,extractor_version:EXTRACTOR_VERSION,collector_id:user.id,producer_epoch:'test-epoch',lane:'live',lane_seq:1,batch_id:crypto.randomUUID(),records_hash:await sha256(stableJson(records)),records,metadata:[],sources:[{source_id:'source',generation:1,kind:'session',from_cursor:0,to_cursor:200,snapshot_eof:200,context_hash:await sha256(stableJson(context)),context,replace_start:true,replace_end:true,generation_complete:true,available:true,trailing_bytes:0}]};
     const wire=await new Response(new Blob([stableJson(batch)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
     return worker.fetch(new Request(url.origin+'/api/v3/ingest',{method:'POST',headers:{...headers,'Content-Type':V3_CONTENT_TYPE},body:wire}),env);
   }

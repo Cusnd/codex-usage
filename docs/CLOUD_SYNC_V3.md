@@ -4,7 +4,7 @@ The backend and browser are deployed together; the desktop collector must match 
 
 ## Required matching synchronization contract
 
-`shared/sync-version.ts` defines `SYNC_VERSION` as protocol.schema.extractor: currently **3.1.2**. The collector, backend and browser use this exact current contract, without a supported-version range or compatibility table. Bump the affected component when the wire format or required shared parsing semantics change; UI-only edits and implementation-only optimizations do not bump it.
+`modules/contracts/sync-version.ts` defines `SYNC_VERSION` as protocol.schema.extractor: currently **3.1.2**. The collector, backend and browser use this exact current contract, without a supported-version range or compatibility table. Bump the affected component when the wire format or required shared parsing semantics change; UI-only edits and implementation-only optimizations do not bump it.
 
 Requests send `X-Codex-Usage-Sync`. Authenticated `POST /api/v3/collector/handshake` records the device's reported contract. Missing or different versions receive HTTP 426 before decoding or receiving data. A downgrade replaces the report; rotating credentials clears it. A matching source fingerprint cannot bypass a mismatched contract.
 
@@ -26,7 +26,7 @@ The browser uses an IndexedDB database name scoped to `SYNC_VERSION`, with no `l
 
 The collector projects an allowlist of native JSONL metadata and token records. Original titles and project paths are intentional synchronized data; chat text, tool bodies and credentials are excluded. Parsing native cumulative token-count records and inherited task prefixes is current input functionality, unrelated to old application protocol support.
 
-`shared/sync-v3.ts` requires protocol 3, schema 1 and the exact current `EXTRACTOR_VERSION`. Content type is `application/vnd.codex-usage.v3+json+gzip`; limits are 512 KiB compressed, 1 MiB decoded, 500 records and 64 source checkpoints. Unknown metadata, including `legacy_replacement`, is rejected.
+`modules/sync/protocol/validate-upload.ts` validates the contract from `modules/contracts/sync.ts` and requires protocol 3, schema 1 and the exact current `EXTRACTOR_VERSION`. Content type is `application/vnd.codex-usage.v3+json+gzip`; limits are 512 KiB compressed, 1 MiB decoded, 500 records and 64 source checkpoints. Unknown metadata, including `legacy_replacement`, is rejected.
 
 The source cursor and durable batch commit together. Local materialization and cloud upload acknowledge independently. Gzip bytes and hashes are persisted and reused on retry. `received` means input is durable and its receipt should be polled; `applied` means canonical effects are committed. Payloads are reclaimed after both consumers apply them. Realtime/backfill lanes have separate contiguous watermarks and source-order barriers. Cancellation, bounded retry and receipt polling remain current reliability behavior.
 
@@ -36,7 +36,7 @@ The cloud reconciles observations globally before filtering execution origin. Up
 
 ## Accounts and settings
 
-`shared/cloud.ts` and `shared/cloud-accounts.ts` require `schemaVersion: 3`. `server/account-sync.ts` uses `/api/v3/collector/config`, `/api/v3/collector/pause` and `/api/v3/accounts/observations`. There is one full-history connection mode and no quota-only upgrade flow.
+`modules/contracts/cloud.ts` and `modules/contracts/cloud-accounts.ts` require `schemaVersion: 3`. `modules/accounts/publisher.ts` uses `/api/v3/collector/config`, `/api/v3/collector/pause` and `/api/v3/accounts/observations`. There is one full-history connection mode and no quota-only upgrade flow.
 
 A per-user HMAC key groups confirmed accounts without uploading raw identity. Monotonic sequences protect retries and account switches. Failed reads retain measured values with explicit stale/error metadata. Daily history merges independently of quota freshness. Unknown identities stay separate. Account uploads allow 256 KiB and have a per-device 60-second throttle, independent of usage lanes.
 

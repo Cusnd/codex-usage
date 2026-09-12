@@ -4,12 +4,13 @@ import fs,{mkdtemp,mkdir,writeFile,appendFile,readFile,rm,rename,symlink} from '
 import {syncBuiltinESMExports} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import {Store} from '../server/db.js';
-import {Collector} from '../server/collector/store.js';
-import {LocalMaterializer} from '../server/local-materializer.js';
-import {StreamingImporter} from '../server/collector/importer.js';
+import {Store} from '../modules/storage/sqlite.js';
+import {Collector} from '../modules/collection/collector.js';
+import {LocalMaterializer} from '../modules/collection/materializer.js';
+import {StreamingImporter} from '../modules/collection/importer.js';
 import {DatabaseSync} from 'node:sqlite';
-import {validUploadBatch,type UploadBatch} from '../shared/sync-v3.js';
+import { validUploadBatch } from '../modules/sync/protocol/validate-upload.js';
+import { type UploadBatch } from '../modules/contracts/sync.js';
 
 const line=(type:string,payload:unknown)=>JSON.stringify({type,timestamp:'2026-09-11T12:00:00Z',payload})+'\n';
 const record=(id:string,n:number)=>line('token_usage_record',{response_id:id,usage:{total_tokens:n}});

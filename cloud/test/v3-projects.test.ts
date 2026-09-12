@@ -1,13 +1,13 @@
 import { env } from 'cloudflare:workers';
 import { expect,it } from 'vitest';
-import { initialContext } from '../../shared/usage-domain/normalize';
-import { normalizeRemote } from '../../shared/usage-domain/projects';
-import type { UploadBatch } from '../../shared/sync-v3';
-import { stableJson } from '../../shared/sync-v3';
-import { advanceHead,domain,endGuard,entityStatements,guard } from '../src/v3/store';
-import { cloudSourceProjectId,performProjectOperation,prepareProjectDeletion,prepareProjectMetadata,projectView } from '../src/v3/projects';
-import { createRead } from '../src/v3/snapshots';
-import { queryUsage } from '../src/v3/queries';
+import { initialContext } from '../../modules/usage/normalize.js';
+import { normalizeRemote } from '../../modules/organization/projects.js';
+import type { UploadBatch } from '../../modules/contracts/sync.js';
+import { stableJson } from '../../modules/contracts/sync.js';
+import { advanceHead,domain,endGuard,entityStatements,guard } from '../../modules/sync/publication/store.js';
+import { cloudSourceProjectId,performProjectOperation,prepareProjectDeletion,prepareProjectMetadata,projectView } from '../../modules/organization/worker/projects.js';
+import { createRead } from '../../modules/sync/reads/snapshots.js';
+import { queryUsage } from '../../modules/analytics/worker/queries.js';
 
 type Actor={user:string;device:string;collector:string};
 async function actor(user?:string):Promise<Actor>{const id=user||crypto.randomUUID(),device=crypto.randomUUID(),collector=crypto.randomUUID();if(!user)await env.DB.prepare('INSERT INTO users(id,github_id,login,created_at) VALUES(?,?,?,?)').bind(id,id,'projects-test',Date.now()).run();await env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at) VALUES(?,?,?,?,?)').bind(device,id,device,device,Date.now()).run();await env.DB.prepare('INSERT INTO v3_collectors(user_id,collector_id,device_id,created_at) VALUES(?,?,?,?)').bind(id,collector,device,Date.now()).run();return {user:id,device,collector};}

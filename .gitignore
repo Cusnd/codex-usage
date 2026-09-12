@@ -25,4 +25,4 @@ cloud/.dev.vars.*
 cloud/.deploy/
 
 cloud/.generated/
-shared/build-version.ts
+tooling/generated/

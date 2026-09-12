@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Store } from '../server/db.js';
-import { AccountSync } from '../server/account-sync.js';
-import type { LimitObservation } from '../server/refresh.js';
+import { Store } from '../modules/storage/sqlite.js';
+import { AccountSync } from '../modules/accounts/publisher.js';
+import type { LimitObservation } from '../modules/accounts/refresh.js';
 const at='2026-09-11T00:00:00.000Z';
 const observation=(key='private-user'):LimitObservation=>({stableIdentity:key,identityKey:key,identityKnown:true,data:{accountId:'private-workspace',buckets:[]},provider:'app-server',collectedAt:at,attemptedAt:at,errorCode:null,refreshInterval:300});
 function fixture(){

@@ -6,12 +6,12 @@ import os from "node:os";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
-import { AccountReader, AccountError, parseLimits, type AccountSource } from "../server/account.js";
-import { observeAuth } from "../server/account-credentials.js";
-import { resolveCodexCommand } from "../server/codex-command.js";
-import { openAccountRpc, type AccountRpc } from "../server/account-rpc.js";
-import { createApp } from "../server/app.js";
-import { Store } from "../server/db.js";
+import { AccountReader, AccountError, parseLimits, type AccountSource } from "../modules/accounts/reader.js";
+import { observeAuth } from "../modules/accounts/credentials.js";
+import { resolveCodexCommand } from "../modules/accounts/command.js";
+import { openAccountRpc, type AccountRpc } from "../modules/accounts/rpc.js";
+import { createApp } from "../apps/local/app.js";
+import { Store } from "../modules/storage/sqlite.js";
 
 const jwt = (data: object) => `e30.${Buffer.from(JSON.stringify(data)).toString('base64url')}.synthetic`;
 const auth = (user = 'user-a', workspace = 'workspace-a') => ({auth_mode:'chatgpt',tokens:{

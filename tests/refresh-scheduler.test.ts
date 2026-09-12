@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { RefreshScheduler } from "../server/refresh-scheduler.js";
-import type { Refresh } from "../server/refresh.js";
-import type { Settings } from "../shared/contracts.js";
+import { RefreshScheduler } from "../modules/accounts/scheduler.js";
+import type { Refresh } from "../modules/accounts/refresh.js";
+import type { Settings } from '../modules/contracts/settings.js';
 test("backend scheduler respects independent intervals, changes, disablement and wake without catch-up", () => {
   let now = Date.now();
   const settings = { localInterval: 60, accountInterval: 300 } as Settings;

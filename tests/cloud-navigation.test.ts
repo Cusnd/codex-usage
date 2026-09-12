@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { navigationSearch } from '../web/navigation.js';
+import { navigationSearch } from '../modules/web/data/navigation.js';
 test('all selected devices survive filtered, full-session, related-task and Agent navigation',()=>{
   const current='deviceIds=A&range=7&deviceIds=B&scope=filtered';
   const filtered=new URLSearchParams(navigationSearch(current,{returnTo:'/threads?'+current}));
