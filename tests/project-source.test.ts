@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -69,7 +69,7 @@ test('real Git reads retain fork ambiguity, remove credentials and cache reposit
   const result = await resolver.resolve({ cwd: nested, threadId: 'one' });
   assert.equal(result.kind, 'git'); assert.equal(result.git!.primary.status, 'ambiguous'); assert.equal(result.git!.primary.identity, null);
   assert.ok(result.provenance.conflicts.includes('tracking-origin-conflict')); assert.ok(!JSON.stringify(result).includes('PRIVATE_REMOTE_PASSWORD'));
-  assert.equal(result.root, projectPath(repo));
+  assert.equal(result.root, projectPath(await realpath(repo)));
   git('config', 'branch.main.remote', 'origin');
   const cached = await resolver.resolve({ cwd: repo, threadId: 'two' }); assert.equal(cached.sourceProjectId, result.sourceProjectId); assert.equal(cached.git!.primary.status, 'ambiguous');
   resolver.invalidate(); const current = await resolver.resolve({ cwd: repo, threadId: 'two' }); assert.equal(current.git!.primary.status, 'confirmed');

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,writeFile,appendFile,readFile,rm,rename} from 'node:fs/promises';
+import fs,{mkdtemp,mkdir,writeFile,appendFile,readFile,rm,rename} from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import {Store} from '../server/db.js';
@@ -34,6 +35,20 @@ test('unacknowledged extraction survives consumer crash and restart without adva
     await f.collector.close();const materializer=new LocalMaterializer(f.store),collector=new Collector(f.store,{sourceRoot:f.root,stateRoot:f.state,onBatch:batch=>materializer.apply(batch)});
     await collector.scan();assert.equal(f.store.one('SELECT SUM(total_tokens) n FROM effective_events')!.n,7n);assert.equal(Number(f.store.one('SELECT COUNT(*) n FROM collector_batches')!.n),0);await collector.close();
   }finally{await f.close();}
+});
+
+test('a different path-stat timestamp does not reread an unchanged handle snapshot or emit another batch',async t=>{
+  const f=await setup();const actualStat=fs.stat;
+  try{
+    await writeFile(f.file,line('session_meta',{id:'thread'})+record('a',7)+'{"type":');await f.collector.scan();const batches=f.seen.length;
+    t.mock.method(fs,'stat',async(file:any,options:any)=>{
+      const info=await actualStat(file,options);
+      return String(file)===f.file?Object.assign(Object.create(Object.getPrototypeOf(info)),info,{mtimeMs:Number(info.mtimeMs)+1}):info;
+    });syncBuiltinESMExports();
+    const next=await f.collector.scan();assert.deepEqual(next.errors,[]);assert.equal(next.unchanged,1);
+    assert.equal(next.bytes_read,0);assert.equal(next.check_bytes_read,0);assert.equal(next.batches,0);assert.equal(f.seen.length,batches);
+    assert.equal(f.store.one('SELECT SUM(total_tokens) n FROM effective_events')!.n,7n);
+  }finally{t.mock.restoreAll();syncBuiltinESMExports();await f.close();}
 });
 test('generation replacement keeps old complete data visible until final checkpoint and archive rename retains identity',async()=>{
   const f=await setup();try{

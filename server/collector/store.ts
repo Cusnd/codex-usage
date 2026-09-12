@@ -135,11 +135,18 @@ export class Collector {
     const hash=createHash('sha256'),buffer=Buffer.alloc(Math.min(this.options.chunkBytes,Math.max(1,end-start)));
     for(let p=start;p<end;){const {bytesRead}=await handle.read(buffer,0,Math.min(buffer.length,end-p),p);if(!bytesRead)throw failure('SOURCE_CHANGED');hash.update(buffer.subarray(0,bytesRead));p+=bytesRead;m[field]+=bytesRead;}return hash.digest('hex');
   }
+  private unchanged(row:Source|undefined,info:ReturnType<typeof describe>,audit:boolean,m:CollectionMetrics) {
+    if(!row||row.reset_required||row.identity!==info.identity||row.size!==info.size||row.mtime!==info.mtime||!row.caught_up||audit)return false;
+    if(!row.available)this.availability(row,true,m);m.unchanged++;return true;
+  }
   private async processFile(file:string,m:CollectionMetrics,audit:boolean,lane:Lane) {
     m.processed++;let info:ReturnType<typeof describe>;try{info=describe(await stat(file));}catch(e:any){if(e.code!=='ENOENT')throw e;const old=this.source(file);if(old)this.availability(old,false,m);return;}
-    let row=this.source(file);if(row&&!row.reset_required&&row.identity===info.identity&&row.size===info.size&&row.mtime===info.mtime&&row.caught_up&&!audit){if(!row.available)this.availability(row,true,m);m.unchanged++;return;}
+    let row=this.source(file);if(this.unchanged(row,info,audit,m))return;
     const handle=await open(file,'r');try {
       info=describe(await handle.stat());
+      // Windows path stat and handle stat can differ in timestamp precision. The
+      // saved snapshot comes from the handle; recheck it before reading any bytes.
+      if(this.unchanged(row,info,audit,m))return;
       if(!row){const old=this.store.db.prepare('SELECT * FROM collector_sources WHERE identity=?').get(info.identity) as Source|undefined;if(old){this.store.run('UPDATE collector_sources SET path=?,available=1 WHERE id=?',[file,old.id]);row=this.source(file);m.renamed++;}}
       const kind=path.basename(file)==='session_index.jsonl'?'titles':'session';
       let reset=!!row&&(!!row.reset_required||row.identity!==info.identity||info.size<row.offset||info.size<=row.size&&info.mtime!==row.mtime);
