@@ -52,7 +52,7 @@
     "precloud:build": "node scripts/build-version.mjs && node tooling/check-architecture.mjs",
     "precloud:check": "node scripts/build-version.mjs",
     "precloud:test": "node scripts/build-version.mjs",
-    "architecture:check": "node tooling/check-architecture.mjs",
+    "architecture:check": "node scripts/build-version.mjs && node tooling/check-architecture.mjs",
     "test:module": "node tooling/test-module.mjs",
     "preshowcase:build": "node scripts/build-version.mjs && node tooling/check-architecture.mjs"
   },
