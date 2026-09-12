@@ -1,5 +1,26 @@
 # Cloud quota deployment record
 
+## 2026-09-12 — manual preview branch, first v3 production rollout
+
+- Channel: manual `preview` snapshots at the existing `https://quota.esoren.com`; ordinary pushes do not deploy. No develop/main integration, GitHub CI run, Git version tag or npm release was performed.
+- Runtime source: [`089dd805badd814d49d7284a639eecececfe8f70`](https://github.com/Cusnd/codex-usage/commit/089dd805badd814d49d7284a639eecececfe8f70). The snapshot contains the current application sources and the manual preview command. Existing local `AGENTS.md` changes, experimental files and benchmark files were left outside the snapshot.
+- Active Worker/assets version: `230a882c-1a25-4fdd-9738-f13f6c636c8e`, deployed at `2026-09-12T09:24:07Z`, with the source SHA in the deployment annotation.
+- The compatible v3 backend with the previous public UI was deployed first as `9b4245f2-e5a9-4d40-b1c6-bea8b125e570`; its health check passed before switching the assets. This is the preceding same-backend/old-UI recovery candidate. The rollback action itself was not exercised.
+- Applied additive migrations `0003_sync_v3.sql` through `0011_v3_legacy_handoff_results.sql` to the existing D1. A subsequent remote migration check reported no pending migrations. A pre-migration Time Travel bookmark is saved privately in `cloud/.deploy/preview-before-d1-bookmark.json`; do not reset the database as a routine Worker rollback.
+- Local deployment checks passed: production Worker TypeScript, Vite cloud build, Wrangler dry-run and module/data-boundary checks. The production TypeScript configuration excludes test fixtures so a fresh source checkout does not depend on ignored generated test data. The existing health and legacy-visibility regression subset passed **9/9**; the complete suites and platform matrix were not run for this preview.
+- Public verification: all **10 served HTML/JS/CSS/font files** matched the local build by SHA-256; `/api/health` returned `ok: true`, `schemaVersion: 2`, `usageProtocol: 3`, `loginConfigured: true`. Unauthenticated identity, v2 usage and v3 sync-status requests returned 401. Custom-domain routing and the one-minute Cron were confirmed by Wrangler.
+- CUA with the existing authenticated Chrome session opened the new overview and settings. Account quota/history snapshots and both existing devices remained visible. A fresh OAuth round trip, collector upgrade and new v3 upload were not performed in this deployment task.
+
+### Preview finding: initial legacy baseline blocks statistics
+
+**Deployment succeeded; the usage-data page acceptance remains pending.** The new UI reports that its initial historical baseline is being built, so usage totals and trends are not yet available. The migration job advanced from 8 to 22 steps without an error code, with 2 of 219 legacy heads materialized at the observed checkpoint; this is not a completion or performance result. The original **219 usage heads and 19,319 usage records** were still present at the post-deployment check. Counts establish retained rows, not full semantic parity.
+
+The rollout currently checks storage/health before enabling the new UI, but that check does not establish that existing users' baselines are ready. Before the next migration-style rollout, provide a usable old-data view during preparation or gate the UI cutover on baseline readiness. The broader performance work remains deferred; this preview has identified the user-visible first-load consequence. The known S05 narrow-device-menu issue also remains outside this deployment task.
+
+Evidence is retained in ignored local artifacts: `artifacts/preview-deployment-20260912.log`, `artifacts/preview-public-verification-20260912.json`, `artifacts/preview-overview-20260912.png`, and `cloud/.deploy/preview-before-*` / `preview-after-deployments.json`. `gh run list --branch preview` returned an empty list after the snapshot push. This record does not claim completed historical migration, v3 production parity, full browser acceptance or a formal release.
+
+---
+
 ## 2026-09-11 — shared UI and multi-device history
 
 - Service: `https://quota.esoren.com`; Worker: `codex-usage-cloud`.

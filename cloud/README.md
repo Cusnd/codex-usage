@@ -2,7 +2,7 @@
 
 The production service is `https://quota.esoren.com`, running Worker `codex-usage-cloud` with one D1 database and the shared application UI. Cloud tooling is a separate private package; npm consumers install only the local application. Each GitHub user can bind multiple collectors. The service stores parsed usage revisions and account snapshots, and never imports the original SQLite database. `usage.esoren.com` remains a redirect to the current computer; its local UI never reads cloud data.
 
-This development tree adds v3 collection, canonical facts, versioned reads, project organization and browser caching. These source changes do not establish that production or npm has been updated. See [v3 storage and migration](../docs/CLOUD_SYNC_V3.md) and the [current acceptance record](../docs/design/multi-device-cloud-panel-implementation-progress-2026-09-11.md). Use new isolated Worker/D1 resources for remote synthetic acceptance; never seed fixture users into the production database.
+The manual `preview` rollout on 2026-09-12 deployed v3 collection support, canonical facts, versioned reads, project organization and browser caching to production. Initial legacy-baseline preparation still blocked statistics at the deployment check; see the [deployment record](DEPLOYMENT.md) for the exact source, version and acceptance limits. npm was not updated. See [v3 storage and migration](../docs/CLOUD_SYNC_V3.md) and the [development acceptance record](../docs/design/multi-device-cloud-panel-implementation-progress-2026-09-11.md). Use new isolated Worker/D1 resources for remote synthetic acceptance; never seed fixture users into the production database.
 
 ## Develop and verify
 
