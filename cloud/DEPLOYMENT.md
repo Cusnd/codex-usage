@@ -1,5 +1,22 @@
 # Cloud quota deployment record
 
+## 2026-09-12 — local preview collector installed and real v3 upload verified
+
+At the user's explicit request, the Windows collector was upgraded in its existing npm global prefix using a locally built preview archive from runtime source `ed18d5aff9ac6c7a7895ffc357d08be734b49b05`. This supersedes the earlier observation below that the desktop was still running the old collector. The cloud Worker remains `2d92b340-42db-4c2d-b259-2adcf4bac4d0`; no additional cloud deployment or npm publication was needed.
+
+- The old verified service was stopped before backing up `%LOCALAPPDATA%/CodexUsage`. All four backup files matched their source SHA-256 and the database passed `PRAGMA integrity_check`. The protected backup location is saved in local `artifacts/local-preview-20260912/backup.json`.
+- `npm pack` ran the production TypeScript/frontend/server build. The installed archive's 72 files matched the corresponding source/build files byte for byte. The archive keeps package version 0.1.6 because this is an unpublished preview; the source SHA and integrity identify the actual build. Archive integrity: `sha512-rdhddNNGr9KtJs51C+OqYuV5cr8XPftvuK+CPC8Zu+VRMOJS4xHz8oFIx4rokMmXx9XW7anQg0av7w1XisnEJw==`.
+- The service is verified at `http://127.0.0.1:8765/`. The existing device identity and credential bytes are unchanged. Local/account intervals remain 60/300 seconds, the manual timezone and enabled cost settings are preserved, and the previously enabled Windows login startup remains enabled. The managed CLI skill was updated to the installed build.
+- The first completed local scan reported 233 files, 21,577 effective local events and no collection issues; a subsequent read found all 234 collector sources complete and available. The database remained healthy. CUA showed populated local totals, trend, Fast/unknown attribution and readable account quotas, with no cloud device selector in the local interface.
+- The cloud legacy baseline completed without a manual reset: all 219 heads were imported, `legacy_baseline_pending=0`, and the migration job became complete. The earlier D1 CPU-limit observation remains part of the record; completion does not establish its root cause or prove long-running availability.
+- By `2026-09-12T11:05:19Z`, D1 recorded **23 real v3 batches applied**, and the retained device reported **protocol 3**, 233 threads and no sync error. This confirms that the newly installed collector is actually sending v3 data to the deployed cloud, beyond a health/version check.
+
+**Installation and initial real upload are verified; first full-history synchronization is still running.** At the near-concurrent local snapshot there were 421 pending batches and 219 legacy handoffs remaining; the device correctly reported `initial_complete=0`. Queue counts can change while live collection and handoff preparation add work. The completed cloud import of old data is separate from replacing those old facts with fully acknowledged new source generations. CUA observed the browser preparing its versioned recent cache (1,600 of 4,794 entities); full browser cache completion and final local/cloud parity were not established in this bounded deployment check. The installed background service remains running to continue synchronization.
+
+Local evidence: `artifacts/local-preview-20260912/pack.json`, `install.log`, `installation-verification.json`, sanitized runtime snapshots, `cloud-progress-2.json` and `progress-cloud.json`. Raw source records, databases and credentials were not included in the npm archive or Git commits.
+
+---
+
 ## 2026-09-12 — performance preview; collector rollout still pending
 
 - Runtime source: [`ed18d5aff9ac6c7a7895ffc357d08be734b49b05`](https://github.com/Cusnd/codex-usage/commit/ed18d5aff9ac6c7a7895ffc357d08be734b49b05), pushed to `origin/preview` before `npm run cloud:preview`. The snapshot includes the collector, upload, migration and browser performance changes and their verification reports. Local guidance changes, raw artifacts and benchmark drivers remain outside the snapshot.
