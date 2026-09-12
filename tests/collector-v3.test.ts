@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs,{mkdtemp,mkdir,writeFile,appendFile,readFile,rm,rename} from 'node:fs/promises';
+import fs,{mkdtemp,mkdir,writeFile,appendFile,readFile,rm,rename,symlink} from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -57,6 +57,22 @@ test('generation replacement keeps old complete data visible until final checkpo
     const observed:number[]=[],projects:string[]=[];const replacement=new Collector(f.store,{sourceRoot:f.root,stateRoot:f.state,maxBatchRecords:1,onBatch:batch=>{new LocalMaterializer(f.store).apply(batch);observed.push(Number(f.store.one('SELECT SUM(total_tokens) n FROM effective_events')!.n));projects.push(f.store.one('SELECT project FROM threads WHERE id=?',['thread'])!.project);}});
     await writeFile(moved,line('session_meta',{id:'thread',cwd:'/new'})+record('b',40)+record('c',10));await replacement.scan();assert.ok(observed.slice(0,-1).every(n=>n===100));assert.equal(observed.at(-1),50);assert.ok(projects.slice(0,-1).every(p=>p==='/old'));assert.equal(projects.at(-1),'/new');await replacement.close();
   }finally{await f.close();}
+});
+
+test('native watchers observe writes through a directory alias without changing persisted source paths',async()=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'collector-watch-')),root=path.join(dir,'codex'),alias=path.join(dir,'alias');
+  await mkdir(path.join(root,'sessions'),{recursive:true});await mkdir(path.join(root,'archived_sessions'));await symlink(root,alias,process.platform==='win32'?'junction':'dir');
+  const store=new Store(':memory:'),materializer=new LocalMaterializer(store),errors:unknown[]=[];
+  const collector=new Collector(store,{sourceRoot:alias,onBatch:batch=>materializer.apply(batch),onError:error=>errors.push(error)});
+  const waitFor=async(ready:()=>boolean)=>{const deadline=Date.now()+5000;while(!ready()){assert.ok(Date.now()<deadline,'watcher did not deliver a change');await new Promise(resolve=>setTimeout(resolve,25));}};
+  try{
+    collector.startWatching(60_000);await waitFor(()=>!!store.one('SELECT completed_at FROM collector_scan_state')?.completed_at);
+    const file=path.join(root,'sessions','one.jsonl');await writeFile(file,line('session_meta',{id:'watched'})+record('one',4));
+    await waitFor(()=>store.one('SELECT SUM(total_tokens) n FROM effective_events')?.n===4n);
+    await appendFile(file,record('two',5));await waitFor(()=>store.one('SELECT SUM(total_tokens) n FROM effective_events')?.n===9n);
+    assert.deepEqual(errors,[]);assert.equal(Number(store.one('SELECT COUNT(*) n FROM collector_sources')!.n),1);
+    assert.equal(store.one('SELECT path FROM collector_sources')!.path,path.join(alias,'sessions','one.jsonl'));
+  }finally{await collector.close();store.close();const resolved=path.resolve(dir);assert.equal(path.dirname(resolved),path.resolve(os.tmpdir()));assert.ok(path.basename(resolved).startsWith('collector-watch-'));await rm(resolved,{recursive:true,force:true});}
 });
 test('missing and restored source availability is transmitted without deleting complete history',async()=>{
   const f=await setup();try{

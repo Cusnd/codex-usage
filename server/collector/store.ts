@@ -1,4 +1,4 @@
-import {mkdirSync,readFileSync,writeFileSync,watch,type FSWatcher} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync,realpathSync,watch,type FSWatcher} from 'node:fs';
 import {readdir,stat,open,type FileHandle} from 'node:fs/promises';
 import {createHash,randomUUID} from 'node:crypto';
 import path from 'node:path';
@@ -208,7 +208,9 @@ export class Collector {
   }
   startWatching(reconcileMs=30000) {
     if(this.watching||this.closed)return;this.watching=true;
-    const add=(dir:string,recursive:boolean)=>{try{const watcher=watch(dir,{recursive},(_event,name)=>{if(!name)this.needDiscovery=true;else {const file=path.join(dir,String(name));if(this.accepts(file))this.notify(file);else this.needDiscovery=true;}this.schedule();});watcher.on('error',e=>{this.needDiscovery=true;this.options.onError?.(e);this.schedule();});this.watchers.push(watcher);}catch(e:any){if(e.code!=='ENOENT')this.options.onError?.(e);}};
+    // libuv's Windows watcher can abort on 8.3 aliases. Watch the native path,
+    // while mapping notifications back to the collector's original source root.
+    const add=(dir:string,recursive:boolean)=>{try{const watcher=watch(realpathSync.native(dir),{recursive},(_event,name)=>{if(!name)this.needDiscovery=true;else {const file=path.join(dir,String(name));if(this.accepts(file))this.notify(file);else this.needDiscovery=true;}this.schedule();});watcher.on('error',e=>{this.needDiscovery=true;this.options.onError?.(e);this.schedule();});this.watchers.push(watcher);}catch(e:any){if(e.code!=='ENOENT')this.options.onError?.(e);}};
     add(this.sourceRoot,false);add(path.join(this.sourceRoot,'sessions'),true);add(path.join(this.sourceRoot,'archived_sessions'),true);
     this.reconcileTimer=setInterval(()=>{this.needDiscovery=true;this.schedule();},reconcileMs);this.reconcileTimer.unref();this.needDiscovery=true;this.schedule();
   }
