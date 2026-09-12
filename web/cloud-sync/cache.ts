@@ -1,5 +1,6 @@
 import { stableJson, type SyncCut, type SyncEntity, type EntityKind } from '../../shared/sync-v3';
 import type { ApiResponse, Settings } from '../../shared/contracts';
+import { SYNC_VERSION } from '../../shared/sync-version';
 
 export type EntityRef = { kind: EntityKind; id: string };
 export type ManifestEntry = Omit<SyncEntity, 'value'>;
@@ -162,7 +163,7 @@ const cursorEach = (source: IDBObjectStore | IDBIndex, range: IDBKeyRange | unde
 
 export class IndexedDbCloudCache implements CloudCache {
   private connection: Promise<IDBDatabase>;
-  constructor(factory: IDBFactory = indexedDB, name = 'codex-usage-cloud-current') {
+  constructor(factory: IDBFactory = indexedDB, name = `codex-usage-cloud-${SYNC_VERSION}`) {
     this.connection = new Promise((resolve, reject) => {
       const req = factory.open(name, 1);
       req.onupgradeneeded = () => {

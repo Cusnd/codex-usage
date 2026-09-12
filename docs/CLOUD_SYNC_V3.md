@@ -20,7 +20,7 @@ An environment using the previous migration chain requires fresh storage before 
 
 Local `usage.sqlite` initializes current columns and `PRAGMA user_version=3`. A populated database with another version raises `LOCAL_SCHEMA_MISMATCH` before schema changes or conversion. Use an empty `CODEX_USAGE_DATA_DIR`, bind the current collector and re-collect original Codex logs. There is no automatic column backfill, INTEGER-to-TEXT conversion, extractor-v1 replay or v2-to-v3 handoff. Missing original logs cannot be reconstructed from a retired format.
 
-The browser uses a current IndexedDB database name, with no `legacy_ready` phase or old checkpoint translator. Retired cache databases are not used.
+The browser uses an IndexedDB database name scoped to `SYNC_VERSION`, with no `legacy_ready` phase or old checkpoint translator. A protocol change starts fresh browser storage; a UI-only update keeps its cache. Retired cache databases are not used.
 
 ## Current collection and reliability
 
