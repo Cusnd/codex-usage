@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { fileURLToPath } from 'node:url';
 import { builtinModules } from 'node:module';
-import { moduleOwner, dependencyViolations } from './architecture-rules.mjs';
+import { moduleOwner, dependencyViolations, ignoredSourceFiles } from './architecture-rules.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const walk = relative => fs.readdirSync(path.join(root, relative), {withFileTypes:true})
@@ -41,7 +41,7 @@ function cycles(includeTypes, nodes=files, dependencies=edges) {
     if(low.get(f)===indices.get(f)){const component=[];let item;do{item=stack.pop();active.delete(item);component.push(item);}while(item!==f);if(component.length>1)found.push(component);}
   }for(const f of nodes)if(!indices.has(f))visit(f);return found;
 }
-const violations=[], moduleCycles=[];
+const violations=ignoredSourceFiles(root,files).map(file=>`${file}: production source matches Git ignore rules`), moduleCycles=[];
 const manifestFile=path.join(root,'modules.json');
 if(fs.existsSync(manifestFile)) {
   const manifest=JSON.parse(fs.readFileSync(manifestFile,'utf8'));
