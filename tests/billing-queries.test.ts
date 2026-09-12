@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store } from '../server/db.js';
-import { Queries } from '../server/queries.js';
+import { Store } from '../modules/storage/sqlite.js';
+import { Queries } from '../modules/analytics/sqlite.js';
 import type { SQLInputValue } from 'node:sqlite';
 
 function event(store: Store, id: string, tier: string | null, input: string, cached: string, output: string) {

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = realpathSync(fileURLToPath(new URL('../', import.meta.url)));
 // TypeScript does not remove outputs whose source files were deleted.
 // Only these compiler output directories may be replaced; never follow an external link.
-for (const name of ['server', 'shared']) {
+for (const name of ['server', 'shared', 'apps', 'modules', 'tooling']) {
   const target = path.resolve(root, 'dist', name);
   if (!existsSync(target)) continue;
   const actual = realpathSync(target), relative = path.relative(root, actual);

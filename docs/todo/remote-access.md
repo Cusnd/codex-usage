@@ -12,7 +12,7 @@
 
 | 方向 | 当前仓库证据 | 后续工作 |
 | --- | --- | --- |
-| 远程访问 | [服务入口](../../server/index.ts) 绑定 127.0.0.1；[HTTP 层](../../server/app.ts) 校验 API Host/Origin；[CLI](../../server/cli.ts) 限制 URL 为 HTTP 回环地址 | 设计明确的受认证远程读接口；不能只改监听地址或直接转发整个本地服务 |
+| 远程访问 | [服务入口](../../apps/local/index.ts) 绑定 127.0.0.1；[HTTP 层](../../apps/local/app.ts) 校验 API Host/Origin；[CLI](../../apps/local/cli.ts) 限制 URL 为 HTTP 回环地址 | 设计明确的受认证远程读接口；不能只改监听地址或直接转发整个本地服务 |
 
 ## 范围与依赖
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {projectLine} from '../server/collector/projection.js';
-import {projectRecord} from '../shared/usage-domain/normalize.js';
+import {projectLine} from '../modules/collection/projection.js';
+import {projectRecord} from '../modules/usage/normalize.js';
 
 const original=(raw:string)=>projectRecord(JSON.parse(raw,(_key,value,context?:{source?:string})=>
   typeof value==='number'&&!Number.isSafeInteger(value)&&context?.source&&/^-?\d+$/.test(context.source)?context.source:value));

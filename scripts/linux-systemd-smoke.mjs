@@ -22,7 +22,7 @@ export async function linuxSystemdSmoke({ root, env, cli, run, base }) {
   const unit = await readFile(file, 'utf8');
   assert.match(unit, /Type=simple/);
   assert.match(unit, /Restart=no/);
-  assert.ok(unit.includes('dist/server/index.js'));
+  assert.ok(unit.includes('dist/apps/local/index.js'));
   assert.ok(!unit.includes('codex-usage.mjs" start'));
   await exec('systemd-analyze', ['--user', 'verify', file], { env });
   const name = `codex-usage-test-${createHash('sha256').update(root).digest('hex').slice(0, 16)}.service`;
@@ -30,10 +30,10 @@ export async function linuxSystemdSmoke({ root, env, cli, run, base }) {
   // Exercise escaping with executable and entry paths, independently of npm's local-tarball URI parser.
   const node = path.join(root, 'node % $ 中文');
   const entry = path.join(root, 'entry % $ 中文.js');
-  const serverDirectory = path.resolve(path.dirname(cli), '../dist/server');
+  const installedDist = path.resolve(path.dirname(cli), '../dist');
   await symlink(process.execPath, node);
-  await symlink(path.join(serverDirectory, 'index.js'), entry);
-  const { linuxServiceUnit } = await import(pathToFileURL(path.join(serverDirectory, 'linux-autostart.js')).href);
+  await symlink(path.join(installedDist, 'apps/local/index.js'), entry);
+  const { linuxServiceUnit } = await import(pathToFileURL(path.join(installedDist, 'modules/platform/node/linux-autostart.js')).href);
   await writeFile(copy, linuxServiceUnit({ directory: env.CODEX_USAGE_STARTUP_DIR, dataRoot: env.CODEX_USAGE_DATA_DIR, node, entry, port: Number(env.PORT), env }));
   await exec('systemd-analyze', ['--user', 'verify', copy], { env });
   let linked = false;

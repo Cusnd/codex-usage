@@ -4,16 +4,16 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import type { CloudAccountView,CloudSource } from '../shared/cloud-accounts';
+import type { CloudAccountView,CloudSource } from '../modules/contracts/cloud-accounts.js';
 
 type Components=typeof import('./fixtures/cloud-display-components');
 let components:Components;
 before(async()=>{
   const dir=path.dirname(fileURLToPath(import.meta.url)),harness=path.join(dir,'fixtures/cloud-display-hooks.ts');
   const result=await build({entryPoints:[path.join(dir,'fixtures/cloud-display-components.tsx')],bundle:true,write:false,platform:'node',format:'cjs',packages:'external',loader:{'.css':'empty'},define:{'import.meta.env.MODE':'"cloud"'},logLevel:'silent',plugins:[{name:'component-boundaries',setup(api){
-    api.onResolve({filter:/^(react|@tanstack\/react-query|\.\/CloudWorkspace|\.\/cloud-sync\/provider)$/},args=>{
+    api.onResolve({filter:/^(react|@tanstack\/react-query)$|\/(cloud-http|queries|cloud-provider)\.js$/},args=>{
       const name=path.basename(args.importer);
-      if(name==='CloudProjects.tsx'||name==='CloudWorkspace.tsx'&&args.path==='./cloud-sync/provider')return {path:harness};
+      if(name==='CloudProjects.tsx'||['DeviceSettings.tsx','CloudSyncStatus.tsx','queries.ts'].includes(name)&&args.path.endsWith('/cloud-provider.js'))return {path:harness};
     });
   }}]});
   const module={exports:{}};new Function('require','module','exports',result.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);components=module.exports as Components;

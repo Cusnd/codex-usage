@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createConnection } from 'node:net';
 import { test } from 'node:test';
-import { createApp } from '../server/app.js';
+import { createApp } from '../apps/local/app.js';
 
 test('managed shutdown releases a connected client that has not sent an HTTP request', async () => {
   const { app } = await createApp({ database: ':memory:', startup: false,

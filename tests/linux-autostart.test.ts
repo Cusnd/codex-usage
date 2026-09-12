@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, readlink, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { linuxAutostart, linuxServiceUnit } from '../server/linux-autostart.js';
+import { linuxAutostart, linuxServiceUnit } from '../modules/platform/node/linux-autostart.js';
 
 const optionsFor = (root: string) => ({ directory: path.join(root, 'units'), dataRoot: path.join(root, 'data % 中文'),
   node: path.join(root, 'node $test'), entry: path.join(root, '程序 %s', 'index.js'), port: 8765,

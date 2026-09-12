@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {appendFile,mkdir,mkdtemp,rm,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {Store} from '../server/db.js';
-import {Collector} from '../server/collector/store.js';
-import type {UploadBatch} from '../shared/sync-v3.js';
+import {Store} from '../modules/storage/sqlite.js';
+import {Collector} from '../modules/collection/collector.js';
+import type { UploadBatch } from '../modules/contracts/sync.js';
 
 test('append proofs survive rebind and restart, match the exact raw prefix, and do not claim a new binding executed old records',async()=>{
   const dir=await mkdtemp(path.join(os.tmpdir(),'collector-origin-')),file=path.join(dir,'sessions','one.jsonl');await mkdir(path.dirname(file),{recursive:true});

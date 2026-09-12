@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { copyDirectory } from '../server/copy-directory.js';
+import { copyDirectory } from '../modules/platform/node/copy-directory.js';
 
 test('Skill directory copy preserves nested files from a Unicode installation path', () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'codex-copy-中文 空格-'));

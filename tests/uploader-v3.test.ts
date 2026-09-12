@@ -1,18 +1,18 @@
-import {SYNC_VERSION} from '../shared/cloud-version.js';
+import {SYNC_VERSION} from '../modules/contracts/cloud-version.js';
 import {versionedFetch} from './fixtures/versioned-fetch.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {Store} from '../server/db.js';
-import {Collector} from '../server/collector/store.js';
-import {LocalMaterializer} from '../server/local-materializer.js';
-import {V3Uploader} from '../server/sync-v3/uploader.js';
-import {CloudSync} from '../server/cloud-sync.js';
-import {decodeUpload} from '../server/sync-v3/codec.js';
-import {sha256} from '../server/collector/projection.js';
-import type {UploadAck,UploadBatch} from '../shared/sync-v3.js';
+import {Store} from '../modules/storage/sqlite.js';
+import {Collector} from '../modules/collection/collector.js';
+import {LocalMaterializer} from '../modules/collection/materializer.js';
+import {V3Uploader} from '../modules/sync/upload/uploader.js';
+import {CloudSync} from '../modules/sync/upload/session.js';
+import {decodeUpload} from '../modules/sync/upload/codec.js';
+import {sha256} from '../modules/collection/projection.js';
+import type { UploadAck, UploadBatch } from '../modules/contracts/sync.js';
 
 async function setup(transport:typeof fetch, serverBuild?:()=>string|null) {
   const dir=await mkdtemp(path.join(os.tmpdir(),'v3-uploader-')),root=path.join(dir,'codex');await mkdir(path.join(root,'sessions'),{recursive:true});

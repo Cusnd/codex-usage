@@ -1,0 +1,1057 @@
+{
+  "version": 1,
+  "description": "Explicit ownership, runtime and dependency boundaries. Public paths are versioned interfaces; changes require consumer validation.",
+  "modules": [
+    {
+      "id": "foundation",
+      "runtime": "universal",
+      "paths": [
+        "modules/foundation/"
+      ],
+      "owner": "foundation",
+      "dependencies": [],
+      "public": [
+        "modules/foundation/chunks.ts",
+        "modules/foundation/query-parameters.ts",
+        "modules/foundation/query-values.ts",
+        "modules/foundation/stable-json.ts",
+        "modules/foundation/time-range.ts",
+        "modules/foundation/timing.ts",
+        "modules/foundation/values.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/exact-queries.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "usage",
+      "runtime": "universal",
+      "paths": [
+        "modules/usage/"
+      ],
+      "owner": "usage",
+      "dependencies": [
+        "foundation"
+      ],
+      "public": [
+        "modules/usage/candidate-row.ts",
+        "modules/usage/canonical.ts",
+        "modules/usage/metrics.ts",
+        "modules/usage/normalize.ts",
+        "modules/usage/origin-evidence.ts",
+        "modules/usage/types.ts"
+      ],
+      "tests": [
+        "tests/usage-domain-v3.test.ts",
+        "tests/service-tier-attribution.test.ts",
+        "tests/collector-projection.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "contracts",
+      "runtime": "universal",
+      "paths": [
+        "modules/contracts/"
+      ],
+      "owner": "contracts",
+      "dependencies": [
+        "foundation",
+        "usage"
+      ],
+      "public": [
+        "modules/contracts/accounts.ts",
+        "modules/contracts/cloud-accounts.ts",
+        "modules/contracts/cloud-version.ts",
+        "modules/contracts/cloud.ts",
+        "modules/contracts/data-source.ts",
+        "modules/contracts/index.ts",
+        "modules/contracts/query.ts",
+        "modules/contracts/read-lease.ts",
+        "modules/contracts/responses.ts",
+        "modules/contracts/settings.ts",
+        "modules/contracts/status.ts",
+        "modules/contracts/sync-version.ts",
+        "modules/contracts/sync.ts"
+      ],
+      "tests": [
+        "tests/usage-domain-v3.test.ts",
+        "tests/cloud-sync.test.ts",
+        "tests/billing-queries.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "settings",
+      "runtime": "universal",
+      "paths": [
+        "modules/settings/"
+      ],
+      "owner": "settings",
+      "dependencies": [
+        "foundation",
+        "contracts"
+      ],
+      "public": [
+        "modules/settings/catalog.ts",
+        "modules/settings/defaults.ts",
+        "modules/settings/pricing.ts",
+        "modules/settings/validation.ts"
+      ],
+      "tests": [
+        "tests/pricing.test.ts",
+        "tests/pricing-settings.test.ts",
+        "tests/billing-queries.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "settings/worker",
+      "runtime": "worker",
+      "paths": [
+        "modules/settings/worker/",
+        "modules/settings/read-settings.ts"
+      ],
+      "owner": "settings",
+      "dependencies": [
+        "settings",
+        "foundation",
+        "contracts",
+        "platform/worker",
+        "sync/publication"
+      ],
+      "public": [
+        "modules/settings/read-settings.ts",
+        "modules/settings/worker/load.ts",
+        "modules/settings/worker/settings.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3-billing.test.ts"
+      ]
+    },
+    {
+      "id": "analytics",
+      "runtime": "universal",
+      "paths": [
+        "modules/analytics/"
+      ],
+      "owner": "analytics",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "settings"
+      ],
+      "public": [
+        "modules/analytics/plan.ts",
+        "modules/analytics/query-engine.ts",
+        "modules/analytics/revision.ts",
+        "modules/analytics/sqlite.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/exact-queries.test.ts",
+        "tests/agents.test.ts",
+        "tests/billing-queries.test.ts",
+        "tests/trend-granularity.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "analytics/worker",
+      "runtime": "worker",
+      "paths": [
+        "modules/analytics/worker/"
+      ],
+      "owner": "analytics",
+      "dependencies": [
+        "analytics",
+        "contracts",
+        "foundation",
+        "settings",
+        "settings/worker",
+        "platform/worker",
+        "sync/reads"
+      ],
+      "public": [
+        "modules/analytics/worker/queries.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3-query-scale.test.ts",
+        "test/v3-billing.test.ts"
+      ]
+    },
+    {
+      "id": "storage",
+      "runtime": "node",
+      "paths": [
+        "modules/storage/"
+      ],
+      "owner": "storage",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "settings",
+        "platform/node"
+      ],
+      "public": [
+        "modules/storage/sqlite.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/collector-v3.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "platform/node",
+      "runtime": "node",
+      "paths": [
+        "modules/platform/node/"
+      ],
+      "owner": "platform",
+      "dependencies": [
+        "foundation"
+      ],
+      "public": [
+        "modules/platform/node/browser.ts",
+        "modules/platform/node/platform.ts",
+        "modules/platform/node/runtime.ts",
+        "modules/platform/node/service.ts",
+        "modules/platform/node/skill-install.ts",
+        "modules/platform/node/util.ts"
+      ],
+      "tests": [
+        "tests/platform.test.ts",
+        "tests/copy-directory.test.ts",
+        "tests/linux-autostart.test.ts",
+        "tests/runtime-version.test.ts",
+        "tests/service-shutdown.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "platform/worker",
+      "runtime": "worker",
+      "paths": [
+        "modules/platform/worker/"
+      ],
+      "owner": "platform",
+      "dependencies": [
+        "contracts"
+      ],
+      "public": [
+        "modules/platform/worker/http.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/worker.test.ts",
+        "test/version-gate.test.ts"
+      ]
+    },
+    {
+      "id": "accounts",
+      "runtime": "node",
+      "paths": [
+        "modules/accounts/"
+      ],
+      "owner": "accounts",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "platform/node",
+        "storage",
+        "collection"
+      ],
+      "public": [
+        "modules/accounts/publisher.ts",
+        "modules/accounts/reader.ts",
+        "modules/accounts/refresh.ts",
+        "modules/accounts/scheduler.ts"
+      ],
+      "tests": [
+        "tests/account.test.ts",
+        "tests/account-sync.test.ts",
+        "tests/refresh-scheduler.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "accounts/worker",
+      "runtime": "worker",
+      "paths": [
+        "modules/accounts/worker/"
+      ],
+      "owner": "accounts",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "platform/worker"
+      ],
+      "public": [
+        "modules/accounts/worker/accounts.ts",
+        "modules/accounts/worker/devices.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/multi-device.test.ts",
+        "test/display-views.test.ts"
+      ]
+    },
+    {
+      "id": "organization",
+      "runtime": "universal",
+      "paths": [
+        "modules/organization/projects.ts"
+      ],
+      "owner": "organization",
+      "dependencies": [],
+      "public": [
+        "modules/organization/projects.ts"
+      ],
+      "tests": [
+        "tests/project-identity.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "organization/node",
+      "runtime": "node",
+      "paths": [
+        "modules/organization/source-node.ts"
+      ],
+      "owner": "organization",
+      "dependencies": [
+        "foundation",
+        "platform/node",
+        "organization"
+      ],
+      "public": [
+        "modules/organization/source-node.ts"
+      ],
+      "tests": [
+        "tests/project-source.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "organization/policies",
+      "runtime": "worker",
+      "paths": [
+        "modules/organization/worker/origin-rules.ts"
+      ],
+      "owner": "organization",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "usage"
+      ],
+      "public": [
+        "modules/organization/worker/origin-rules.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3-origins.test.ts"
+      ]
+    },
+    {
+      "id": "organization/worker",
+      "runtime": "worker",
+      "paths": [
+        "modules/organization/worker/"
+      ],
+      "owner": "organization",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "usage",
+        "organization",
+        "organization/policies",
+        "platform/worker",
+        "sync/publication",
+        "sync/reads",
+        "sync/jobs-types"
+      ],
+      "public": [
+        "modules/organization/worker/origins.ts",
+        "modules/organization/worker/projects.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3-projects.test.ts",
+        "test/v3-origins.test.ts"
+      ]
+    },
+    {
+      "id": "collection",
+      "runtime": "node",
+      "paths": [
+        "modules/collection/"
+      ],
+      "owner": "collection",
+      "dependencies": [
+        "foundation",
+        "contracts",
+        "usage",
+        "organization/node",
+        "storage"
+      ],
+      "public": [
+        "modules/collection/collector.ts",
+        "modules/collection/importer.ts",
+        "modules/collection/projection.ts"
+      ],
+      "tests": [
+        "tests/collector-v3.test.ts",
+        "tests/collector-origins.test.ts",
+        "tests/collector-projection.test.ts",
+        "tests/core.test.ts",
+        "tests/agents.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "sync/protocol",
+      "runtime": "universal",
+      "paths": [
+        "modules/sync/protocol/"
+      ],
+      "owner": "sync",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "usage"
+      ],
+      "public": [
+        "modules/sync/protocol/validate-upload.ts"
+      ],
+      "tests": [
+        "tests/usage-domain-v3.test.ts",
+        "tests/collector-v3.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "sync/upload",
+      "runtime": "node",
+      "paths": [
+        "modules/sync/upload/"
+      ],
+      "owner": "sync",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "usage",
+        "accounts",
+        "collection",
+        "storage",
+        "sync/protocol"
+      ],
+      "public": [
+        "modules/sync/upload/session.ts",
+        "modules/sync/upload/uploader.ts"
+      ],
+      "tests": [
+        "tests/uploader-v3.test.ts",
+        "tests/cloud-resume.test.ts",
+        "tests/cloud-sync.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "sync/publication",
+      "runtime": "worker",
+      "paths": [
+        "modules/sync/publication/"
+      ],
+      "owner": "sync",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "usage",
+        "organization/policies",
+        "platform/worker"
+      ],
+      "public": [
+        "modules/sync/publication/commit.ts",
+        "modules/sync/publication/metrics.ts",
+        "modules/sync/publication/store.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3.test.ts",
+        "test/v3-apply-performance.test.ts"
+      ]
+    },
+    {
+      "id": "sync/apply",
+      "runtime": "worker",
+      "paths": [
+        "modules/sync/apply/"
+      ],
+      "owner": "sync",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "usage",
+        "sync/protocol",
+        "sync/publication",
+        "sync/jobs-types",
+        "organization/worker",
+        "organization/policies",
+        "platform/worker"
+      ],
+      "public": [
+        "modules/sync/apply/apply.ts",
+        "modules/sync/apply/codec.ts",
+        "modules/sync/apply/materialization.ts",
+        "modules/sync/apply/rebuild.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3.test.ts",
+        "test/v3-apply-performance.test.ts",
+        "test/v3-job-budget.test.ts"
+      ]
+    },
+    {
+      "id": "sync/jobs-types",
+      "runtime": "universal",
+      "paths": [
+        "modules/sync/jobs/types.ts"
+      ],
+      "owner": "sync",
+      "dependencies": [],
+      "public": [
+        "modules/sync/jobs/types.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3-job-budget.test.ts"
+      ]
+    },
+    {
+      "id": "sync/jobs",
+      "runtime": "worker",
+      "paths": [
+        "modules/sync/jobs/"
+      ],
+      "owner": "sync",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "usage",
+        "sync/jobs-types",
+        "sync/apply",
+        "sync/publication",
+        "sync/reads",
+        "organization/worker",
+        "organization/policies",
+        "platform/worker"
+      ],
+      "public": [
+        "modules/sync/jobs/jobs.ts"
+      ],
+      "tests": [
+        "tests/query-budget.test.ts"
+      ],
+      "cloudTests": [
+        "test/v3-job-budget.test.ts",
+        "test/v3-status-background.test.ts"
+      ]
+    },
+    {
+      "id": "sync/reads",
+      "runtime": "worker",
+      "paths": [
+        "modules/sync/reads/"
+      ],
+      "owner": "sync",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "platform/worker",
+        "sync/publication",
+        "settings"
+      ],
+      "public": [
+        "modules/sync/reads/snapshots.ts"
+      ],
+      "tests": [],
+      "cloudTests": [
+        "test/v3.test.ts",
+        "test/v3-query-scale.test.ts"
+      ]
+    },
+    {
+      "id": "sync/browser",
+      "runtime": "browser",
+      "paths": [
+        "modules/sync/browser/"
+      ],
+      "owner": "sync",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "analytics"
+      ],
+      "public": [
+        "modules/sync/browser/cache.ts",
+        "modules/sync/browser/controller.ts",
+        "modules/sync/browser/data-source.ts",
+        "modules/sync/browser/transport.ts"
+      ],
+      "tests": [
+        "tests/web-cloud-sync.test.ts",
+        "tests/web-cloud-prefetch.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/adapters",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/adapters/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "sync/browser"
+      ],
+      "public": [
+        "modules/web/adapters/cloud-http.ts",
+        "modules/web/adapters/local.ts"
+      ],
+      "tests": [
+        "tests/refresh-ui.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/runtime",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/runtime/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "web/adapters"
+      ],
+      "public": [
+        "modules/web/runtime/context.tsx"
+      ],
+      "tests": [
+        "tests/refresh-ui.test.ts",
+        "tests/web-runtime.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/motion",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/motion/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts"
+      ],
+      "public": [
+        "modules/web/motion/ChartMotion.tsx",
+        "modules/web/motion/MotionPrimitives.tsx",
+        "modules/web/motion/TrendMotion.ts",
+        "modules/web/motion/motion-data.ts",
+        "modules/web/motion/motion-state.ts",
+        "modules/web/motion/motion.ts"
+      ],
+      "tests": [
+        "tests/motion.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/data",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/data/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "analytics",
+        "sync/browser",
+        "web/adapters",
+        "web/runtime",
+        "web/motion"
+      ],
+      "public": [
+        "modules/web/data/cloud-provider.tsx",
+        "modules/web/data/workspace.ts",
+        "modules/web/data/navigation.ts"
+      ],
+      "tests": [
+        "tests/refresh-ui.test.ts",
+        "tests/web-cloud-prefetch.test.ts",
+        "tests/cloud-navigation.test.ts",
+        "tests/web-runtime.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/ui",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/ui/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "web/motion"
+      ],
+      "public": [
+        "modules/web/ui/Choice.tsx",
+        "modules/web/ui/format.ts"
+      ],
+      "tests": [
+        "tests/motion.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/widgets",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/widgets/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "web/runtime",
+        "web/data",
+        "web/ui",
+        "web/motion"
+      ],
+      "public": [
+        "modules/web/widgets/Chart.tsx",
+        "modules/web/widgets/Usage.tsx",
+        "modules/web/widgets/ui.tsx"
+      ],
+      "tests": [
+        "tests/pricing-settings.test.ts",
+        "tests/cloud-display.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/accounts",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/features/accounts/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "web/runtime",
+        "web/adapters",
+        "web/data",
+        "web/ui",
+        "web/widgets",
+        "web/motion"
+      ],
+      "public": [
+        "modules/web/features/accounts/AccountNotice.tsx",
+        "modules/web/features/accounts/CloudAccounts.tsx",
+        "modules/web/features/accounts/QuotaCards.tsx"
+      ],
+      "tests": [
+        "tests/cloud-display.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/devices",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/features/devices/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "web/runtime",
+        "web/adapters",
+        "web/data",
+        "web/ui",
+        "web/widgets",
+        "web/motion"
+      ],
+      "public": [
+        "modules/web/features/devices/CloudBind.tsx",
+        "modules/web/features/devices/CloudSyncStatus.tsx",
+        "modules/web/features/devices/DeviceSettings.tsx",
+        "modules/web/features/devices/queries.ts"
+      ],
+      "tests": [
+        "tests/cloud-display.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/projects",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/features/projects/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "web/runtime",
+        "web/adapters",
+        "web/data",
+        "web/ui",
+        "web/widgets",
+        "web/motion",
+        "web/devices",
+        "organization"
+      ],
+      "public": [
+        "modules/web/features/projects/CloudOrigins.tsx",
+        "modules/web/features/projects/CloudProjects.tsx"
+      ],
+      "tests": [
+        "tests/cloud-display.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/settings",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/features/settings/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "web/runtime",
+        "web/adapters",
+        "web/data",
+        "web/ui",
+        "web/widgets",
+        "web/motion",
+        "web/accounts",
+        "web/devices",
+        "web/projects"
+      ],
+      "public": [
+        "modules/web/features/settings/SettingsPage.tsx"
+      ],
+      "tests": [
+        "tests/pricing-settings.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/analysis",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/features/analysis/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "web/runtime",
+        "web/adapters",
+        "web/data",
+        "web/ui",
+        "web/widgets",
+        "web/motion"
+      ],
+      "public": [
+        "modules/web/features/analysis/Atlas.tsx"
+      ],
+      "tests": [
+        "tests/trend-brush.test.ts",
+        "tests/cloud-navigation.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/overview",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/features/overview/"
+      ],
+      "owner": "web",
+      "dependencies": [
+        "contracts",
+        "foundation",
+        "web/runtime",
+        "web/adapters",
+        "web/data",
+        "web/ui",
+        "web/widgets",
+        "web/motion",
+        "web/accounts"
+      ],
+      "public": [
+        "modules/web/features/overview/Overview.tsx"
+      ],
+      "tests": [
+        "tests/cloud-display.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "web/shell",
+      "runtime": "browser",
+      "paths": [
+        "modules/web/shell/"
+      ],
+      "owner": "integration",
+      "dependencies": [
+        "contracts",
+        "web/runtime",
+        "web/adapters",
+        "web/data",
+        "web/ui",
+        "web/widgets",
+        "web/motion",
+        "web/accounts",
+        "web/devices",
+        "web/projects",
+        "web/settings",
+        "web/analysis",
+        "web/overview"
+      ],
+      "public": [
+        "modules/web/shell/cloud-gate.tsx",
+        "modules/web/shell/mount.tsx"
+      ],
+      "tests": [
+        "tests/cloud-navigation.test.ts",
+        "tests/cloud-display.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "app/local",
+      "runtime": "node",
+      "paths": [
+        "apps/local/"
+      ],
+      "owner": "integration",
+      "dependencies": [
+        "foundation",
+        "contracts",
+        "platform/node",
+        "storage",
+        "analytics",
+        "accounts",
+        "collection",
+        "settings",
+        "sync/upload"
+      ],
+      "public": [],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/cli-range.test.ts",
+        "tests/service-shutdown.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "app/cloud",
+      "runtime": "worker",
+      "paths": [
+        "apps/cloud/"
+      ],
+      "owner": "integration",
+      "dependencies": [
+        "foundation",
+        "contracts",
+        "platform/worker",
+        "settings",
+        "settings/worker",
+        "accounts/worker",
+        "organization/worker",
+        "analytics/worker",
+        "sync/apply",
+        "sync/jobs",
+        "sync/reads",
+        "sync/publication"
+      ],
+      "public": [],
+      "tests": [],
+      "cloudTests": [
+        "test/worker.test.ts",
+        "test/health.test.ts",
+        "test/version-gate.test.ts",
+        "test/v3-device-methods.test.ts"
+      ]
+    },
+    {
+      "id": "app/web-local",
+      "runtime": "browser",
+      "paths": [
+        "apps/web-local/"
+      ],
+      "owner": "integration",
+      "dependencies": [
+        "web/shell",
+        "web/runtime",
+        "web/adapters"
+      ],
+      "public": [],
+      "tests": [
+        "tests/refresh-ui.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "app/web-cloud",
+      "runtime": "browser",
+      "paths": [
+        "apps/web-cloud/"
+      ],
+      "owner": "integration",
+      "dependencies": [
+        "web/shell"
+      ],
+      "public": [],
+      "tests": [
+        "tests/cloud-display.test.ts"
+      ],
+      "cloudTests": []
+    },
+    {
+      "id": "app/showcase",
+      "runtime": "browser",
+      "paths": [
+        "apps/showcase/"
+      ],
+      "owner": "integration",
+      "dependencies": [
+        "foundation",
+        "contracts",
+        "settings",
+        "analytics",
+        "web/shell",
+        "web/runtime"
+      ],
+      "public": [],
+      "tests": [
+        "tests/showcase.test.ts"
+      ],
+      "cloudTests": []
+    }
+  ]
+}

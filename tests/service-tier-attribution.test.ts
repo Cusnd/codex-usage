@@ -4,11 +4,12 @@ import {createHash} from 'node:crypto';
 import {mkdtemp,mkdir,writeFile,appendFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {encodeUpload} from '../server/sync-v3/codec.js';
-import {consumeProjected,initialContext,initialLegacyState,nextContext,projectRecord} from '../shared/usage-domain/normalize.js';
-import {canonicalize} from '../shared/usage-domain/canonical.js';
-import {EXTRACTOR_VERSION,stableJson,validProjectedRecord,validUploadBatch,type UploadBatch} from '../shared/sync-v3.js';
-import type {Candidate,ExtractionContext,Observation} from '../shared/usage-domain/types.js';
+import {encodeUpload} from '../modules/sync/upload/codec.js';
+import {consumeProjected,initialContext,initialLegacyState,nextContext,projectRecord} from '../modules/usage/normalize.js';
+import {canonicalize} from '../modules/usage/canonical.js';
+import { EXTRACTOR_VERSION, stableJson, type UploadBatch } from '../modules/contracts/sync.js';
+import { validProjectedRecord, validUploadBatch } from '../modules/sync/protocol/validate-upload.js';
+import type {Candidate,ExtractionContext,Observation} from '../modules/usage/types.js';
 
 const at='2026-09-12T07:00:00.000Z',digest=(v:string)=>createHash('sha256').update(v).digest('hex');
 const row=(type:string,payload:Record<string,unknown>)=>({type,timestamp:at,payload});

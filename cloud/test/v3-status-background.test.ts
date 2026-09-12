@@ -1,13 +1,13 @@
 import {gzipSync} from 'node:zlib';
-import {stableJson} from '../../shared/sync-v3';
-import {hashBytes} from '../src/v3/codec';
+import { stableJson } from '../../modules/contracts/sync.js';
+import {hashBytes} from '../../modules/sync/apply/codec.js';
 import {MatchingRequest} from './matching-build';
 import {env} from 'cloudflare:workers';
 import {expect,it} from 'vitest';
-import worker from '../src/index';
-import {SESSION_COOKIE} from '../src/http';
-import {domain,currentDevice,receive} from '../src/v3/store';
-import {queryBudget} from '../src/v3/query-budget';
+import worker from '../../apps/cloud/index.js';
+import {SESSION_COOKIE} from '../../modules/platform/worker/http.js';
+import {domain,currentDevice,receive} from '../../modules/sync/publication/store.js';
+import {queryBudget} from '../../modules/sync/jobs/query-budget.js';
 import {actor,call,batch,origin} from './performance-fixture';
 
 it('returns persisted v3 status before background work completes',async()=>{

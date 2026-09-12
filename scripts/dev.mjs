@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 const children = [
   spawn(
     process.execPath,
-    ["node_modules/tsx/dist/cli.mjs", "watch", "server/index.ts"],
+    ["node_modules/tsx/dist/cli.mjs", "watch", "apps/local/index.ts"],
     { stdio: "inherit" },
   ),
   spawn(process.execPath, ["node_modules/vite/bin/vite.js"], {

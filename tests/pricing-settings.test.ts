@@ -6,20 +6,21 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { createApp } from '../server/app';
-import type { EstimatedCost, Metrics, Settings } from '../shared/contracts';
+import { createApp } from '../apps/local/app.js';
+import type { EstimatedCost, Settings } from '../modules/contracts/settings.js';
+import type { Metrics } from '../modules/contracts/query.js';
 
 type Components = typeof import('./fixtures/pricing-display-components');
 let components: Components;
 before(async () => {
   const dir = path.dirname(fileURLToPath(import.meta.url)), harness = path.join(dir,'fixtures/pricing-display-hooks.ts');
   const result = await build({entryPoints:[path.join(dir,'fixtures/pricing-display-components.tsx')],bundle:true,write:false,platform:'node',format:'cjs',packages:'external',loader:{'.css':'empty'},define:{'import.meta.env.MODE':'"test"'},logLevel:'silent',plugins:[{name:'pricing-component-boundaries',setup(api){
-    api.onResolve({filter:/^(react|@tanstack\/react-query|react-router-dom|\.\/workspace|\.\/motion|\.\/motion-data|\.\/motion-state|\.\/api)$/},args => {
+    api.onResolve({filter:/^(react|@tanstack\/react-query|react-router-dom)$|\/(workspace|motion|motion-data|motion-state|context)\.js$/},args => {
       const name = path.basename(args.importer);
       if (['PriceSettings.tsx','Usage.tsx','SettingsPage.tsx'].includes(name) && args.path==='react' ||
-        name==='PriceSettings.tsx' && ['./workspace','./motion'].includes(args.path) ||
-        name==='SettingsPage.tsx' && ['@tanstack/react-query','./api','./motion-state'].includes(args.path) ||
-        name==='workspace.ts' && ['react','react-router-dom','@tanstack/react-query','./motion-data'].includes(args.path)) return {path:harness};
+        name==='PriceSettings.tsx' && /\/(workspace|motion)\.js$/.test(args.path) ||
+        name==='SettingsPage.tsx' && (args.path==='@tanstack/react-query'||/\/(context|motion-state)\.js$/.test(args.path)) ||
+        name==='workspace.ts' && (['react','react-router-dom','@tanstack/react-query'].includes(args.path)||/\/(context|motion-data)\.js$/.test(args.path))) return {path:harness};
     });
   }}]});
   const module={exports:{}};new Function('require','module','exports',result.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);components=module.exports as Components;

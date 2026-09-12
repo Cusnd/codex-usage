@@ -45,7 +45,7 @@ Published publicly after npm browser authentication. The official registry now r
 - Public scoped npm package: `@esoren/codex-usage`; CLI remains `codex-usage`.
 - Current release: `0.1.4` on the `latest` channel.
 - Supported platforms: Windows x64 and macOS x64/arm64, Node.js 22.13+ (22.x), 24.x, or 26.x.
-- Ship the CLI, compiled server/shared code, built web assets, Skill, runtime helper, license and user documentation.
+- Ship the CLI, compiled local application and modules, built web assets, Skill, runtime helper, license and user documentation.
 - Keep existing GitHub Release installation working while adding npm installation.
 
 ## Prepare and verify

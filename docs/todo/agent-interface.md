@@ -24,7 +24,7 @@
 
 ### AGENT-01：查询契约与使用场景
 
-- [ ] 对照 [server/cli.ts](../../server/cli.ts)、[server/app.ts](../../server/app.ts)、[shared/contracts.ts](../../shared/contracts.ts) 和 Skill，检查命令、参数、分页、错误与版本说明。
+- [ ] 对照 [apps/local/cli.ts](../../apps/local/cli.ts)、[apps/local/app.ts](../../apps/local/app.ts)、[modules/contracts/index.ts](../../modules/contracts/index.ts) 和 Skill，检查命令、参数、分页、错误与版本说明。
 - [ ] 补齐团队自身/后代/合计、跨任务轮次、期间变化和低缓存任务的可执行示例。
 - [ ] 使用合成数据走通“确认来源与新鲜度 → 查询 → 保留范围、时区和缺失说明”的流程。
 - [ ] 远程初版是否开放 Agent 查询单独定义；保留本地 CLI 默认行为，不为手机 Web 需求自动放开 CODEX_USAGE_URL。

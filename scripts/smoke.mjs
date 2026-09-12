@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { createApp } from "../dist/server/app.js";
+import { createApp } from "../dist/apps/local/app.js";
 
 const root = await mkdtemp(path.join(os.tmpdir(), "codex-smoke-中文 空格-"));
 process.env.CODEX_BIN = path.join(root, "not-installed.exe");

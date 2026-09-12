@@ -2,10 +2,10 @@ import {MatchingRequest} from './matching-build';
 import {env} from 'cloudflare:workers';
 import {it,expect} from 'vitest';
 import {gzipSync} from 'node:zlib';
-import worker from '../src/index';
-import {SESSION_COOKIE,sha256,token} from '../src/http';
-import {advanceJobs} from '../src/v3/jobs';
-import {stableJson,V3_CONTENT_TYPE,type UploadBatch} from '../../shared/sync-v3';
+import worker from '../../apps/cloud/index.js';
+import {SESSION_COOKIE,sha256,token} from '../../modules/platform/worker/http.js';
+import {advanceJobs} from '../../modules/sync/jobs/jobs.js';
+import { stableJson, V3_CONTENT_TYPE, type UploadBatch } from '../../modules/contracts/sync.js';
 import fixture from '../.generated/billing.json';
 
 const origin='https://quota.esoren.com';

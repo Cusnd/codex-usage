@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CloudSyncController, entityHash, type ChangeResponse, type SyncTransport } from '../web/cloud-sync/controller';
-import { MemoryCloudCache, type ManifestEntry, type ReadLease } from '../web/cloud-sync/cache';
-import type { SnapshotManifestPage, SyncEntity } from '../shared/sync-v3';
+import { CloudSyncController, entityHash, type ChangeResponse, type SyncTransport } from '../modules/sync/browser/controller.js';
+import { MemoryCloudCache, type ManifestEntry, type ReadLease } from '../modules/sync/browser/cache.js';
+import type { SnapshotManifestPage, SyncEntity } from '../modules/contracts/sync.js';
 
 const cut = { dataset_epoch: 'prefetch-epoch', commit_seq: 1, deletion_version: 0, organization_version: 0, config_version: 0 };
 const expires_at = new Date(Date.now() + 3600_000).toISOString();

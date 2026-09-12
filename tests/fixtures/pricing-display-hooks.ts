@@ -1,5 +1,6 @@
 import { createContext } from 'react';
-import type { Settings } from '../../shared/contracts';
+import type { Settings } from '../../modules/contracts/settings.js';
+import { localDataSource } from '../../modules/web/adapters/local.js';
 export { createContext };
 export const hooks = {
   states: {} as Record<string, any[]>, active: 'settings', cursor: 0,
@@ -24,6 +25,9 @@ export const useResultMotion = () => ({});
 export const useQuery = (options: any) => {hooks.query=options;return {data:undefined};};
 export const useQueryClient = () => ({setQueryData:()=>{},invalidateQueries:async(options:any)=>{hooks.invalidations.push(options);}});
 export const mutate = async (...args: any[]) => {hooks.requests.push(args);return {data:args[1]};};
+export const useApi = () => ({mutate});
+export const useCapabilities = () => ({deviceScope:false,demoPreview:false});
+export const useWebRuntime = () => ({source:localDataSource,clock:Date.now,capabilities:useCapabilities()});
 export const beginRefreshMotion = () => ({});
 export const cancelRefreshMotion = () => {};
 export const markQueryMotion = () => {};

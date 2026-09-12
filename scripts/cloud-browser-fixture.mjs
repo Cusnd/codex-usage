@@ -2,7 +2,7 @@
 import { mkdirSync,readFileSync,writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createApp } from "../dist/server/app.js";
+import { createApp } from "../dist/apps/local/app.js";
 const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../cloud/.deploy/browser-fixture-"+(process.argv[2]||'A'),

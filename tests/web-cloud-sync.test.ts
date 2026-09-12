@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CloudSyncController, entityHash, SyncError, type SyncTransport, type ChangeResponse } from '../web/cloud-sync/controller';
-import { MemoryCloudCache, emptyState, namespaceOf, CacheConflict, type CacheWrite, type CacheState, type ReadLease, type ManifestEntry } from '../web/cloud-sync/cache';
-import { CloudUsageDataSource, OfflineCacheMiss } from '../web/data-source';
-import { namesFromProjects, referencedProjectIds } from '../web/cloud-sync/project-labels';
-import { stableJson, type SyncEntity, type SyncCut, type SnapshotManifestPage } from '../shared/sync-v3';
-import { USAGE_QUERY_REVISION } from '../shared/query-revision';
-import type { ApiResponse, Settings } from '../shared/contracts';
+import { CloudSyncController, entityHash, SyncError, type SyncTransport, type ChangeResponse } from '../modules/sync/browser/controller.js';
+import { MemoryCloudCache, emptyState, namespaceOf, CacheConflict, type CacheWrite, type CacheState, type ReadLease, type ManifestEntry } from '../modules/sync/browser/cache.js';
+import { CloudUsageDataSource, OfflineCacheMiss } from '../modules/sync/browser/data-source.js';
+import { namesFromProjects, referencedProjectIds } from '../modules/sync/browser/project-labels.js';
+import { stableJson, type SyncEntity, type SyncCut, type SnapshotManifestPage } from '../modules/contracts/sync.js';
+import { USAGE_QUERY_REVISION } from '../modules/analytics/revision.js';
+import type { ApiResponse } from '../modules/contracts/responses.js';
+import type { Settings } from '../modules/contracts/settings.js';
 
 const identity = { origin: 'https://usage.example', userId: 'github:42', deviceIds: [] as string[] };
 const cut = (commit_seq = 1): SyncCut => ({ dataset_epoch: 'epoch-a', commit_seq, deletion_version: 0, organization_version: 0, config_version: 0 });

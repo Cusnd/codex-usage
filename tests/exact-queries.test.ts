@@ -4,13 +4,13 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { Store } from '../server/db.js';
-import { Queries } from '../server/queries.js';
-import { QueryEngine, queryStore, type Statement } from '../shared/query-engine.js';
-import { EXACT_EVENT_PAGE_SIZE, canAggregateInSql } from '../shared/exact-query-engine.js';
-import { tokenFields } from '../shared/query-values.js';
-import { seedExample } from '../showcase/fixture.js';
-import { exampleSettings } from '../showcase/store.js';
+import { Store } from '../modules/storage/sqlite.js';
+import { Queries } from '../modules/analytics/sqlite.js';
+import { QueryEngine, queryStore, type Statement } from '../modules/analytics/query-engine.js';
+import { EXACT_EVENT_PAGE_SIZE, canAggregateInSql } from '../modules/analytics/exact-query-engine.js';
+import { tokenFields } from '../modules/foundation/query-values.js';
+import { seedExample } from '../apps/showcase/fixture.js';
+import { exampleSettings } from '../apps/showcase/store.js';
 
 const at = '2026-11-01T05:30:00.000Z';
 function add(store: Store, id: string, values: Record<string, any> = {}) {

@@ -4,9 +4,10 @@ on:
     branches: [develop, main]
     paths:
       - 'cloud/**'
-      - 'web/**'
-      - 'shared/**'
-      - 'server/**'
+      - 'apps/**'
+      - 'modules/**'
+      - 'tooling/**'
+      - 'modules.json'
       - 'scripts/**'
       - 'tests/**'
       - 'vite.config.ts'

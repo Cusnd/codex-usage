@@ -8,7 +8,7 @@ const root = path.resolve(cloud, '..');
 const preview = process.argv.includes('--preview');
 if (process.argv.includes('--backend-first')) throw new Error('Backend and browser assets must use the same build; --backend-first is retired.');
 const prepareOnly = process.argv.includes('--prepare-only');
-const deploymentInputs = ['cloud', 'shared', 'web', 'server', 'bin', 'scripts/build-version.mjs', 'vite.config.ts', 'tsconfig.json', 'tsconfig.server.json', 'package.json', 'package-lock.json'];
+const deploymentInputs = ['cloud', 'apps', 'modules', 'tooling', 'modules.json', 'bin', 'scripts/build-version.mjs', 'vite.config.ts', 'tsconfig.json', 'tsconfig.server.json', 'tsconfig.browser.json', 'tsconfig.node.json', 'package.json', 'package-lock.json'];
 function git(args) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
   if (result.error || result.status !== 0) throw new Error(`Cannot verify preview source: git ${args[0]} failed.`);
@@ -30,7 +30,7 @@ verifyPreviewSource();
 const versionArgs = preview ? ['--tag', `preview-${previewRevision.slice(0, 12)}`, '--message', `preview source ${previewRevision}`] : [];
 const wrangler = path.join(cloud, 'node_modules/wrangler/bin/wrangler.js');
 const config = JSON.parse(readFileSync(path.join(cloud, 'wrangler.jsonc'), 'utf8'));
-if (config.name !== 'codex-usage-cloud' || config.main !== 'src/index.ts' || config.vars.APP_ORIGIN !== 'https://quota.esoren.com' || !config.vars.GITHUB_CLIENT_ID || config.d1_databases[0].database_id.startsWith('00000000'))
+if (config.name !== 'codex-usage-cloud' || config.main !== '../apps/cloud/index.ts' || config.vars.APP_ORIGIN !== 'https://quota.esoren.com' || !config.vars.GITHUB_CLIENT_ID || config.d1_databases[0].database_id.startsWith('00000000'))
   throw new Error('Production Worker, origin, OAuth client and D1 must be configured before deployment.');
 const local = path.join(cloud, '.deploy'); mkdirSync(local, { recursive: true, mode: 0o700 });
 function run(script, args, cwd = cloud) {
@@ -39,13 +39,14 @@ function run(script, args, cwd = cloud) {
   if (result.status !== 0) throw new Error(`Command failed: ${path.basename(script)} ${args[0]}`);
 }
 run(path.join(root, 'scripts/build-version.mjs'), [], root);
-const expectedBuild = JSON.parse(readFileSync(path.join(root,'shared/build-version.ts'),'utf8').match(/export const BUILD_VERSION = ("[^"]+");/)?.[1] || 'null');
+run(path.join(root, 'tooling/check-architecture.mjs'), [], root);
+const expectedBuild = JSON.parse(readFileSync(path.join(root,'tooling/generated/build-version.ts'),'utf8').match(/export const BUILD_VERSION = ("[^"]+");/)?.[1] || 'null');
 if (typeof expectedBuild !== 'string') throw new Error('Missing generated application build.');
 run(path.join(cloud, 'node_modules/typescript/bin/tsc'), ['--noEmit', '--project', 'tsconfig.deploy.json']);
 run(path.join(root, 'node_modules/vite/bin/vite.js'), ['build', '--mode', 'cloud'], root);
 run(wrangler, ['deploy', '--dry-run', '--outdir', '.deploy/bundle', '--metafile', '.deploy/bundle-meta.json']);
 const meta = JSON.parse(readFileSync(path.join(local, 'bundle-meta.json'), 'utf8'));
-if (Object.keys(meta.inputs).some(file => /(?:^|\/)(?:server|showcase|test)\//.test(file.replaceAll('\\', '/')))) throw new Error('Private/test modules found in the Worker bundle.');
+if (Object.keys(meta.inputs).some(file => /(?:^|\/)(?:apps\/(?:local|showcase)|modules\/(?:storage|collection|platform\/node)|tests?|test)\//.test(file.replaceAll('\\', '/')))) throw new Error('Private/test modules found in the Worker bundle.');
 function files(dir) { return readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(path.join(dir, entry.name)) : [path.join(dir, entry.name)]); }
 for (const file of files(path.join(cloud, 'build')).filter(file => /\.(js|html)$/.test(file))) {
   const text = readFileSync(file, 'utf8');

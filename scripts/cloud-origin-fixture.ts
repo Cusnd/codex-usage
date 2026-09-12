@@ -3,11 +3,11 @@ import {appendFile,mkdir,mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
-import {Store} from '../server/db.js';
-import {Collector} from '../server/collector/store.js';
-import {LocalMaterializer} from '../server/local-materializer.js';
-import {encodeUpload} from '../server/sync-v3/codec.js';
-import type {UploadBatch} from '../shared/sync-v3.js';
+import {Store} from '../modules/storage/sqlite.js';
+import {Collector} from '../modules/collection/collector.js';
+import {LocalMaterializer} from '../modules/collection/materializer.js';
+import {encodeUpload} from '../modules/sync/upload/codec.js';
+import type { UploadBatch } from '../modules/contracts/sync.js';
 
 // Both cloud tests and local tests use output produced by the default Collector.
 // No origin override or hand-authored preserved claim is used here.

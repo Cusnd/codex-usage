@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bucketTimes, bucketRange } from '../shared/time-range';
-import { readTrendParent, selectedBrushIndices } from '../web/trend-range';
+import { bucketTimes, bucketRange } from '../modules/foundation/time-range.js';
+import { readTrendParent, selectedBrushIndices } from '../modules/web/features/analysis/trend-range.js';
 
 test('shrinking and expanding address the same original brush domain', () => {
   const parent = readTrendParent(JSON.stringify({ range: '7', from: '2026-09-02T04:00:00Z', to: '2026-09-08T16:00:00Z', bucket: 'day' }))!;

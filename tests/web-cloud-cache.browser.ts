@@ -1,6 +1,6 @@
-import { IndexedDbCloudCache, emptyState, namespaceOf, CacheConflict, type ReadLease, type CacheState } from '../web/cloud-sync/cache';
-import { entityHash } from '../web/cloud-sync/controller';
-import type { SyncEntity } from '../shared/sync-v3';
+import { IndexedDbCloudCache, emptyState, namespaceOf, CacheConflict, type ReadLease, type CacheState } from '../modules/sync/browser/cache.js';
+import { entityHash } from '../modules/sync/browser/controller.js';
+import type { SyncEntity } from '../modules/contracts/sync.js';
 
 // This browser-only harness exercises actual IndexedDB transaction lifetimes, not the test double.
 const result: { startedAt: string; browser: string; checks: { name: string; passed: boolean; error?: string }[]; complete: boolean } = {

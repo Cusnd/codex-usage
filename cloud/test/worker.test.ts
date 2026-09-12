@@ -1,9 +1,9 @@
 import {MatchingRequest} from './matching-build';
 import { env } from "cloudflare:workers";
 import { afterEach, expect, it, vi } from "vitest";
-import worker, { cleanup } from "../src/index";
-import { SESSION_COOKIE, STATE_COOKIE, sha256, token } from "../src/http";
-import type { CloudSnapshot } from "../../shared/cloud";
+import worker, { cleanup } from "../../apps/cloud/index.js";
+import { SESSION_COOKIE, STATE_COOKIE, sha256, token } from "../../modules/platform/worker/http.js";
+import type { CloudSnapshot } from "../../modules/contracts/cloud.js";
 
 const origin = "https://quota.esoren.com";
 type Actor = {

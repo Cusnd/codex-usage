@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { expect, it } from 'vitest';
-import { accountViews } from '../src/accounts';
-import { deviceViews } from '../src/v3/devices';
-import type { CloudAccountSnapshot } from '../../shared/cloud-accounts';
+import { accountViews } from '../../modules/accounts/worker/accounts.js';
+import { deviceViews } from '../../modules/accounts/worker/devices.js';
+import type { CloudAccountSnapshot } from '../../modules/contracts/cloud-accounts.js';
 
 async function accountFixture() {
   const user=crypto.randomUUID(),now=Date.now(),account='account-'+user;

@@ -12,7 +12,7 @@
 
 | 方向 | 当前仓库证据 | 后续工作 |
 | --- | --- | --- |
-| 手机布局 | [响应式 CSS](../../web/styles/responsive.css) 已有多档断点；[历史验收](../../docs/design/shared-frontend/README.md) 记录过 390px 等宽度无页面溢出 | 历史宽度验证不等于触屏体验、弱网或远程访问验证；需要专项验收 |
+| 手机布局 | [响应式 CSS](../../modules/web/ui/styles/responsive.css) 已有多档断点；[历史验收](../../docs/design/shared-frontend/README.md) 记录过 390px 等宽度无页面溢出 | 历史宽度验证不等于触屏体验、弱网或远程访问验证；需要专项验收 |
 
 ## 范围与依赖
 

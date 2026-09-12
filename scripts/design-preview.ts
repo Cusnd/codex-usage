@@ -1,8 +1,8 @@
 // Deterministic design dataset: isolated in-memory database, no account or user files.
 // Run with: npx tsx scripts/design-preview.ts
-import { createApp } from "../server/app.js";
-import { ExampleAccount } from "../showcase/account.js";
-import { seedExample } from "../showcase/fixture.js";
+import { createApp } from "../apps/local/app.js";
+import { ExampleAccount } from "../apps/showcase/account.js";
+import { seedExample } from "../apps/showcase/fixture.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";

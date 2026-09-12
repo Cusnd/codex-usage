@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
 import { expect, it } from 'vitest';
 import { gzipSync } from 'node:zlib';
-import worker from '../src/index';
-import { SESSION_COOKIE, sha256, token } from '../src/http';
-import { SYNC_HEADER, SYNC_VERSION, BUILD_HEADER, BUILD_VERSION } from '../../shared/cloud-version';
-import { stableJson, V3_CONTENT_TYPE } from '../../shared/sync-v3';
+import worker from '../../apps/cloud/index.js';
+import { SESSION_COOKIE, sha256, token } from '../../modules/platform/worker/http.js';
+import { SYNC_HEADER, SYNC_VERSION, BUILD_HEADER, BUILD_VERSION } from '../../modules/contracts/cloud-version.js';
+import { stableJson, V3_CONTENT_TYPE } from '../../modules/contracts/sync.js';
 import { batch } from './performance-fixture';
 
 const origin = 'https://quota.esoren.com';

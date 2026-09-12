@@ -89,6 +89,7 @@ Open a fresh agent task if the newly installed Skill is not discovered yet. Firs
 | A repeatable installation procedure for an agent | [Agent installation guide](docs/INSTALL_FOR_AGENTS.md) |
 | CLI/API behavior, counting rules, and data sources | [Technical reference](docs/TECHNICAL_REFERENCE.md) |
 | Development and contribution checks | [Contributing](CONTRIBUTING.md) |
+| Module ownership, dependency rules and parallel work | [Architecture](docs/ARCHITECTURE.md) |
 | Building the interactive example and reproducing its screenshots | [Example frontend](showcase/README.md) · [Screenshot guide](docs/images/README.md) |
 
 Found a problem? [Open an issue](https://github.com/Cusnd/codex-usage/issues) with reproduction steps and sanitized errors.

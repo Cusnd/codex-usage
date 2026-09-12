@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import initSqlJs from 'sql.js';
-import { Store } from '../server/db.js';
-import { Queries } from '../server/queries.js';
-import { ExampleStore, exampleSettings } from '../showcase/store.js';
-import { seedExample, EXAMPLE_NOW } from '../showcase/fixture.js';
-import { createExampleAdapter } from '../showcase/adapter.js';
-import type { Filter } from '../shared/contracts.js';
+import { Store } from '../modules/storage/sqlite.js';
+import { Queries } from '../modules/analytics/sqlite.js';
+import { ExampleStore, exampleSettings } from '../apps/showcase/store.js';
+import { seedExample, EXAMPLE_NOW } from '../apps/showcase/fixture.js';
+import { createExampleAdapter } from '../apps/showcase/adapter.js';
+import type { Filter } from '../modules/contracts/query.js';
 
 test('browser SQLite and native queries agree across scopes, costs, pages, missing fields and integer precision', async () => {
   const native = new Store(':memory:');

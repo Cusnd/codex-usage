@@ -6,7 +6,15 @@
     "noEmit": false,
     "outDir": "dist",
     "rootDir": ".",
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "ES2023"
+    ]
   },
-  "include": ["server", "shared"]
+  "include": [
+    "apps/local"
+  ],
+  "exclude": []
 }

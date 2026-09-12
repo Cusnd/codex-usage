@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeRemote, selectPrimaryRemote, sourceProjectId, normalizeProjectAliases, resolveProjectAlias, organizeProjects, type ProjectEdge } from '../shared/usage-domain/projects.js';
+import { normalizeRemote, selectPrimaryRemote, sourceProjectId, normalizeProjectAliases, resolveProjectAlias, organizeProjects, type ProjectEdge } from '../modules/organization/projects.js';
 
 test('source project identity keeps collector, original project and normalized root separate', () => {
   const base = sourceProjectId('A', 'app', '/work/repo', 'saved');

@@ -6,8 +6,8 @@ import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from 'node:fs/promi
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
-import { ProjectSourceResolver, readCodexProjectMap, type CodexProjectMap } from '../server/project-source.js';
-import { projectPath } from '../server/util.js';
+import { ProjectSourceResolver, readCodexProjectMap, type CodexProjectMap } from '../modules/organization/source-node.js';
+import { projectPath } from '../modules/platform/node/util.js';
 
 const empty = (): CodexProjectMap => ({ database: null, schema: null, projects: [], roots: [], threads: [], projectlessThreadIds: [], issues: [] });
 async function fixture(run: (root: string) => Promise<void>) {

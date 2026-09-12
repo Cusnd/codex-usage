@@ -45,7 +45,7 @@ POS-01 为公开说明提供依据；DISC-03 依赖 DISC-01、DISC-02 及 [AGENT
 用户或 Agent 能判断是否适用、依赖哪些数据、哪些信息可能缺失；六项特色没有混淆已有功能与规划功能。
 ### DISC-02：公开内容与演示
 
-当前 [HTML 入口](../../web/index.html) 只有基础标题和空 React root，未包含产品介绍正文。公开站点的可检索说明需要单独处理；本地应用无需为搜索暴露个人数据。
+当前 [HTML 入口](../../apps/web-local/index.html) 只有基础标题和空 React root，未包含产品介绍正文。公开站点的可检索说明需要单独处理；本地应用无需为搜索暴露个人数据。
 
 - [ ] 在现有站点发布流程中加入轻量、无需执行应用 JavaScript 即可读取的产品说明，链接共享前端演示、GitHub、npm 和安装文档。
 - [ ] 为公开说明页配置准确 title、description、canonical 和分享预览；多页时再按实际 URL 结构生成 sitemap。发布前检查 HTTP 状态、robots 与目标搜索爬虫可访问性。

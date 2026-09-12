@@ -4,7 +4,7 @@
 
 ## Data and behavior
 
-The local application calls its existing loopback API. The example build lazily loads sql.js and creates an in-memory SQLite database from `fixture.ts`. Both environments execute the existing `Queries` engine and pricing calculations. The browser database exposes only synthetic usage and task tables; it does not contain source files, account credentials or personal snapshots.
+The local application calls its existing loopback API. The example build lazily loads sql.js and creates an in-memory SQLite database from `apps/apps/showcase/fixture.ts`. Both environments execute the existing `Queries` engine and pricing calculations. The browser database exposes only synthetic usage and task tables; it does not contain source files, account credentials or personal snapshots.
 
 The fixture contains 119,210,000 Token, 28 Sessions and 92 Turns across four projects. The example team has 18.2M self, 30.4M descendant and 48.6M total Token. `scripts/design-preview.ts` uses the same fixture for its native SQLite preview.
 
@@ -20,19 +20,19 @@ npm run check
 npm test
 npm run build
 npm run showcase:build
-npx wrangler dev --config showcase/wrangler.jsonc --port 8877
+npx wrangler dev --config apps/apps/showcase/wrangler.jsonc --port 8877
 ```
 
 The example build requires no running local or design server. It writes only to ignored `showcase/build/`. A Vite bundle guard rejects private server modules from the example and rejects example/sql.js modules from the local production frontend. sql.js is a development dependency used only to produce the example assets.
 
 ```powershell
-npx wrangler deployments list --config showcase/wrangler.jsonc
-npx wrangler deploy --config showcase/wrangler.jsonc --dry-run
-npx wrangler deploy --config showcase/wrangler.jsonc
+npx wrangler deployments list --config apps/apps/showcase/wrangler.jsonc
+npx wrangler deploy --config apps/apps/showcase/wrangler.jsonc --dry-run
+npx wrangler deploy --config apps/apps/showcase/wrangler.jsonc
 node scripts/verify-showcase.mjs
 ```
 
-Record the previous deployment before publishing. To restore it after a failed verification, use `npx wrangler rollback <previous-version-id> --config showcase/wrangler.jsonc` and verify the restored site. Publication is separate from Git commits or application release packages.
+Record the previous deployment before publishing. To restore it after a failed verification, use `npx wrangler rollback <previous-version-id> --config apps/apps/showcase/wrangler.jsonc` and verify the restored site. Publication is separate from Git commits or application release packages.
 
 Cloudflare serves only `showcase/build/` with [SPA navigation fallback](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/). The connection policy permits only the example origin; the browser does not connect to a visitor's localhost. No cloud database, account authentication, model call or personal data upload is introduced.
 

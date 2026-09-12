@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { expect,it } from 'vitest';
-import { domain } from '../src/v3/store';
-import { createRead } from '../src/v3/snapshots';
-import { queryUsage } from '../src/v3/queries';
+import { domain } from '../../modules/sync/publication/store.js';
+import { createRead } from '../../modules/sync/reads/snapshots.js';
+import { queryUsage } from '../../modules/analytics/worker/queries.js';
 
 function traceReads(db:D1Database){
   let rows=0,maximum=0;

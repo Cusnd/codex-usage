@@ -1,11 +1,11 @@
 import {matchingDevice} from './matching-build';
 import {MatchingRequest} from './matching-build';
 import {env} from 'cloudflare:workers';
-import worker from '../src/index';
-import {SESSION_COOKIE,sha256,token} from '../src/http';
-import {stableJson,type UploadBatch} from '../../shared/sync-v3';
-import {initialContext,normalizeTokens} from '../../shared/usage-domain/normalize';
-import {advanceJobs} from '../src/v3/jobs';
+import worker from '../../apps/cloud/index.js';
+import {SESSION_COOKIE,sha256,token} from '../../modules/platform/worker/http.js';
+import { stableJson, type UploadBatch } from '../../modules/contracts/sync.js';
+import {initialContext,normalizeTokens} from '../../modules/usage/normalize.js';
+import {advanceJobs} from '../../modules/sync/jobs/jobs.js';
 const origin='https://quota.esoren.com';type Actor={user:string;session:string;device:string;credential:string;collector:string};
 async function actor(user?:string):Promise<Actor>{const id=user||crypto.randomUUID(),session=token(),device=crypto.randomUUID(),credential=token();if(!user)await env.DB.prepare('INSERT INTO users(id,github_id,login,created_at) VALUES(?,?,?,?)').bind(id,id,'v3-test',Date.now()).run();await env.DB.prepare('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await sha256(session),id,Date.now()+86400000).run();await env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at) VALUES(?,?,?,?,?)').bind(device,id,device,await sha256(credential),Date.now()).run();await matchingDevice(env.DB,device);return {user:id,session,device,credential,collector:crypto.randomUUID()};}
 async function batch(a:Actor,options:{seq?:number;generation?:number;from?:number;complete?:boolean;response?:string;tokens?:string;originDevice?:string;originKind?:'preserved'|'execution';source?:string;record?:any;timestamp?:string}={}):Promise<UploadBatch>{

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Value } from "@sinclair/typebox/value";
-import { CostSchema, PricingInfoSchema, SettingsSchema, type ModelPrice, type Settings } from "../shared/contracts.js";
-import { estimateCost, officialPrices, pricingCatalog, pricingInfo } from "../shared/pricing.js";
+import { CostSchema, PricingInfoSchema, SettingsSchema, type ModelPrice, type Settings } from '../modules/contracts/settings.js';
+import { estimateCost, officialPrices, pricingCatalog, pricingInfo } from "../modules/settings/pricing.js";
 
 const settings: Settings = {localInterval: 30, accountInterval: 300, timezone: "UTC", timezoneMode: "manual", costEnabled: true};
 const api: Settings = {...settings, officialApiPricing: true};

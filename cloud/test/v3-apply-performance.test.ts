@@ -1,13 +1,13 @@
 import {env} from 'cloudflare:workers';
 import {expect,it} from 'vitest';
 import {gzipSync} from 'node:zlib';
-import {applyBatch} from '../src/v3/apply';
-import {claimJob} from '../src/v3/jobs';
-import {sha256} from '../src/http';
-import {stableJson} from '../../shared/sync-v3';
-import {normalizeTokens} from '../../shared/usage-domain/normalize';
-import {currentDevice,receive,receipt} from '../src/v3/store';
-import {hashBytes} from '../src/v3/codec';
+import {applyBatch} from '../../modules/sync/apply/apply.js';
+import {claimJob} from '../../modules/sync/jobs/jobs.js';
+import {sha256} from '../../modules/platform/worker/http.js';
+import { stableJson } from '../../modules/contracts/sync.js';
+import {normalizeTokens} from '../../modules/usage/normalize.js';
+import {currentDevice,receive,receipt} from '../../modules/sync/publication/store.js';
+import {hashBytes} from '../../modules/sync/apply/codec.js';
 import {actor,batch,events} from './performance-fixture';function instrument(base:D1Database) {
   const stats={requests:0,statements:0,rows_read:0,rows_written:0};
   const add=(results:D1Result[])=>{for(const r of results){stats.rows_read+=r.meta.rows_read||0;stats.rows_written+=r.meta.rows_written||0;}};
