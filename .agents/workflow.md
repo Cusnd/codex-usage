@@ -26,6 +26,8 @@
 
 现有工作流仅在目标为 develop/main 的 PR、手动运行或版本标签时启动。保持 `preview` 的 push/PR 不触发完整 CI，不使用全局禁用 Actions 或提交信息的 skip 标记。
 
+将 `preview` 合入 `develop` 时，PR 目标已是 `develop`，需要运行更新后的完整平台矩阵。涉及云端、本地采集、共享规则、网页或测试脚本时，还运行 `Cloud v3 checks`：安装根目录和云端锁定依赖，构建云端页面，检查类型与共享统计边界，执行当前协议的 Workerd/D1 集成测试。该检查不部署 Worker、不改动远端 D1，也不发布 npm。
+
 ## Commit
 
 按有意义的变化创建提交，标题使用：

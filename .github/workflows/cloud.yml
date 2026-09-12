@@ -1,4 +1,4 @@
-name: Cloud quota
+name: Cloud v3 checks
 on:
   pull_request:
     branches: [develop, main]
@@ -6,17 +6,24 @@ on:
       - 'cloud/**'
       - 'web/**'
       - 'shared/**'
-      - 'scripts/cloud-parity-fixture.ts'
+      - 'server/**'
+      - 'scripts/**'
+      - 'tests/**'
       - 'vite.config.ts'
+      - 'tsconfig*.json'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/cloud.yml'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: cloud-v3-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   cloud:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
