@@ -9,6 +9,11 @@ import {
   setCookie,
 } from "./http";
 import { snapshotRoute } from "./snapshots";
+import { usageSyncRoute, cleanupUsage } from './usage-sync';
+import { usageQueryRoute } from './usage-query';
+import { v3Route } from './v3/routes';
+import { advanceJobs } from './v3/jobs';
+import { cleanupVersions } from './v3/snapshots';
 
 export async function cleanup(env: Env, now = Date.now()) {
   await env.DB.batch([
@@ -26,9 +31,16 @@ export default {
     try {
       if (pathname === "/api/health" && request.method === "GET") {
         await env.DB.prepare("SELECT 1 FROM users LIMIT 1").first();
+        await env.DB.prepare('SELECT resumed_device_id FROM device_authorizations LIMIT 0').all();
+        // Prepare the current storage shape without reading any private rows.
+        await env.DB.prepare(`SELECT r.applied_at,d.rebuild_job,d.legacy_baseline_pending
+          FROM v3_receipts r,v3_sync_domains d,v3_rebuild_candidates b,v3_legacy_heads l,
+          v3_project_sources p,v3_project_rules g,v3_entity_versions e,v3_read_leases q,
+          v3_aggregate_members m,v3_operations o,v3_origin_operations u,v3_origin_operation_events a LIMIT 0`).all();
         return json({
           ok: true,
-          schemaVersion: 1,
+          schemaVersion: 2,
+          usageProtocol: 3,
           loginConfigured: !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
         });
       }
@@ -40,12 +52,15 @@ export default {
         return fail(403, "INVALID_ORIGIN", "请使用已配置的云端地址。");
       const response =
         (await authRoute(request, env, pathname)) ||
+        (await v3Route(request, env, pathname)) ||
+        (await usageSyncRoute(request, env, pathname)) ||
+        (await usageQueryRoute(request, env, pathname)) ||
         (await deviceRoute(request, env, pathname)) ||
         (await snapshotRoute(request, env, pathname));
       if (response) return response;
       if (pathname === "/api/v1/me" && request.method === "GET") {
         const user = await sessionUser(request, env);
-        return json({ user: { login: user.login } });
+        return json({ user: { id: user.id, login: user.login } });
       }
       if (pathname === "/api/v1/me" && request.method === "DELETE") {
         requireSameOrigin(request, env);
@@ -98,5 +113,8 @@ export default {
   },
   async scheduled(_event, env) {
     await cleanup(env);
+    for(let i=0;i<4;i++)await cleanupUsage(env);
+    await advanceJobs(env.DB,{maxSteps:20,budgetMs:15000});
+    await cleanupVersions(env.DB);
   },
 } satisfies ExportedHandler<Env>;

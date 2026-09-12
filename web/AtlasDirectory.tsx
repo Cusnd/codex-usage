@@ -8,7 +8,7 @@ import type {
   Page,
   ThreadRow,
 } from "../shared/contracts";
-import { compact, percent, projectName } from "./api";
+import { compact, percent, projectDescription, projectName } from "./api";
 import { SessionPanel } from "./AtlasSession";
 import {
   Group,
@@ -109,7 +109,7 @@ export function SessionList({
               </span>
               <span className="directory-copy">
                 <b>{sessionTitle(row)}</b>
-                <small title={row.project || "未知项目"}>
+                <small title={projectDescription(row.project)}>
                   {projectName(row.project)} · {shortId(row.id)}
                 </small>
                 <small>
@@ -137,7 +137,7 @@ export function SessionList({
               <tr>
                 <th>Session / 项目</th>
                 <th className="detail-column">最近活动</th>
-                <UsageHeadings />
+                <UsageHeadings cost={q.data?.data.items.find((row) => row.cost)?.cost} />
                 <th />
               </tr>
             </thead>
@@ -279,7 +279,7 @@ export function GroupWorkspace({ view }: { view: Group }) {
                 )}
               </span>
               <span className="directory-copy">
-                <b title={row.key || "未知"}>{row.label}</b>
+                <b title={view === 'project' ? row.label : row.key || '未知'}>{row.label}</b>
                 <small>
                   {row.threadCount} Sessions · {percent(row.share)}
                 </small>

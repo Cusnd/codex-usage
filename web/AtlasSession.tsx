@@ -1,3 +1,4 @@
+import { navigationSearch } from './navigation';
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy } from "lucide-react";
 import { Fragment, useContext } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
@@ -9,7 +10,7 @@ import type {
   TurnRow,
 } from "../shared/contracts";
 import { AgentUsagePanel } from "./AgentUsage";
-import { compact, exact, projectName } from "./api";
+import { compact, exact, projectDescription, projectName } from "./api";
 import {
   offsetOf,
   ScopeLabel,
@@ -150,7 +151,7 @@ export function TurnTable({
               {global && <th>所属 Session</th>}
               <th>轮次 / 时间</th>
               <th className="detail-column">模型 · 推理强度</th>
-              <UsageHeadings />
+              <UsageHeadings cost={q.data?.data.items.find((row) => row.cost)?.cost} />
               <th />
             </tr>
           </thead>
@@ -162,7 +163,7 @@ export function TurnTable({
                     <td>
                       <Link
                         className="session-name"
-                        to={`/threads/${encodeURIComponent(row.threadId)}?${new URLSearchParams({ ...Object.fromEntries(search), scope: "filtered", returnTo: location.pathname + location.search })}`}
+                        to={`/threads/${encodeURIComponent(row.threadId)}?${navigationSearch(search,{ scope: "filtered", returnTo: location.pathname + location.search })}`}
                         state={{ from: location.pathname + location.search }}
                       >
                         {sessionTitle({ ...row, id: row.threadId })}
@@ -313,7 +314,7 @@ export function SessionPanel({
       <div className="atlas-detail-heading">
         <div>
           <h2>{title}</h2>
-          <p title={detail.data?.data.thread.project || "未知项目"}>
+          <p title={projectDescription(detail.data?.data.thread.project || null)}>
             {projectName(detail.data?.data.thread.project || null)} ·{" "}
             <span className="mono">{shortId(id)}</span>
             <button
@@ -337,7 +338,7 @@ export function SessionPanel({
         <ScopeLabel filters={filters} />
         {!full && (
           <Link
-            to={`/threads/${encodeURIComponent(id)}?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
+            to={`/threads/${encodeURIComponent(id)}?${navigationSearch(location.search,{ returnTo: location.pathname + location.search },true)}`}
             state={{ from: location.pathname + location.search }}
           >
             查看完整 Session <ArrowUpRight size={14} />
@@ -364,7 +365,7 @@ export function SessionPanel({
           {detail.data.data.related.map((row) => (
             <Link
               key={`${row.id}:${row.relation}`}
-              to={`/threads/${encodeURIComponent(row.id)}`}
+              to={`/threads/${encodeURIComponent(row.id)}?${navigationSearch(location.search,{},true)}`}
               state={{ from: location.pathname + location.search }}
             >
               {

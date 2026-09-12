@@ -107,10 +107,13 @@ test("legacy inherited prefix is excluded when parent arrives later in archives"
 }));
 
 test("cost and incomplete metrics retain existing aggregation semantics", async () => fixture(async (s, i, q, d) => {
-  s.saveSettings({ ...s.settings(), costEnabled: true, modelPrices: [{ model: "model-a", input: "1", cachedInput: "0", cacheWrite: "0", output: "2", longContextThreshold: null, longInput: null, longCachedInput: null, longCacheWrite: null, longOutput: null }] });
+  s.saveSettings({ ...s.settings(), costEnabled: true, officialApiPricing: true, modelPrices: [{ model: "model-a", input: "1", cachedInput: "0", cacheWrite: "0", output: "2", longContextThreshold: null, longInput: null, longCachedInput: null, longCacheWrite: null, longOutput: null }] });
   await log(d, "root", [meta("root"), context(), record("root", 1000000)]);
   await log(d, "child", [meta("child", "root"), context(), record("child", 2000000, null)]);
   await i.scan(() => {});
+  // Supply known tiers for this API aggregation fixture; old unmarked logs stay
+  // unknown in production and are covered separately by the upgrade regressions.
+  s.run("UPDATE usage_events SET service_tier='standard',service_tier_source='record'");
   const result = q.agents("root")!;
   assert.equal(Number(result.team.cost!.amount), 3);
   assert.equal(Number(result.self.cost!.amount), 1);

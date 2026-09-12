@@ -5,7 +5,19 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { recentCalendarRange } from '../shared/time-range.js';
 import { copyDirectory } from './copy-directory.js';
+import { browserCommand } from './platform.js';
 import { dataRoot, packageRoot, version, port, base, instance, alive, control, delay, autostartStatus, setAutostart } from './runtime.js';
+
+async function openBrowser(url: string) {
+  const { command, args, wait } = browserCommand(url);
+  const opener = spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true, ...(wait ? { timeout: 15000 } : {}) });
+  await new Promise<void>((resolve, reject) => {
+    opener.once('error', reject);
+    if (wait) opener.once('exit', code => code === 0 ? resolve() : reject(new Error(`${command} exited with code ${code}`)));
+    else opener.once('spawn', resolve);
+  });
+  opener.unref();
+}
 
 async function ensureService() {
   const current = instance();
@@ -114,9 +126,8 @@ async function main() {
     if (action === 'connect' && result.data.binding && !flags['no-open'] && !flags.json) {
       const url = new URL(result.data.binding.verificationUrl);
       if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname))) throw new Error('Invalid cloud verification URL.');
-      const mac = process.platform === 'darwin';
-      const opener = spawn(mac ? '/usr/bin/open' : 'rundll32.exe', mac ? [url.href] : ['url.dll,FileProtocolHandler', url.href], { detached: true, stdio: 'ignore', windowsHide: true });
-      opener.on('error', () => console.error('Open the verificationUrl from this response to finish binding.')); opener.unref();
+      try { await openBrowser(url.href); }
+      catch (error) { console.error(`Browser could not be opened: ${(error as Error).message}. Open ${url.href} to finish binding.`); }
     }
     if (action === 'connect' && flags.wait && result.data.binding) {
       console.error(`Confirm code ${result.data.binding.userCode} at ${result.data.binding.verificationUrl}`);
@@ -169,14 +180,7 @@ async function main() {
     if (port !== 8765) console.error('Custom port: usage.esoren.com still redirects to port 8765.');
     if (command === 'open') {
       try {
-        const mac = process.platform === 'darwin';
-        const opener = spawn(mac ? '/usr/bin/open' : 'rundll32.exe', mac ? [base] : ['url.dll,FileProtocolHandler', base], { detached: true, stdio: 'ignore', windowsHide: true, ...(mac ? { timeout: 15000 } : {}) });
-        await new Promise<void>((resolve, reject) => {
-          opener.once('error', reject);
-          if (mac) opener.once('exit', code => code === 0 ? resolve() : reject(new Error(`open exited with code ${code}`)));
-          else opener.once('spawn', resolve);
-        });
-        opener.unref();
+        await openBrowser(base);
       } catch (error) {
         console.error(`Browser could not be opened: ${(error as Error).message}. Open ${base} manually; the service is running.`);
         process.exitCode = 1;

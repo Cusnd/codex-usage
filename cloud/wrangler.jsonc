@@ -12,6 +12,6 @@
   "d1_databases": [{ "binding": "DB", "database_name": "codex-usage-cloud", "database_id": "56edc711-905f-44d0-a6c1-93b7aea396b4", "migrations_dir": "migrations" }],
   "vars": { "APP_ORIGIN": "https://quota.esoren.com", "GITHUB_CLIENT_ID": "Ov23lib5pCf2LFFUVUar" },
   "ratelimits": [{ "name": "AUTH_LIMITER", "namespace_id": "260910001", "simple": { "limit": 20, "period": 60 } }],
-  "triggers": { "crons": ["0 * * * *"] },
+  "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "invocation_logs": false } }
 }

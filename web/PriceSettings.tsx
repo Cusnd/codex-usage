@@ -1,4 +1,4 @@
-import type { ModelPrice, Settings } from "../shared/contracts";
+import type { ModelPrice, PricingInfo, Settings } from "../shared/contracts";
 import { useData } from "./workspace";
 import { ErrorBox } from "./ui";
 import { X, Plus, RotateCcw } from "lucide-react";
@@ -6,13 +6,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MotionDetails, PresenceList } from "./MotionPrimitives";
 import { useReveal } from "./motion";
 
-type PricingInfo = {
-  prices: ModelPrice[];
-  source: string;
-  checkedAt: string;
-  currency: string;
-  tier: string;
-};
 const fields = [
   ["input", "普通输入"],
   ["cachedInput", "缓存读取"],
@@ -34,6 +27,8 @@ export function PriceSettings({
   setDraft: (s: Settings) => void;
 }) {
   const info = useData<PricingInfo>("pricing");
+  const apiPricing = Boolean(draft.officialApiPricing);
+  const catalog = apiPricing ? info.data?.data : info.data?.data.subscription;
   const prices = draft.modelPrices || [];
   const [open, setOpen] = useState(Boolean(draft.costEnabled));
   useEffect(() => setOpen(Boolean(draft.costEnabled)), [draft.costEnabled]);
@@ -62,8 +57,8 @@ export function PriceSettings({
     <section className="price-settings" ref={root}>
       <div className="setting-row">
         <div>
-          <label htmlFor="costEnabled">显示参考成本</label>
-          <p>在摘要与明细中增加缓存写入、USD 参考成本。默认关闭。</p>
+          <label htmlFor="costEnabled">显示美元参考消耗 / 成本</label>
+          <p>在摘要与明细中增加缓存写入和美元计价结果。默认关闭；开启后默认使用订阅模式。</p>
         </div>
         <input
           id="costEnabled"
@@ -74,28 +69,39 @@ export function PriceSettings({
           }
         />
       </div>
+      <div className="setting-row">
+        <div>
+          <label htmlFor="officialApiPricing">使用官方 API 计价（API Key 用户勾选）</label>
+          <p>按 Token 美元单价估算。已收录模型的订阅 Fast 为 2.5×，API 官方预置 Fast 为 2×；勾选后使用 API 计价规则。</p>
+        </div>
+        <input id="officialApiPricing" type="checkbox" checked={apiPricing}
+          onChange={(e) => setDraft({ ...draft, officialApiPricing: e.target.checked })} />
+      </div>
       <MotionDetails form open={open} onOpenChange={setOpen} duration={260} summary={<>
           模型参考单价 <span>USD / 百万 Token</span>
         </>}>
         <p className="footnote">
-          按 Standard API 文本 Token
-          价格估算，不代表订阅账单；不计工具费用、Fast／Batch／Flex
-          或区域附加费。价格覆盖后对历史记录重新估算。
+          {apiPricing
+            ? "按官方 API 文本 Token 单价及 Fast 倍率估算；不计工具费用、Batch／Flex 或区域附加费。自定义价格保存后对历史记录重新估算。"
+            : "按 Token 美元单价及订阅模式 Fast 倍率计算参考消耗，不代表订阅实际支出。费率表只读，API 自定义单价单独保留。"}
         </p>
         <p className="footnote">
-          非缓存输入＝输入－缓存读取，包含缓存写入；计价时普通输入＝输入－读取－写入。写入缺失时仅提供不完整参考额，不把缺失值当作零。
+          {apiPricing
+            ? "非缓存输入＝输入－缓存读取，包含缓存写入；API 计价时普通输入＝输入－读取－写入。写入缺失时仅提供不完整参考额，不把缺失值当作零。"
+            : "订阅计价区分非缓存输入、缓存读取与输出，非缓存输入包含缓存写入。Fast 使用相应倍率；无法识别档位或模型时保留未计价记录，不按 Standard 补算。"}
         </p>
         <ErrorBox error={info.error} />
         <div className="price-source">
-          {info.data && (
+          {catalog && (
             <>
-              <a href={info.data.data.source} target="_blank" rel="noreferrer">
-                官方 API 定价
+              <a href={catalog.source} target="_blank" rel="noreferrer">
+                {apiPricing ? "官方 API 定价" : "官方 Token 美元单价"}
               </a>
-              <span>核对日期 {info.data.data.checkedAt}</span>
+              <span>核对日期 {catalog.checkedAt}</span>
             </>
           )}
-          <button
+          {info.data && <a href={info.data.data.speedSource} target="_blank" rel="noreferrer">Fast 计价说明</a>}
+          {apiPricing && <button
             type="button"
             className="text-button"
             disabled={!info.data}
@@ -107,8 +113,20 @@ export function PriceSettings({
           >
             <RotateCcw size={14} />
             恢复官方预置
-          </button>
+          </button>}
         </div>
+        {!apiPricing && info.data?.data.subscription && <div className="subscription-price-scroll" tabIndex={0} role="region" aria-label="订阅模式美元参考单价表，可横向滚动">
+          <table className="atlas-table subscription-prices">
+            <thead><tr><th scope="col">模型</th><th scope="col" className="numeric">非缓存输入</th><th scope="col" className="numeric">缓存读取</th><th scope="col" className="numeric">输出</th><th scope="col" className="numeric">Fast 倍率</th></tr></thead>
+            <tbody>{info.data.data.subscription.prices.map((price) => <tr key={price.model}>
+              <th scope="row">{price.model}</th>
+              {[price.input, price.cachedInput, price.output].map((value, index) => <td key={index} className="numeric">{value ?? "未配置"}</td>)}
+              <td className="numeric">{price.fastMultiplier == null ? "未配置" : `${price.fastMultiplier}×`}</td>
+            </tr>)}</tbody>
+          </table>
+          <p className="footnote">表内为 Standard 单价；Fast 单价＝对应单价 × Fast 倍率，单位均为 USD / 百万 Token。</p>
+        </div>}
+        {apiPricing && <>
         <div ref={resetMotion}>
         <PresenceList key={reset} className="price-model-list" items={prices.map((price, index) => ({ price, index, id: keys.current[index] }))} itemKey={(row) => row.id}>
           {({ price: p, index, id }, _position, present) => (
@@ -140,6 +158,13 @@ export function PriceSettings({
                   <X size={16} />
                 </button>
               </div>
+              <label className="price-threshold">
+                Fast 倍率（应用于该模型全部 API Token 单价）
+                <input inputMode="decimal" pattern="[0-9]{1,8}(\.[0-9]{1,6})?" placeholder="未配置"
+                  aria-label={`模型 ${p.model} Fast 倍率`}
+                  value={(p.fastMultiplier === undefined ? info.data?.data.prices.find((price) => price.model === p.model)?.fastMultiplier : p.fastMultiplier) ?? ""}
+                  onChange={(e) => change(index, { fastMultiplier: e.target.value || null })} />
+              </label>
               <div className="price-fields">
                 {fields.map(([field, label]) => (
                   <label key={field}>
@@ -216,6 +241,7 @@ export function PriceSettings({
                   longCachedInput: null,
                   longCacheWrite: null,
                   longOutput: null,
+                  fastMultiplier: null,
                 },
               ],
             });
@@ -228,6 +254,7 @@ export function PriceSettings({
           空白表示未配置，0 表示明确免费。模型 ID
           精确匹配，不自动把未知模型或版本映射成其他模型。
         </p>
+        </>}
       </MotionDetails>
     </section>
   );

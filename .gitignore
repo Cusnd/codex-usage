@@ -23,3 +23,5 @@ cloud/.dev.vars
 cloud/.dev.vars.*
 !cloud/.dev.vars.example
 cloud/.deploy/
+
+cloud/.generated/

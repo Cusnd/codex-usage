@@ -7,6 +7,7 @@ import { captureProcess as exec } from './capture-process.mjs';
 import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { linuxSystemdSmoke } from './linux-systemd-smoke.mjs';
 const root = await mkdtemp(path.join(os.tmpdir(), 'codex-package-中文 空格-'));
 const project = process.cwd();
 const packageName = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8')).name;
@@ -14,7 +15,7 @@ const portServer = createServer();
 await new Promise(r => portServer.listen(0, '127.0.0.1', r));
 const port = portServer.address().port;
 await new Promise(r => portServer.close(r));
-const env = { ...process.env, PORT: String(port), CODEX_USAGE_DATA_DIR: path.join(root, 'data'), CODEX_HOME: path.join(root, 'codex'), CODEX_BIN: path.join(root, 'missing.exe'), CODEX_USAGE_STARTUP_DIR: path.join(root, 'Startup') };
+const env = { ...process.env, PORT: String(port), CODEX_USAGE_DATA_DIR: path.join(root, process.platform === 'linux' ? 'data % $ 中文' : 'data'), CODEX_HOME: path.join(root, 'codex'), CODEX_BIN: path.join(root, 'missing.exe'), CODEX_USAGE_STARTUP_DIR: path.join(root, 'Startup') };
 const prefix = path.join(root, 'install');
 // Exercise npm's generated shim using the selected Node runtime.
 const inheritedPath = process.env.PATH ?? process.env.Path ?? '';
@@ -59,6 +60,21 @@ try {
   await inspectPackages(path.join(prefix, ...(windows ? [] : ['lib']), 'node_modules'));
   assert.equal((await run('doctor', '--json')).node, process.version);
   assert.equal((await run('status', '--json')).running, false);
+  if (process.platform === 'linux') {
+    const fallbackHome = path.join(root, 'isolated-home');
+    for (const xdg of ['', path.join(root, 'xdg-data')]) {
+      const defaults = { ...env, HOME: fallbackHome, XDG_DATA_HOME: xdg };
+      delete defaults.CODEX_USAGE_DATA_DIR;
+      const doctor = JSON.parse((await exec(process.execPath, [cli, 'doctor', '--json'], { env: defaults })).stdout);
+      assert.equal(doctor.dataRoot, path.join(xdg || path.join(fallbackHome, '.local/share'), 'CodexUsage'));
+    }
+    const noManager = { ...env, XDG_RUNTIME_DIR: path.join(root, 'no-user-runtime'), DBUS_SESSION_BUS_ADDRESS: `unix:path=${path.join(root, 'no-user-bus')}` };
+    assert.equal(JSON.parse((await exec(process.execPath, [cli, 'start', '--json'], { env: noManager })).stdout).running, true);
+    const doctor = JSON.parse((await exec(process.execPath, [cli, 'doctor', '--json'], { env: noManager })).stdout);
+    assert.equal(doctor.service, 'verified', 'ordinary background start does not require systemd');
+    assert.equal(doctor.autostart.supported, false);
+    await run('stop', '--json');
+  }
   const both = await Promise.all([run('start', '--json'), run('start', '--json')]);
   assert.ok(both.every(x => x.running));
   const recordFile = path.join(env.CODEX_USAGE_DATA_DIR, 'instance.json');
@@ -66,6 +82,19 @@ try {
   await run('start', '--json');
   assert.equal(JSON.parse(await readFile(recordFile, 'utf8')).pid, record.pid);
   const base = `http://127.0.0.1:${port}`;
+  if (process.platform === 'linux') {
+    const headless = { ...env, DISPLAY: '', WAYLAND_DISPLAY: '', XDG_RUNTIME_DIR: path.join(root, 'no-user-runtime'), DBUS_SESSION_BUS_ADDRESS: `unix:path=${path.join(root, 'no-user-bus')}` };
+    await assert.rejects(exec(process.execPath, [cli, 'open', '--json'], { env: headless }), error => {
+      assert.match(error.stderr, /No desktop session/);
+      assert.ok(error.stderr.includes(base));
+      assert.equal(JSON.parse(error.stdout).running, true);
+      return true;
+    });
+    const doctor = JSON.parse((await exec(process.execPath, [cli, 'doctor', '--json'], { env: headless })).stdout);
+    assert.equal(doctor.autostart.supported, false);
+    assert.match(doctor.autostart.reason, /user manager is unavailable|non-root/);
+    assert.equal(doctor.service, 'verified');
+  }
   const page = await fetch(base).then(r => r.text());
   assert.ok(page.includes('<html'));
   assert.equal((await fetch(base + page.match(/src="([^"]+\.js)"/)[1])).status, 200);
@@ -171,6 +200,7 @@ try {
     assert.equal((await run('status', '--json')).running, false, 'launchd does not restart manually stopped service');
     await exec('/bin/launchctl', ['bootout', launchJob]); launchJob = undefined;
   }
+  if (process.platform === 'linux') await linuxSystemdSmoke({ root, env, cli, run, base });
   await run('skill', 'install', '--json');
   assert.ok((await readFile(path.join(env.CODEX_HOME, 'skills/codex-usage/SKILL.md'), 'utf8')).includes('codex-usage'));
   await run('skill', 'uninstall', '--json');
@@ -200,7 +230,7 @@ try {
   await Promise.all([run('start', '--json'), run('start', '--json')]);
   assert.notEqual(JSON.parse(await readFile(recordFile, 'utf8')).pid, crashed.pid);
   await run('stop', '--json');
-  if (process.platform === 'darwin') {
+  if (process.platform === 'darwin' || process.platform === 'linux') {
     const lockOwner = createServer(socket => socket.destroy());
     await new Promise((resolve, reject) => { lockOwner.once('error', reject); lockOwner.listen(serviceGuardAddress(env.CODEX_USAGE_DATA_DIR), resolve); });
     try { await assert.rejects(run('start', '--json')); assert.ok(lockOwner.listening); }

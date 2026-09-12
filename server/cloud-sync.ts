@@ -20,6 +20,9 @@ import {
 } from "../shared/cloud.js";
 import type { LimitObservation } from "./refresh.js";
 import type { Store } from "./db.js";
+import { UsageSync } from './usage-sync.js';
+import type { V3Uploader } from './sync-v3/uploader.js';
+import type { AccountUsage } from '../shared/contracts.js';
 
 type Credentials = {
   origin: string;
@@ -36,14 +39,20 @@ type State = Omit<
   outbox: CloudSnapshot | null;
   fingerprint: string | null;
   failures: number;
+  fullUsage: boolean;
+  pausePending: boolean | null;
 };
 type Options = {
   credentialFile: string | null;
   observation: () => Promise<LimitObservation>;
+  refreshLimits: () => Promise<void>;
   origin?: string;
   fetch?: typeof fetch;
   now?: () => number;
   random?: () => number;
+  history?: () => Promise<{data:AccountUsage|null;collectedAt:string|null;identityKey:string|null}>;
+  collection?: () => {running:boolean;updatedAt:string|null;error:string|null};
+  uploader?: V3Uploader;
 };
 const empty = (): State => ({
   enabled: false,
@@ -60,6 +69,8 @@ const empty = (): State => ({
   outbox: null,
   fingerprint: null,
   failures: 0,
+  fullUsage: false,
+  pausePending: null,
 });
 const token = () => randomBytes(32).toString("base64url");
 const iso = (n: number) => new Date(n).toISOString();
@@ -136,6 +147,7 @@ export class CloudSync {
   readonly origin: string;
   private now: () => number;
   private fetcher: typeof fetch;
+  private usage: UsageSync;
   constructor(
     private store: Store,
     private options: Options,
@@ -159,6 +171,10 @@ export class CloudSync {
     this.origin = url.origin;
     this.now = options.now || Date.now;
     this.fetcher = options.fetch || fetch;
+    this.usage = new UsageSync(store, (route,method,body) => {
+      const v3Account = !!options.uploader && route === 'sync/accounts';
+      return this.request(v3Account ? 'accounts/observations' : route,method,body,true,v3Account ? 3 : 2);
+    }, options.observation, options.history, this.now, options.collection);
     store.db.exec(
       "CREATE TABLE IF NOT EXISTS cloud_sync (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)",
     );
@@ -190,6 +206,7 @@ export class CloudSync {
     }
   }
   status(): CloudStatus {
+    const usage=this.options.uploader?.status()||this.usage.status();
     const {
       enabled,
       revokePending,
@@ -211,12 +228,14 @@ export class CloudSync {
       deviceName,
       userLogin,
       binding,
-      collectedAt,
-      uploadedAt,
-      nextUploadAt,
-      error,
-      pending: !!this.state.outbox,
+      collectedAt: this.state.fullUsage ? usage.collectedAt : collectedAt,
+      uploadedAt: this.state.fullUsage ? usage.uploadedAt : uploadedAt,
+      nextUploadAt: this.state.fullUsage && deviceId ? usage.nextUploadAt : nextUploadAt,
+      error: this.state.fullUsage ? usage.error || this.usage.status().error || error : error,
+      pending: this.state.fullUsage ? usage.pendingThreads > 0 : !!this.state.outbox,
       running: !!this.active,
+      fullUsage: this.state.fullUsage,
+      usage: this.state.fullUsage ? usage : null,
     };
   }
   private save() {
@@ -253,9 +272,10 @@ export class CloudSync {
     method: string,
     body?: unknown,
     bearer = false,
+    version = 1,
   ) {
     this.controller = new AbortController();
-    const response = await this.fetcher(this.origin + "/api/v1/" + route, {
+    const response = await this.fetcher(this.origin + `/api/v${version}/` + route, {
       method,
       headers: {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -306,7 +326,7 @@ export class CloudSync {
         data && typeof data === "object" && !Array.isArray(data) ? data : {},
     };
   }
-  async connect(deviceName = hostname()) {
+  async connect(deviceName = hostname(), fullUsage = false) {
     if (this.starting)
       throw Object.assign(new Error("正在发起绑定，请稍候。"), {
         statusCode: 409,
@@ -351,6 +371,7 @@ export class CloudSync {
         "device-authorizations",
         "POST",
         { deviceName, tokenHash: hash(c.token) },
+        false, fullUsage ? 2 : 1,
       );
       if (
         !response.ok ||
@@ -366,6 +387,7 @@ export class CloudSync {
       this.saveCredentials(c);
       this.state = {
         ...empty(),
+        fullUsage,
         deviceName,
         binding: {
           userCode: data.userCode,
@@ -388,6 +410,7 @@ export class CloudSync {
   async capture() {
     if (
       this.closed ||
+      this.state.fullUsage ||
       !this.state.enabled ||
       !this.state.deviceId ||
       !this.credentials ||
@@ -427,14 +450,29 @@ export class CloudSync {
   async setEnabled(enabled: boolean) {
     if (!this.credentials || !this.state.deviceId || this.state.revokePending)
       throw Object.assign(new Error("请先完成设备绑定。"), { statusCode: 409 });
+    const resuming=enabled&&!this.state.enabled,epoch=++this.epoch;
+    if(resuming){
+      // Keep uploads paused while obtaining a current observation, even when automatic refresh is off.
+      await this.options.refreshLimits();
+      if(this.closed||epoch!==this.epoch||!this.credentials||this.state.revokePending)return this.status();
+      this.usage.refreshAccounts();
+    }
     this.state.enabled = enabled;
-    ++this.epoch;
-    if (!enabled) this.controller?.abort();
+    if(this.state.fullUsage)this.state.pausePending=!enabled;
+    if (!enabled) {this.controller?.abort();this.options.uploader?.cancel();}
     this.save();
     if (enabled) {
       await this.capture();
-      void this.tick();
+      // A pause request from the preceding epoch must finish before the resume request is sent.
+      if(this.active)await this.active;
+      if(!this.closed&&epoch===this.epoch)void this.tick();
     }
+    return this.status();
+  }
+  async setFullUsage(fullUsage: boolean) {
+    this.state.fullUsage=fullUsage;this.save();
+    if(!fullUsage)await this.options.uploader?.unbind();
+    else void this.tick();
     return this.status();
   }
   async disconnect() {
@@ -447,10 +485,12 @@ export class CloudSync {
       : null;
     ++this.epoch;
     this.controller?.abort();
+    this.options.uploader?.cancel();
     this.save();
     if (this.active) await this.active;
     if (this.credentials) await this.tick();
     else {
+      await this.options.uploader?.unbind();
       this.state = empty();
       this.save();
     }
@@ -523,6 +563,7 @@ export class CloudSync {
       if (!current()) return;
       if (response.ok || response.status === 401 || response.status === 410) {
         this.saveCredentials(null);
+        await this.options.uploader?.unbind();
         this.state = empty();
         this.save();
       } else
@@ -583,6 +624,22 @@ export class CloudSync {
       this.save();
       await this.capture();
     }
+    if(this.state.fullUsage && this.state.deviceId && this.state.pausePending!==null && current()) {
+      const pending=this.state.pausePending;
+      const result=await this.request('sync/pause','PUT',{paused:pending},true,2);
+      if(!current())return;
+      if(!result.response.ok){this.retry(result.response);return;}
+      this.state.pausePending=null;this.save();
+    }
+    if (this.state.enabled && this.state.fullUsage && this.state.deviceId && current()) {
+      const enabled=()=>current()&&this.state.enabled&&this.state.fullUsage;
+      if(this.options.uploader)await Promise.all([
+        this.options.uploader.tick({deviceId:this.state.deviceId,token:this.credentials!.token,origin:this.origin},enabled),
+        this.usage.tick(this.state.deviceId,enabled,'accounts'),
+      ]);
+      else await this.usage.tick(this.state.deviceId,enabled);
+      return;
+    }
     if (!this.state.enabled || !this.state.outbox || !current()) return;
     // Recheck the selected identity immediately before retrying persisted data.
     const observation = await this.options.observation();
@@ -642,6 +699,7 @@ export class CloudSync {
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
     this.controller?.abort();
+    await this.options.uploader?.close();
     if (this.active) await this.active;
   }
 }

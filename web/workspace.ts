@@ -1,18 +1,22 @@
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import type { Settings, Status, Filter } from "../shared/contracts";
 import { dataQuery } from "./data-query";
 import { resolveTrendBucket } from "../shared/time-range";
-import { currentTime } from './runtime';
+import { USAGE_QUERY_REVISION } from "../shared/query-revision";
+import { currentTime, cloudMode } from './runtime';
 import { markQueryMotion } from "./motion-state";
 import { useResultMotion } from "./motion-data";
+import { dataSourceRevision, subscribeDataSource } from './data-source';
 export const defaultSettings: Settings = {
   localInterval: 60,
   accountInterval: 300,
   timezone: "America/New_York",
   timezoneMode: "manual",
+  costEnabled: false,
+  officialApiPricing: false,
 };
 export const Workspace = createContext({
   settings: defaultSettings,
@@ -24,17 +28,24 @@ export function useData<T>(
   params: Record<string, unknown> = {},
   enabled = true,
 ) {
+  useSyncExternalStore(subscribeDataSource, dataSourceRevision, dataSourceRevision);
   const { settings } = useContext(Workspace);
   const [search] = useSearchParams();
-  const query = useQuery({
-    enabled,
-    ...dataQuery<T>(
+  const options = dataQuery<T>(
       route,
-      params,
+      cloudMode ? {...params,deviceIds:search.getAll('deviceIds')} : params,
       settings.timezone,
       search.get("range") !== "custom",
-    ),
-    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === route ? previous : undefined,
+    );
+  const pricingKey = !cloudMode && route.startsWith("local/")
+    ? JSON.stringify([USAGE_QUERY_REVISION, Boolean(settings.costEnabled), Boolean(settings.officialApiPricing), settings.officialApiPricing ? settings.modelPrices : null])
+    : null;
+  const query = useQuery({
+    enabled,
+    ...options,
+    queryKey: pricingKey == null ? options.queryKey : [...options.queryKey, pricingKey],
+    placeholderData: cloudMode ? undefined : (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === route && (pricingKey == null || previousQuery.queryKey.at(-1) === pricingKey) ? previous : undefined,
   });
   const change = useResultMotion(query, search, route.startsWith("account") ? "account" : "local");
   return { ...query, motion: change };

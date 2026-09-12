@@ -3,10 +3,10 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dataRoot, port, version, instanceFile, instance, alive } from './runtime.js';
-import { serviceGuardAddress } from './platform.js';
+import { serviceGuardAddress, supportedPlatform } from './platform.js';
 
 mkdirSync(dataRoot, { recursive: true });
-if (!(process.platform === 'win32' && process.arch === 'x64') && !(process.platform === 'darwin' && ['x64', 'arm64'].includes(process.arch))) throw new Error('Managed service supports Windows x64 and macOS x64/arm64 only.');
+if (!supportedPlatform()) throw new Error('Managed service supports Windows x64 and macOS/Linux x64/arm64 only.');
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be 1–65535.');
 // An OS-owned listener serializes all starters and is released even after a crash.
 // Unlike a PID-only lock, stale-file recovery cannot delete a new starter's lock.

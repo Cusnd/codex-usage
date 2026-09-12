@@ -20,7 +20,8 @@ export class ExampleStore {
       CREATE TABLE usage_events(file TEXT,event_key TEXT,thread_id TEXT,turn_id TEXT,response_id TEXT,
       at TEXT,project TEXT,model TEXT,effort TEXT,kind TEXT,signature TEXT,input_tokens INTEGER,
       cached_input_tokens INTEGER,cache_write_input_tokens INTEGER,output_tokens INTEGER,
-      reasoning_output_tokens INTEGER,total_tokens INTEGER,incomplete INTEGER,excluded INTEGER,active INTEGER);
+      reasoning_output_tokens INTEGER,total_tokens INTEGER,incomplete INTEGER,excluded INTEGER,active INTEGER,
+      service_tier TEXT,service_tier_source TEXT);
       CREATE VIEW effective_events AS SELECT * FROM usage_events WHERE active=1;`);
     this.db.create_function('local_bucket', (at: string, zone: string, bucket: string) => {
       const d = DateTime.fromISO(at, { zone: 'utc' }).setZone(zone);

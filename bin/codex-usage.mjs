@@ -4,8 +4,8 @@ if (process.versions.node.includes('-') || !((major === 22 && minor >= 13) || ma
   console.error(`Codex Usage requires Node.js 22.13+ (22.x), 24.x, or 26.x; current version: ${process.version}. Install a supported Node.js release.`);
   process.exit(1);
 }
-if (!(process.platform === 'win32' && process.arch === 'x64') && !(process.platform === 'darwin' && ['x64', 'arm64'].includes(process.arch))) {
-  console.error(`Codex Usage supports Windows x64 and macOS x64/arm64; current platform: ${process.platform}/${process.arch}.`);
+if (!(process.platform === 'win32' && process.arch === 'x64') && !(['darwin', 'linux'].includes(process.platform) && ['x64', 'arm64'].includes(process.arch))) {
+  console.error(`Codex Usage supports Windows x64 and macOS/Linux x64/arm64; current platform: ${process.platform}/${process.arch}.`);
   process.exit(1);
 }
 await import('../dist/server/cli.js');

@@ -9,7 +9,7 @@ export function openAccountRpc(command: CodexCommand, root: string, signal: Abor
   signal.throwIfAborted();
   let child;
   try { child = spawn(command.bin, [...command.args, "app-server"], {
-    windowsHide: true, detached: process.platform === 'darwin', stdio: "pipe", env: { ...process.env, CODEX_HOME: root },
+    windowsHide: true, detached: process.platform === 'darwin' || process.platform === 'linux', stdio: "pipe", env: { ...process.env, CODEX_HOME: root },
   }); } catch { throw new AccountError("CLI_START", "无法启动 Codex App Server，请检查安装入口。"); }
   let next = 1, failure: AccountError | null = null;
   const pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
@@ -40,7 +40,7 @@ export function openAccountRpc(command: CodexCommand, root: string, signal: Abor
     fail(new AccountError("CANCELLED", "账户读取已取消。"));
     reader.close(); signal.removeEventListener("abort", abort);
     closing = (async () => {
-      if (process.platform === 'darwin' && child.pid) {
+      if ((process.platform === 'darwin' || process.platform === 'linux') && child.pid) {
         // Only this spawned session's process group, including the npm wrapper's native child.
         const group = -child.pid;
         const signalGroup = (signal: NodeJS.Signals | 0) => {

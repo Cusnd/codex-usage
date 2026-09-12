@@ -1,13 +1,18 @@
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DateTime } from "luxon";
 import type { Settings } from "../shared/contracts.js";
 import { json } from "./util.js";
 import { officialPrices } from "./pricing.js";
+import { invalidTokenStorageSql } from '../shared/exact-query-engine.js';
+import { tokenFields } from '../shared/query-values.js';
 
 export class Store {
   db: DatabaseSync;
+  private transactionDepth = 0;
+  private prepared = new Map<string,StatementSync>();
+  private cacheReady = false;
   constructor(filename: string) {
     if (filename !== ":memory:")
       mkdirSync(path.dirname(filename), { recursive: true });
@@ -22,8 +27,8 @@ export class Store {
       CREATE TABLE IF NOT EXISTS usage_events (
         file TEXT NOT NULL, event_key TEXT NOT NULL, thread_id TEXT NOT NULL, turn_id TEXT, response_id TEXT,
         at TEXT NOT NULL, project TEXT, model TEXT, effort TEXT, kind TEXT NOT NULL, signature TEXT,
-        input_tokens INTEGER, cached_input_tokens INTEGER, cache_write_input_tokens INTEGER,
-        output_tokens INTEGER, reasoning_output_tokens INTEGER, total_tokens INTEGER,
+        input_tokens TEXT, cached_input_tokens TEXT, cache_write_input_tokens TEXT,
+        output_tokens TEXT, reasoning_output_tokens TEXT, total_tokens TEXT,
         incomplete INTEGER NOT NULL DEFAULT 0, excluded INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY(file,event_key)
       );
@@ -59,6 +64,12 @@ export class Store {
       this.db.exec(
         "ALTER TABLE usage_events ADD COLUMN active INTEGER NOT NULL DEFAULT 0",
       );
+    if (tokenFields.some(field => String(columns.find(column => column.name === field)?.type).toUpperCase() !== 'TEXT')) this.migrateTokenText();
+    // Add metadata after the exact-token migration so old INTEGER schemas keep
+    // their existing validation and no token value is rewritten by this upgrade.
+    for (const column of ['service_tier', 'service_tier_source'])
+      if (!columns.some(c => c.name === column))
+        this.db.exec(`ALTER TABLE usage_events ADD COLUMN ${column} TEXT`);
     this.db.exec(`DROP VIEW IF EXISTS effective_events;
       CREATE VIEW effective_events AS SELECT * FROM usage_events WHERE active=1;
       CREATE INDEX IF NOT EXISTS active_time ON usage_events(at) WHERE active=1;
@@ -80,30 +91,76 @@ export class Store {
       );
       return bucket === "hour" ? d.startOf("hour").toISO()! : d.toISODate()!;
     });
+    this.cacheReady = true;
+  }
+  /** Bound prepared statements only; query results and parameters are never cached. */
+  private statement(sql:string,read:boolean):StatementSync {
+    const key=(read?'read:':'write:')+sql,existing=this.cacheReady?this.prepared.get(key):undefined;
+    if(existing){this.prepared.delete(key);this.prepared.set(key,existing);return existing;}
+    const statement=this.db.prepare(sql);if(read)statement.setReadBigInts(true);
+    if(this.cacheReady){this.prepared.set(key,statement);if(this.prepared.size>256)this.prepared.delete(this.prepared.keys().next().value!);}
+    return statement;
   }
   all<T = Record<string, any>>(sql: string, params: SQLInputValue[] = []): T[] {
-    const statement = this.db.prepare(sql);
-    statement.setReadBigInts(true);
-    return statement.all(...params) as T[];
+    return this.statement(sql,true).all(...params) as T[];
   }
   one<T = Record<string, any>>(
     sql: string,
     params: SQLInputValue[] = [],
   ): T | undefined {
-    return this.all<T>(sql, params)[0];
+    return this.statement(sql,true).get(...params) as T|undefined;
   }
   run(sql: string, params: SQLInputValue[] = []) {
-    return this.db.prepare(sql).run(...params);
+    // node:sqlite binds Number as DOUBLE; TEXT affinity would otherwise store a safe integer as "123.0".
+    // Only already-safe integer Numbers may be converted. Unsafe values are never reconstructed this way.
+    return this.statement(sql,false).run(...params.map(value => typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : value));
   }
   transaction(fn: () => void) {
     this.db.exec("BEGIN IMMEDIATE");
+    this.transactionDepth++;
     try {
       fn();
       this.db.exec("COMMIT");
     } catch (e) {
       this.db.exec("ROLLBACK");
       throw e;
+    } finally { this.transactionDepth--; }
+  }
+  /** Every safety probe, SQL aggregate and fallback page sees the same local database snapshot. */
+  readSnapshot<T>(fn: () => T): T {
+    if (this.transactionDepth) return fn();
+    this.db.exec('BEGIN'); this.transactionDepth++;
+    try { const value = fn(); this.db.exec('COMMIT'); return value; }
+    catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    finally { this.transactionDepth--; }
+  }
+  private migrateTokenText(): void {
+    const invalid = this.one(`SELECT 1 invalid FROM usage_events WHERE ${invalidTokenStorageSql} LIMIT 1`);
+    if (invalid) {
+      this.db.close();
+      throw Object.assign(new Error('Existing token storage contains REAL or noncanonical values. Reimport the affected source; rounded values cannot be migrated as exact integers.'), { code: 'TOKEN_TEXT_MIGRATION_REQUIRED' });
     }
+    const names = ['file','event_key','thread_id','turn_id','response_id','at','project','model','effort','kind','signature',...tokenFields,'incomplete','excluded','active'];
+    const existing = this.all('PRAGMA table_info(usage_events)').map(column => column.name);
+    if (existing.length !== names.length || existing.some(name => !names.includes(name))) throw new Error('Unsupported usage_events schema for token migration');
+    this.transaction(() => {
+      this.db.exec(`CREATE TABLE usage_events_exact (
+        file TEXT NOT NULL,event_key TEXT NOT NULL,thread_id TEXT NOT NULL,turn_id TEXT,response_id TEXT,
+        at TEXT NOT NULL,project TEXT,model TEXT,effort TEXT,kind TEXT NOT NULL,signature TEXT,
+        ${tokenFields.map(k => `${k} TEXT`).join(',')},
+        incomplete INTEGER NOT NULL DEFAULT 0,excluded INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(file,event_key));
+        INSERT INTO usage_events_exact(${names.join(',')}) SELECT ${names.map(name => (tokenFields as readonly string[]).includes(name) ? `CAST(${name} AS TEXT)` : name).join(',')} FROM usage_events;
+        DROP VIEW IF EXISTS effective_events;
+        DROP TABLE usage_events;
+        ALTER TABLE usage_events_exact RENAME TO usage_events;
+        CREATE INDEX events_identity ON usage_events(event_key);
+        CREATE INDEX events_turn ON usage_events(thread_id,turn_id,kind);
+        CREATE INDEX events_time ON usage_events(at);
+        CREATE INDEX events_thread_time ON usage_events(thread_id,at);
+        CREATE INDEX events_model_time ON usage_events(model,at);
+        CREATE INDEX events_project_time ON usage_events(project,at);`);
+    });
   }
   settings(): Settings {
     const stored = JSON.parse(
@@ -112,6 +169,7 @@ export class Store {
     return {
       ...stored,
       costEnabled: stored.costEnabled ?? false,
+      officialApiPricing: stored.officialApiPricing ?? false,
       modelPrices: stored.modelPrices ?? officialPrices,
       timezoneMode: stored.timezoneMode || "manual",
       timezone:
@@ -143,6 +201,7 @@ export class Store {
     );
   }
   close() {
+    this.prepared.clear();
     this.db.close();
   }
 }

@@ -1,4 +1,4 @@
-name: Windows and macOS checks
+name: Platform checks
 run-name: ${{ inputs.revision && format('Release checks {0}', inputs.revision) || format('Compatibility {0}', github.ref_name) }}
 on:
   pull_request:
@@ -47,6 +47,8 @@ jobs:
           - { runner: windows-latest, platform: win32, arch: x64 }
           - { runner: macos-15, platform: darwin, arch: arm64 }
           - { runner: macos-15-intel, platform: darwin, arch: x64 }
+          - { runner: ubuntu-24.04, platform: linux, arch: x64 }
+          - { runner: ubuntu-24.04-arm, platform: linux, arch: arm64 }
         node: ['22.13.0', '22.x', '24.0.0', '24.x', '26.0.0', '26.x']
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +89,7 @@ jobs:
     needs: [inspect, platform-checks]
     runs-on: ubuntu-latest
     steps:
-      - run: echo 'All 18 native platform/runtime jobs passed.'
+      - run: echo 'All 30 native platform/runtime jobs passed.'
   result:
     name: Compatibility result
     if: always()

@@ -1,5 +1,5 @@
 import { Store } from "./db.js";
-import { Importer } from "./importer.js";
+import type { LocalImporter } from './collector/importer.js';
 import { AccountError, type AccountSource } from "./account.js";
 import type { SourceStatus, AccountStatus, Status, RefreshSource, AccountLimits } from "../shared/contracts.js";
 import { json } from "./util.js";
@@ -12,6 +12,7 @@ const accountInitial = (): AccountStatus => ({ ...initial(), provider: null, fal
 type Job = "local" | "accountLimits" | "accountHistory";
 type AccountJob = Exclude<Job, "local">;
 export type LimitObservation = {
+  stableIdentity?: string | null;
   identityKey: string | null; identityKnown: boolean; data: AccountLimits | null;
   provider: AccountStatus['provider']; collectedAt: string | null; attemptedAt: string;
   errorCode: string | null; refreshInterval: number;
@@ -22,7 +23,7 @@ export class Refresh {
   private successes: Partial<Record<AccountJob, string>> = {};
   private closed = false;
   private limitsListeners = new Set<() => Promise<void>>();
-  constructor(private store: Store, private importer: Importer, private account: AccountSource) {
+  constructor(private store: Store, private importer: LocalImporter, private account: AccountSource) {
     this.status.local.updatedAt = store.one("SELECT MAX(updated_at) at FROM source_files")?.at || null;
     this.status.local.events = Number(store.one("SELECT COUNT(*) n FROM effective_events")!.n);
     this.status.local.issues = Number(store.one("SELECT COALESCE(SUM(issues),0) n FROM source_files")!.n);
@@ -72,7 +73,9 @@ export class Refresh {
     const identityError = ['IDENTITY_CHANGED', 'IDENTITY_UNKNOWN', 'LOGIN_EXPIRED', 'UNSUPPORTED_LOGIN', 'CREDENTIALS_MISSING', 'CREDENTIALS_INVALID', 'CREDENTIALS_UNREADABLE'].includes(state.errorCode || '');
     // A just-verified App Server identity may use keyring storage and have no file-based confirmation.
     const identityKnown = !!state.identityKey && !identityError && (state.identityConfirmed || (!state.error && this.successes.accountLimits === state.identityKey));
-    return { identityKey: identityKnown ? state.identityKey : null, identityKnown, data: identityKnown ? data : null,
+    const selection = await this.account.selection();
+    return { stableIdentity: identityKnown && selection.confirmed && selection.identity?.key===state.identityKey ? selection.identity.key : null,
+      identityKey: identityKnown ? state.identityKey : null, identityKnown, data: identityKnown ? data : null,
       provider: identityKnown ? state.provider : null, collectedAt: identityKnown ? state.updatedAt : null,
       attemptedAt: state.startedAt || new Date().toISOString(), errorCode: state.errorCode,
       refreshInterval: this.store.settings().accountInterval };
@@ -92,6 +95,11 @@ export class Refresh {
     }
     this.aggregate();
     return this.status;
+  }
+  async refreshAccountLimits() {
+    this.trigger('accountLimits', true);
+    // Resuming cloud sync must not wait for an unrelated history import or account-history job.
+    await this.jobs.accountLimits;
   }
   private async run(key: Job) {
     const s = this.status[key];
@@ -127,5 +135,5 @@ export class Refresh {
     }
   }
   async wait() { await Promise.all(Object.values(this.jobs)); }
-  async close() { this.closed = true; this.importer.stopped = true; this.account.close(); await this.wait(); }
+  async close() { this.closed = true; this.importer.stopped = true; this.account.close(); await this.importer.close?.(); await this.wait(); }
 }

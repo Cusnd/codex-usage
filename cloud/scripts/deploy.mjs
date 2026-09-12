@@ -5,6 +5,28 @@ import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 const cloud = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(cloud, '..');
+const preview = process.argv.includes('--preview');
+const prepareOnly = process.argv.includes('--prepare-only');
+const deploymentInputs = ['cloud', 'shared', 'web', 'vite.config.ts', 'tsconfig.json', 'package.json', 'package-lock.json'];
+function git(args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
+  if (result.error || result.status !== 0) throw new Error(`Cannot verify preview source: git ${args[0]} failed.`);
+  return result.stdout.trim();
+}
+let previewRevision;
+function verifyPreviewSource() {
+  if (!preview) return;
+  if (git(['branch', '--show-current']) !== 'preview') throw new Error('Preview deployment requires the preview branch.');
+  if (git(['status', '--porcelain', '--untracked-files=all', '--', ...deploymentInputs]))
+    throw new Error('Commit all cloud deployment inputs before deploying preview.');
+  const revision = git(['rev-parse', 'HEAD']);
+  if (previewRevision && previewRevision !== revision) throw new Error('Preview source changed during deployment.');
+  if (git(['ls-remote', 'origin', 'refs/heads/preview']).split(/\s+/)[0] !== revision)
+    throw new Error('Push this snapshot to origin/preview before deploying preview.');
+  previewRevision = revision;
+}
+verifyPreviewSource();
+const versionArgs = preview ? ['--tag', `preview-${previewRevision.slice(0, 12)}`, '--message', `preview source ${previewRevision}`] : [];
 const wrangler = path.join(cloud, 'node_modules/wrangler/bin/wrangler.js');
 const config = JSON.parse(readFileSync(path.join(cloud, 'wrangler.jsonc'), 'utf8'));
 if (config.name !== 'codex-usage-cloud' || config.main !== 'src/index.ts' || config.vars.APP_ORIGIN !== 'https://quota.esoren.com' || !config.vars.GITHUB_CLIENT_ID || config.d1_databases[0].database_id.startsWith('00000000'))
@@ -15,7 +37,7 @@ function run(script, args, cwd = cloud) {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Command failed: ${path.basename(script)} ${args[0]}`);
 }
-run(path.join(cloud, 'node_modules/typescript/bin/tsc'), ['--noEmit']);
+run(path.join(cloud, 'node_modules/typescript/bin/tsc'), ['--noEmit', '--project', 'tsconfig.deploy.json']);
 run(path.join(root, 'node_modules/vite/bin/vite.js'), ['build', '--mode', 'cloud'], root);
 run(wrangler, ['deploy', '--dry-run', '--outdir', '.deploy/bundle', '--metafile', '.deploy/bundle-meta.json']);
 const meta = JSON.parse(readFileSync(path.join(local, 'bundle-meta.json'), 'utf8'));
@@ -25,20 +47,53 @@ for (const file of files(path.join(cloud, 'build')).filter(file => /\.(js|html)$
   const text = readFileSync(file, 'utf8');
   if (/node:sqlite|SYNTHETIC-NEVER-UPLOAD|synthetic-account-private-id|CODEX_HOME|cloud-credentials\.json|synthetic-browser-user/.test(text)) throw new Error('Private/test data found in cloud assets.');
 }
+verifyPreviewSource();
+if (prepareOnly) {
+  console.log('Deployment preparation passed; no remote migrations or deployment performed.');
+  process.exit(0);
+}
 const varsFile = path.join(cloud, '.dev.vars');
 const secret = process.env.GITHUB_CLIENT_SECRET || (existsSync(varsFile) ? parseEnv(readFileSync(varsFile, 'utf8')).GITHUB_CLIENT_SECRET : undefined);
 const secretFile = path.join(local, 'secrets.json');
+// Keep the deployed UI for a compatibility backend rollout before enabling the shared UI.
+// Only public same-origin static assets are copied; private API responses are never captured.
+let previousAssets;
+if(process.argv.includes('--backend-first')) {
+  previousAssets=path.join(local,'previous-assets-'+Date.now());mkdirSync(previousAssets,{recursive:true});
+  const pending=['/'],seen=new Set();
+  while(pending.length){const pathname=pending.shift();if(seen.has(pathname))continue;seen.add(pathname);
+    if(seen.size>100)throw new Error('Unexpected number of previous static assets.');
+    const response=await fetch(config.vars.APP_ORIGIN+pathname,{redirect:'error',signal:AbortSignal.timeout(20000)});
+    if(!response.ok)throw new Error('Cannot preserve the currently deployed static assets.');
+    const bytes=Buffer.from(await response.arrayBuffer()),target=path.resolve(previousAssets,pathname==='/'?'index.html':pathname.slice(1));
+    if(!target.startsWith(previousAssets+path.sep))throw new Error('Invalid static asset path.');
+    mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,bytes);
+    if(pathname==='/'||pathname.endsWith('.css'))for(const match of bytes.toString('utf8').matchAll(/(?:src=|href=|url\()["']?([^"')\s>]+)/g)){
+      const asset=new URL(match[1],config.vars.APP_ORIGIN+pathname);if(asset.origin===config.vars.APP_ORIGIN&&asset.pathname.startsWith('/assets/'))pending.push(asset.pathname);
+    }
+  }
+  const headers=path.join(cloud,'build','_headers');if(existsSync(headers))writeFileSync(path.join(previousAssets,'_headers'),readFileSync(headers));
+  console.log('Previous public UI preserved for the compatibility rollout.');
+}
 try {
   if (secret) writeFileSync(secretFile, JSON.stringify({ GITHUB_CLIENT_SECRET: secret }), { mode: 0o600 });
   // Incremental migrations preserve existing user data. Schema rollback requires a separate migration.
   run(wrangler, ['d1', 'migrations', 'apply', 'DB', '--remote']);
-  run(wrangler, ['deploy', ...(secret ? ['--secrets-file', secretFile] : [])]);
+  if(previousAssets){
+    verifyPreviewSource();
+    run(wrangler,['deploy','--assets',previousAssets,...versionArgs,...(secret?['--secrets-file',secretFile]:[])]);
+    const health=await (await fetch(config.vars.APP_ORIGIN+'/api/health',{signal:AbortSignal.timeout(15000)})).json();
+    if(health.schemaVersion!==2||health.usageProtocol!==3||!health.ok)throw new Error('Compatible v3 backend verification failed; shared UI was not enabled.');
+    console.log('Compatibility backend verified; enabling the shared UI next.');
+  }
+  verifyPreviewSource();
+  run(wrangler, ['deploy', ...versionArgs, ...(secret ? ['--secrets-file', secretFile] : [])]);
   let verified = false;
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       const health = await fetch(config.vars.APP_ORIGIN + '/api/health', { signal: AbortSignal.timeout(15000) });
       const result = await health.json();
-      if (health.ok && result.ok && result.loginConfigured) { verified = true; break; }
+      if (health.ok && result.ok && result.usageProtocol === 3 && result.loginConfigured) { verified = true; break; }
     } catch { /* A newly created custom domain may still have negative DNS caches. */ }
     if (attempt < 5) {
       console.log('Worker deployed; retrying public health verification in 10 seconds.');

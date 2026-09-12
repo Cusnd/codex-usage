@@ -93,6 +93,7 @@ function fixture() {
     credentialFile: path.join(directory, "cloud-credentials.json"),
     fetch: fetcher,
     observation: async () => reading,
+    refreshLimits: async () => {},
     now: () => now,
     random: () => 0.5,
   };

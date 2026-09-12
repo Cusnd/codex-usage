@@ -58,7 +58,7 @@ If the command is missing, inspect `npm prefix --global` and invoke `"$(npm pref
 | Skill | `<Codex home>/skills/codex-usage`; records absolute Node/CLI paths. |
 | Login startup | `~/Library/LaunchAgents/com.esoren.codex-usage.plist`; test directory overridden by `CODEX_USAGE_STARTUP_DIR`. |
 | Browser | `/usr/bin/open` opens the loopback URL; failure prints a manual URL. |
-| Platforms | Windows x64 and macOS x64/arm64; Linux and Windows ARM64 are not included. |
+| Platforms | Windows x64 and macOS/Linux x64/arm64; Windows ARM64 is not included. See [Linux support](LINUX_COMPATIBILITY.md) for Linux behavior and verification boundaries. |
 
 `autostart enable` registers a one-shot launcher for the next login, without immediately starting a stopped service. `start` starts it now; `stop` stops it without a keep-alive restart. `autostart disable` removes only the owned registration for future logins, leaving the current service running. A foreign or different-data-directory registration is a conflict and is preserved.
 
@@ -76,6 +76,8 @@ npm uninstall --global @esoren/codex-usage
 Data, logs and Skill backups remain. To migrate an old cache, stop its old service, then use `codex-usage migrate --from '/Users/name/old data/usage.sqlite'`; existing destinations are not overwritten.
 
 ## Validation status
+
+The records below describe the macOS rollout on 2026-09-09. The expanded Linux platform workflow now requires all 30 jobs; this older 18-job result cannot satisfy its acceptance gate.
 
 - Native CI passed all 18 jobs on 2026-09-09: `windows-latest` (x64), `macos-15` (arm64) and `macos-15-intel` (x64), each with Node 22.13.0/22.x, 24.0.0/24.x and 26.0.0/26.x. [Actions run 34325789035](https://github.com/Cusnd/codex-usage/actions/runs/34325789035) tested commit `da32062be78105f4160b2f890c746a91ba7aafc1`.
 - Each Mac job passed type checks, all 58 tests with zero skips, build, production API/assets smoke, and actual npm installation/lifecycle smoke. Coverage includes native permissions, npm symlinks, process-group cleanup with an uncooperative descendant, and 20 consecutive short-lived RPC error/cleanup cycles.

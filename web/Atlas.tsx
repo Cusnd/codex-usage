@@ -1,3 +1,4 @@
+import { navigationSearch } from './navigation';
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -143,7 +144,7 @@ export function AtlasThreads() {
         filters={r.filters}
         onSelect={(id) =>
           navigate(
-            `/threads/${encodeURIComponent(id)}?${new URLSearchParams({ ...Object.fromEntries(r.search), scope: "filtered", returnTo: location.pathname + location.search })}`,
+            `/threads/${encodeURIComponent(id)}?${navigationSearch(r.search,{ scope: "filtered", returnTo: location.pathname + location.search })}`,
             { state: { from: location.pathname + location.search } },
           )
         }
@@ -162,7 +163,7 @@ export function AtlasDetail() {
     (location.state as { from?: string } | null)?.from ||
     r.search.get("returnTo");
   const back =
-    stored && /^\/(analysis|threads)(\?|$)/.test(stored) ? stored : "/threads";
+    stored && /^\/(analysis|threads)(\?|$)/.test(stored) ? stored : '/threads?'+navigationSearch(r.search,{},true);
   return (
     <div className="atlas-page standalone-detail">
       <Link className="back-link" to={back}>

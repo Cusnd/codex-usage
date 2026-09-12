@@ -53,6 +53,8 @@ export type CloudBinding = {
   expiresAt: string;
 };
 export type CloudStatus = {
+  fullUsage?: boolean;
+  usage?: {enabled:boolean;error:string|null;totalThreads:number;pendingThreads:number;lastScanAt:string|null;totalSources?:number;pendingSources?:number;pendingBatches?:number;receivedBatches?:number;received?:{live:number;backfill:number};applied?:{live:number;backfill:number};migrationPending?:number} | null;
   origin: string;
   connected: boolean;
   enabled: boolean;

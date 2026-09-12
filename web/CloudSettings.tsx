@@ -22,7 +22,7 @@ export function CloudSettings() {
     [name, setName] = useState("");
   const state = query.data?.data;
   const action = async (
-    kind: "connect" | "pause" | "resume" | "disconnect",
+    kind: "connect" | "pause" | "resume" | "disconnect" | "upgrade",
   ) => {
     if (busy) return;
     setBusy(true);
@@ -38,7 +38,7 @@ export function CloudSettings() {
             ? await mutate<CloudStatus>("cloud/connection", undefined, "DELETE")
             : await mutate<CloudStatus>(
                 "cloud/settings",
-                { enabled: kind === "resume" },
+                { enabled: kind === "resume" || kind === "upgrade", ...(kind === "upgrade" ? {fullUsage:true} : {}) },
                 "PATCH",
               );
       client.setQueryData(["cloud"], result);
@@ -66,7 +66,7 @@ export function CloudSettings() {
         )}
       </div>
       <p className="footnote">
-        从手机查看最后同步的额度。只同步额度窗口与采集状态；本地任务、聊天、账户登录凭据留在本机。
+        将本机完整用量、原标题、项目路径与账户快照同步到云端；本地界面仍只显示本机。聊天正文、工具正文和登录凭据不上传。
       </p>
       {(error || query.error) && (
         <p className="error-text" role="alert">
@@ -102,6 +102,10 @@ export function CloudSettings() {
               </button>
             )}
           </div>
+          {state.connected && !state.fullUsage && <button disabled={busy} onClick={() => void action("upgrade")}>启用完整历史同步（含原标题与路径）</button>}
+          {state.usage && <p role="status">{state.usage.totalSources!==undefined?`待同步 ${state.usage.pendingSources??0} / ${state.usage.totalSources} 个来源`:`已完成 ${Math.max(0,state.usage.totalThreads-state.usage.pendingThreads)} / ${state.usage.totalThreads} 个会话`} · {state.usage.error || (state.usage.pendingBatches?'后台同步中':'已确认的批次可在云端查询')}
+            {!!state.usage.receivedBatches&&` · ${state.usage.receivedBatches} 个批次已接收，等待云端应用`}</p>}
+          {!!state.usage?.migrationPending&&<p className="footnote">{state.usage.migrationPending} 个旧版会话等待完成历史交接；原有云端历史继续保留。</p>}
           {state.error && (
             <p className="notice" role="status">
               {state.error}
@@ -111,7 +115,7 @@ export function CloudSettings() {
             <dl className="cloud-settings-times">
               <dt>最近采集</dt>
               <dd>{stamp(state.collectedAt)}</dd>
-              <dt>云端接收</dt>
+              <dt>{state.fullUsage?'云端可查询确认':'云端接收'}</dt>
               <dd>{stamp(state.uploadedAt)}</dd>
               <dt>下次允许发送 / 重试</dt>
               <dd>
@@ -169,13 +173,13 @@ export function CloudSettings() {
               {confirm ? (
                 <div className="notice">
                   <p>
-                    断开后将撤销这台设备，并删除云端最新快照。网络不可用时，本地会立即停止发送并继续尝试撤销。
+                    断开后将撤销这台设备，云端用量历史保留。网络不可用时，本地会立即停止发送并继续尝试撤销。
                   </p>
                   <button
                     disabled={busy}
                     onClick={() => void action("disconnect")}
                   >
-                    确认断开并删除快照
+                    确认断开连接
                   </button>{" "}
                   <button onClick={() => setConfirm(false)}>取消</button>
                 </div>
@@ -191,7 +195,7 @@ export function CloudSettings() {
             </div>
           )}
           <p className="footnote">
-            关闭网页后，后台服务仍按刷新设置采集。上传最多每分钟一次；暂停同步保留云端快照。
+            关闭网页后，后台服务仍按刷新设置采集。账户快照每分钟最多更新一次，历史分批传输；暂停同步保留云端历史。
           </p>
         </>
       )}

@@ -474,8 +474,12 @@ test("global turns preserve session identity, unknown turns, filtered compositio
     s.saveSettings({
       ...s.settings(),
       costEnabled: true,
+      officialApiPricing: true,
       modelPrices: officialPrices,
     });
+    // This case isolates the pre-existing API arithmetic from legacy parsing;
+    // native tier extraction is exercised through the streaming collector tests.
+    s.run("UPDATE usage_events SET service_tier='standard',service_tier_source='record'");
     const all = q.allTurns({}, 20, 0);
     assert.equal(all.total, 3);
     assert.equal(q.summary().turnCount, 2);
@@ -578,10 +582,12 @@ test("future cache-write usage details and manual price overrides remain explici
     s.saveSettings({
       ...s.settings(),
       costEnabled: true,
+      officialApiPricing: true,
       modelPrices: officialPrices.map((p) =>
         p.model === "gpt-6-astra" ? { ...p, input: "20" } : p,
       ),
     });
+    s.run("UPDATE usage_events SET service_tier='standard',service_tier_source='record'");
     assert.equal(q.summary().cost!.amount, "0.009425000000");
     s.saveSettings({ ...s.settings(), modelPrices: [] });
     assert.equal(q.summary().cost!.amount, null);

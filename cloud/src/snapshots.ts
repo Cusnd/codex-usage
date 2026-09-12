@@ -21,7 +21,7 @@ export async function snapshotRoute(
   if (pathname === "/api/v1/quota" && request.method === "GET") {
     const user = await sessionUser(request, env);
     const row = await env.DB.prepare(
-      "SELECT payload,received_at FROM quota_snapshots WHERE user_id=?",
+      "SELECT q.payload,q.received_at FROM quota_snapshots q WHERE q.user_id=? AND q.device_id=(SELECT d.id FROM devices d WHERE d.user_id=q.user_id AND d.revoked_at IS NULL ORDER BY d.bound_at DESC LIMIT 1)",
     )
       .bind(user.id)
       .first<SnapshotRow>();
@@ -34,6 +34,7 @@ export async function snapshotRoute(
   requireJson(request);
   const device = await deviceAuth(request, env),
     body = await readJson(request);
+  if(device.paused)return fail(423,'DEVICE_PAUSED','设备同步已在云端暂停。');
   if (!isCloudSnapshot(body) || body.deviceId !== device.id)
     return fail(400, "INVALID_SNAPSHOT", "额度快照格式不正确。");
   const now = Date.now(),
@@ -44,7 +45,7 @@ export async function snapshotRoute(
   const results = await env.DB.batch([
     env.DB.prepare(
       `UPDATE users SET next_upload_at=?,upload_nonce=? WHERE id=? AND next_upload_at<=?
-      AND EXISTS(SELECT 1 FROM devices WHERE user_id=users.id AND id=? AND token_hash=?)
+      AND EXISTS(SELECT 1 FROM devices WHERE user_id=users.id AND id=? AND token_hash=? AND revoked_at IS NULL AND paused=0)
       AND NOT EXISTS(SELECT 1 FROM quota_snapshots WHERE user_id=users.id AND device_id=? AND sequence>=?)`,
     ).bind(
       next,
@@ -59,7 +60,7 @@ export async function snapshotRoute(
     env.DB.prepare(
       `INSERT INTO quota_snapshots(user_id,device_id,sequence,payload,received_at)
       SELECT id,?,?,?,? FROM users WHERE id=? AND upload_nonce=?
-      ON CONFLICT(user_id) DO UPDATE SET device_id=excluded.device_id,sequence=excluded.sequence,payload=excluded.payload,received_at=excluded.received_at`,
+      ON CONFLICT(user_id,device_id) DO UPDATE SET device_id=excluded.device_id,sequence=excluded.sequence,payload=excluded.payload,received_at=excluded.received_at`,
     ).bind(device.id, body.sequence, payload, now, device.user_id, nonce),
   ]);
   if (results[0].meta.changes)
@@ -71,9 +72,9 @@ export async function snapshotRoute(
   // A revocation/replacement can win between authentication and the guarded transaction.
   await deviceAuth(request, env);
   const current = await env.DB.prepare(
-    "SELECT payload,sequence,received_at,device_id FROM quota_snapshots WHERE user_id=?",
+    "SELECT payload,sequence,received_at,device_id FROM quota_snapshots WHERE user_id=? AND device_id=?",
   )
-    .bind(device.user_id)
+    .bind(device.user_id,device.id)
     .first<SnapshotRow>();
   const clock = await env.DB.prepare(
     "SELECT next_upload_at FROM users WHERE id=?",
