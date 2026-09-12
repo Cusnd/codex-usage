@@ -70,7 +70,7 @@ export async function queryUsage(db:D1Database,user:string,url:URL,route:string)
   if((route==='local/breakdown'||route==='local/compare')&&(p.groupBy||'project')==='project'&&data&&typeof data==='object'&&'items' in data){
     const rows=(data as {items:{key:string|null;label:string}[]}).items,keys=rows.flatMap(r=>r.key===null?[]:[r.key]);
     const names=await executeV3Query(db,user,leaseId,(function*():Generator<Statement,{id:string;name:string|null}[],any>{return yield {sql:'SELECT id,name FROM logical_projects WHERE id IN(SELECT value FROM json_each(?))',params:[stableJson(keys)]};})());
-    const byId=new Map(names.map(n=>[n.id,n.name]));for(const row of rows)if(row.key&&byId.get(row.key))row.label=byId.get(row.key)!;
+    const byId=new Map(names.map(n=>[n.id,n.name]));for(const row of rows)if(row.key!==null&&byId.has(row.key))row.label=byId.get(row.key)?.trim()||'未命名项目';
   }
   return {data,meta:{source:'cloud',updatedAt:null,timezone:settings.timezone,warnings:[],lease_id:leaseId,cut:{dataset_epoch:lease.epoch,commit_seq:lease.cut,deletion_version:lease.deletion_version,organization_version:lease.organization_version,config_version:lease.config_version}}};
 }

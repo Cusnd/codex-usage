@@ -33,6 +33,16 @@ const approve=(a:Actor,p:{userCode:string},target:string|null)=>call(a,'/api/v3/
 const poll=(a:Actor,p:{requestId:string;pollSecret:string})=>call(a,'/api/v3/device-authorizations/poll','POST',{requestId:p.requestId,pollSecret:p.pollSecret});
 async function unknown(b:UploadBatch){for(const r of b.records)r.origin={kind:'observed_local',device_id:null};b.records_hash=await sha256(stableJson(b.records));return b;}
 const origins=(a:Actor)=>call(a,'/api/v3/origins?limit=50').then(r=>r.json<any>());
+
+it.each([null,'Named project'])('project breakdown and comparison label an existing logical project named %s without exposing its ID',async name=>{
+  const a=await actor(),b=await batch(a,{timestamp:'2026-09-12T12:00:00Z'});
+  b.metadata=[{type:'project',source_project_id:'project',value:{kind:'session',name}}];await apply(a,b);
+  for(const route of ['breakdown','compare']){
+    const response=await call(a,'/api/v3/usage/local/'+route+'?groupBy=project&from=2026-09-01T00:00:00Z&to=2026-09-20T00:00:00Z');
+    expect(response.status).toBe(200);const result=await response.json<any>();expect(result.data.items).toHaveLength(1);
+    expect(result.data.items[0].key).toMatch(/^lp1:/);expect(result.data.items[0].label).toBe(name||'未命名项目');
+  }
+});
 async function assignOrigins(a:Actor,lease:string,device?:string,id=crypto.randomUUID()){const body={operation_id:id,lease_id:lease,action:device?'assign':'revoke',thread_ids:['thread'],...device?{device_id:device}:{}};return {body,response:await call(a,'/api/v3/origins/operations','POST',body)};}
 
 it('assigns only fixed-cut naturally unknown history, preserves natural proof and tokens, and revokes with idempotent operation IDs',async()=>{
