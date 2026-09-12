@@ -4,7 +4,7 @@ import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const runners = ['windows-latest', 'macos-15', 'macos-15-intel'];
+const runners = ['windows-latest', 'macos-15', 'macos-15-intel', 'ubuntu-24.04', 'ubuntu-24.04-arm'];
 const nodes = ['22.13.0', '22.x', '24.0.0', '24.x', '26.0.0', '26.x'];
 export const expectedJobs = runners.flatMap(runner => nodes.map(node => `${runner} / Node ${node}`));
 
@@ -45,11 +45,11 @@ async function main(mode) {
   const url = mode === 'lookup' && process.env.GITHUB_EVENT_NAME === 'workflow_dispatch'
     ? null : await findValidation({ api, repository, tree, currentRun: process.env.GITHUB_RUN_ID });
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `tree=${tree}\nreuse=${Boolean(url)}\n`);
-  const message = url ? `Reusing 18-job validation for tree ${tree}: ${url}` : `No matching 18-job validation for tree ${tree}.`;
+  const message = url ? `Reusing 30-job validation for tree ${tree}: ${url}` : `No matching 30-job validation for tree ${tree}.`;
   console.log(message);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${message}\n`);
   if (mode === 'require' && !url) {
-    throw new Error('Release blocked: run Windows and macOS checks on this exact commit, then rerun the release. No package was uploaded.');
+    throw new Error('Release blocked: run Platform checks on this exact commit, then rerun the release. No package was uploaded.');
   }
 }
 

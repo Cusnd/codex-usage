@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createServer } from 'node:net';
 import { projectPath } from '../server/util.js';
-import { defaultDataRoot, serviceGuardAddress } from '../server/platform.js';
+import { browserCommand, defaultDataRoot, serviceGuardAddress, supportedPlatform } from '../server/platform.js';
 import { macAutostart, launchAgentPlist } from '../server/mac-autostart.js';
 import { resolveCodexCommand } from '../server/codex-command.js';
 
@@ -28,6 +28,24 @@ test('platform data defaults and explicit overrides', () => {
   assert.equal(defaultDataRoot({}, 'darwin', home), path.join(home, 'Library/Application Support/CodexUsage'));
   assert.equal(defaultDataRoot({ LOCALAPPDATA: path.join(home, 'Local') }, 'win32', home), path.join(home, 'Local/CodexUsage'));
   assert.equal(defaultDataRoot({ CODEX_USAGE_DATA_DIR: 'custom' }, 'darwin', home), path.resolve('custom'));
+  assert.equal(defaultDataRoot({}, 'linux', home), path.join(home, '.local/share/CodexUsage'));
+  assert.equal(defaultDataRoot({ XDG_DATA_HOME: path.join(home, 'xdg') }, 'linux', home), path.join(home, 'xdg/CodexUsage'));
+  assert.equal(defaultDataRoot({ XDG_DATA_HOME: 'relative', LOCALAPPDATA: path.join(home, 'wrong') }, 'linux', home), path.join(home, '.local/share/CodexUsage'));
+  assert.equal(defaultDataRoot({ CODEX_USAGE_DATA_DIR: path.join(home, 'custom'), XDG_DATA_HOME: path.join(home, 'xdg') }, 'linux', home), path.join(home, 'custom'));
+  assert.throws(() => defaultDataRoot({ CODEX_USAGE_DATA_DIR: 'relative' }, 'linux', home), /must be absolute/);
+});
+
+test('platform support retains Windows and macOS targets and adds Linux x64/arm64', () => {
+  for (const [platform, arch] of [['win32', 'x64'], ['darwin', 'x64'], ['darwin', 'arm64'], ['linux', 'x64'], ['linux', 'arm64']] as const) assert.equal(supportedPlatform(platform, arch), true);
+  for (const [platform, arch] of [['win32', 'arm64'], ['linux', 'ia32'], ['linux', 's390x'], ['freebsd', 'x64']] as const) assert.equal(supportedPlatform(platform, arch), false);
+});
+
+test('Linux browser selection requires a desktop and passes URLs as a single xdg-open argument', () => {
+  const url = 'http://127.0.0.1:8765';
+  assert.throws(() => browserCommand(url, 'linux', {}), /No desktop session/);
+  for (const env of [{ DISPLAY: ':0' }, { WAYLAND_DISPLAY: 'wayland-0' }]) assert.deepEqual(browserCommand(url, 'linux', env), { command: 'xdg-open', args: [url], wait: true });
+  assert.equal(browserCommand(url, 'darwin', {}).command, '/usr/bin/open');
+  assert.equal(browserCommand(url, 'win32', {}).command, 'rundll32.exe');
 });
 
 test('data-directory aliases share a kernel guard; conflicts do not displace its owner', async () => {
@@ -35,14 +53,24 @@ test('data-directory aliases share a kernel guard; conflicts do not displace its
   const first = createServer(socket => socket.destroy());
   const second = createServer();
   try {
-    const data = path.join(root, 'data'); await mkdir(data);
+    // A random fixture hash can land on an unrelated ephemeral port. Choose an
+    // available fixture directory before testing the deliberate ownership collision.
+    let data = '';
+    for (let attempt = 0; attempt < 20; attempt++) {
+      data = path.join(root, `data-${attempt}`); await mkdir(data);
+      try {
+        await new Promise<void>((resolve, reject) => { first.once('error', reject); first.listen(serviceGuardAddress(data), resolve); });
+        break;
+      } catch (error: any) { if (error.code !== 'EADDRINUSE' || attempt === 19) throw error; }
+    }
     const alias = path.join(root, 'alias'); await symlink(data, alias, process.platform === 'win32' ? 'junction' : 'dir');
-    // Bind the host's real guard: Windows named pipes, macOS loopback TCP.
-    // A macOS hash-derived port may be unavailable on a Windows runner.
+    // Bind the host's real guard: Windows named pipes, POSIX loopback TCP.
+    // A POSIX hash-derived port may be unavailable on a Windows runner.
     const address = serviceGuardAddress(data);
     assert.deepEqual(serviceGuardAddress(alias), address);
     assert.deepEqual(serviceGuardAddress(alias, 'darwin'), serviceGuardAddress(data, 'darwin'));
-    await new Promise<void>((resolve, reject) => { first.once('error', reject); first.listen(address, resolve); });
+    assert.deepEqual(serviceGuardAddress(alias, 'linux'), serviceGuardAddress(data, 'linux'));
+    assert.deepEqual(serviceGuardAddress(data, 'linux'), serviceGuardAddress(data, 'darwin'));
     await assert.rejects(new Promise<void>((resolve, reject) => { second.once('error', reject); second.listen(address, resolve); }), { code: 'EADDRINUSE' });
     assert.ok(first.listening);
     await new Promise<void>(resolve => first.close(() => resolve()));
@@ -83,18 +111,18 @@ test('LaunchAgent registration preserves ownership and old configuration on vali
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('macOS resolver handles executable permission, npm symlinks and invalid override', { skip: process.platform !== 'darwin' }, async () => {
+test('POSIX resolver handles executable permission, npm symlinks and invalid override', { skip: !['darwin', 'linux'].includes(process.platform) }, async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'codex-resolve-中文 空格-'));
   try {
     const native = path.join(root, 'codex'); await writeFile(native, '#!/bin/sh\nexit 0\n');
     await chmod(native, 0o600);
-    await assert.rejects(resolveCodexCommand({ CODEX_BIN: native }, 'darwin'), /CODEX_BIN/);
+    await assert.rejects(resolveCodexCommand({ CODEX_BIN: native }), /CODEX_BIN/);
     await chmod(native, 0o700);
-    assert.equal((await resolveCodexCommand({ PATH: root }, 'darwin')).bin, await realpath(native));
-    await assert.rejects(resolveCodexCommand({ CODEX_BIN: path.join(root, 'missing'), PATH: root }, 'darwin'), /CODEX_BIN/);
+    assert.equal((await resolveCodexCommand({ PATH: root })).bin, await realpath(native));
+    await assert.rejects(resolveCodexCommand({ CODEX_BIN: path.join(root, 'missing'), PATH: root }), /CODEX_BIN/);
     const js = path.join(root, 'entry.js'); await writeFile(js, '');
     const shim = path.join(root, 'npm-codex'); await symlink(js, shim);
-    assert.deepEqual(await resolveCodexCommand({ CODEX_BIN: shim }, 'darwin'), { bin: process.execPath, args: [await realpath(js)] });
-    await assert.rejects(resolveCodexCommand({ CODEX_BIN: root }, 'darwin'), /CODEX_BIN/);
+    assert.deepEqual(await resolveCodexCommand({ CODEX_BIN: shim }), { bin: process.execPath, args: [await realpath(js)] });
+    await assert.rejects(resolveCodexCommand({ CODEX_BIN: root }), /CODEX_BIN/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

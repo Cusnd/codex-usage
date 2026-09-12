@@ -1,3 +1,4 @@
+import { cloudMode } from './runtime';
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { useContext, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -128,7 +129,7 @@ export function ActiveScope() {
   return (
     <div className="atlas-scope-chips">
       <span>
-        {summary.data?.meta.exampleData ? "示例数据" : "本机记录"}
+        {summary.data?.meta.exampleData ? "示例数据" : cloudMode ? "所选设备记录" : "本机记录"}
       </span>
       <PresenceList compact className="scope-chip-list" items={(["project", "model", "effort"] as const)
         .filter((key) => r.filters[key] || r.filters.unknown === key)

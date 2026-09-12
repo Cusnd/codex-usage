@@ -11,10 +11,13 @@ import { DateTime } from "luxon";
 import * as C from "../shared/contracts.js";
 import { Store } from "./db.js";
 import { Queries } from "./queries.js";
-import { Importer } from "./importer.js";
+import { StreamingImporter } from './collector/importer.js';
+import { V3Uploader } from './sync-v3/uploader.js';
 import { AccountReader, type AccountSource } from "./account.js";
 import { Refresh } from "./refresh.js";
-import { officialPrices, pricingSource, pricingCheckedAt } from "./pricing.js";
+import { RefreshScheduler } from './refresh-scheduler.js';
+import { CloudSync } from './cloud-sync.js';
+import { pricingInfo } from "./pricing.js";
 import { dataRoot, packageRoot, autostartStatus, setAutostart } from './runtime.js';
 
 export async function createApp(
@@ -25,6 +28,9 @@ export async function createApp(
     logger?: boolean;
     accountReader?: AccountSource;
     exampleData?: boolean;
+    cloudCredentialFile?: string | null;
+    cloudOrigin?: string;
+    cloudFetch?: typeof fetch;
     managed?: { token: string; version: string; shutdown: () => Promise<void> };
   } = {},
 ) {
@@ -45,16 +51,26 @@ export async function createApp(
     options.database || path.join(dataRoot, "usage.sqlite"),
   );
   const queries = new Queries(store);
+  const importer = new StreamingImporter(store,
+    options.codexHome || process.env.CODEX_HOME || path.join(homedir(), '.codex'),
+    {stateRoot:options.database === ':memory:' ? undefined : path.dirname(options.database || path.join(dataRoot, 'usage.sqlite')),
+      onCycle:(progress,metrics)=>{if(!refresh)return;Object.assign(refresh.status.local,progress,{updatedAt:new Date().toISOString(),error:metrics.errors.length?'部分来源采集失败；已保存进度，可重新刷新继续。':null});},
+      onError:()=>{refresh.status.local.error='本机记录监测失败，将通过目录复核继续采集。';}});
   const refresh = new Refresh(
     store,
-    new Importer(
-      store,
-      options.codexHome ||
-        process.env.CODEX_HOME ||
-        path.join(homedir(), ".codex"),
-    ),
+    importer,
     options.accountReader || new AccountReader({ root: options.codexHome }),
   );
+  const scheduler = new RefreshScheduler(refresh, () => store.settings());
+  const uploader = new V3Uploader(store, importer.collector, {fetch:options.cloudFetch});
+  const cloud = new CloudSync(store, {
+    credentialFile: options.cloudCredentialFile !== undefined ? options.cloudCredentialFile : options.database === ':memory:' ? null : path.join(path.dirname(options.database || path.join(dataRoot, 'usage.sqlite')), 'cloud-credentials.json'),
+    observation: () => refresh.cloudObservation(), origin: options.cloudOrigin || process.env.CODEX_USAGE_CLOUD_ORIGIN, fetch: options.cloudFetch,
+    refreshLimits: () => refresh.refreshAccountLimits(),
+    history: async () => ({data: await refresh.accountSnapshot('usage'),collectedAt:refresh.status.accountHistory.updatedAt,identityKey:refresh.status.accountHistory.identityKey}),
+    uploader,
+  });
+  refresh.onLimits(async () => { void cloud.tick(); });
   await app.register(swagger, {
     openapi: {
       info: {
@@ -168,6 +184,14 @@ export async function createApp(
     };
   };
   app.get("/openapi.json", async () => app.swagger());
+  app.get('/api/cloud/status', async () => wrap(cloud.status(), 'settings'));
+  app.post<{ Body: { deviceName?: string } }>('/api/cloud/connect', {
+    schema: { body: Type.Object({ deviceName: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })) }, { additionalProperties: false }) },
+  }, async req => wrap(await cloud.connect(req.body.deviceName), 'settings'));
+  app.patch<{ Body: { enabled: boolean } }>('/api/cloud/settings', {
+    schema: { body: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }) },
+  }, async req => { return wrap(await cloud.setEnabled(req.body.enabled), 'settings'); });
+  app.delete('/api/cloud/connection', async () => wrap(await cloud.disconnect(), 'settings'));
   app.get('/api/system/autostart', async () => wrap(autostartStatus(), 'settings'));
   app.post<{ Body: { enabled: boolean } }>('/api/system/autostart', {
     schema: { body: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }) },
@@ -181,27 +205,10 @@ export async function createApp(
   app.get(
     "/api/pricing",
     {
-      schema: schema(
-        Type.Object({
-          prices: Type.Array(C.ModelPriceSchema),
-          source: Type.String(),
-          checkedAt: Type.String(),
-          currency: Type.Literal("USD"),
-          tier: Type.String(),
-        }),
-      ),
+      schema: schema(C.PricingInfoSchema),
     },
     async () =>
-      wrap(
-        {
-          prices: officialPrices,
-          source: pricingSource,
-          checkedAt: pricingCheckedAt,
-          currency: "USD",
-          tier: "Standard API reference",
-        },
-        "settings",
-      ),
+      wrap(pricingInfo(), "settings"),
   );
   app.get("/api/status", { schema: schema(C.StatusSchema) }, async () =>
     wrap(await refresh.getStatus()),
@@ -269,6 +276,8 @@ export async function createApp(
           { statusCode: 400 },
         );
       store.saveSettings(next);
+      scheduler.reschedule();
+      if(options.startup!==false){if(next.localInterval>0)importer.startWatching();else importer.stopWatching();}
       return wrap(next, "settings");
     },
   );
@@ -566,10 +575,12 @@ export async function createApp(
     );
   }
   app.addHook("onClose", async () => {
+    scheduler.close();
+    await cloud.close();
     await refresh.close();
     store.close();
   });
   await app.ready();
-  if (options.startup !== false) refresh.trigger("all", true);
-  return { app, store, queries, refresh };
+  if (options.startup !== false) { refresh.trigger("all", true); if(store.settings().localInterval>0)importer.startWatching(); scheduler.start(); cloud.start(); }
+  return { app, store, queries, refresh, scheduler, cloud, collector:importer.collector };
 }

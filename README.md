@@ -8,6 +8,8 @@ A local dashboard for understanding your Codex activity. Follow a usage spike fr
 
 Windows x64 · macOS Apple Silicon / Intel · Local-first · Apache-2.0
 
+The current development tree adds Linux x64/arm64 and a multi-device cloud dashboard. These changes have not been published to npm. Linux installation paths and verification limits are documented in [Linux support](docs/LINUX_COMPATIBILITY.md); implementation and acceptance evidence are tracked in [the cloud implementation record](docs/design/multi-device-cloud-panel-implementation-progress-2026-09-11.md).
+
 Version 0.1.3 adds macOS Apple Silicon and Intel support, verified by native GitHub Actions jobs on both architectures. See [macOS compatibility](docs/MACOS_COMPATIBILITY.md) for installation and run records. Version 0.1.2 and earlier support Windows only.
 
 Try the [live example](https://codex-usage-showcase.sorenliu.workers.dev) before installing. It runs the same React frontend with synthetic records, including task and turn details, agent teams, filters, and browser-local cost settings. Your own usage is available in the local app.
@@ -75,6 +77,7 @@ Open a fresh agent task if the newly installed Skill is not discovered yet. Firs
 
 - **Local history stays local.** The app reads your Codex records without modifying them and does not upload usage history. Its cache contains usage metadata, including task titles and project paths, rather than chat bodies or tool output.
 - **Account limits are a separate view.** Available account features use your existing Codex login. Local token activity and account-level snapshots cover different things and are not added together.
+- **Optional cloud viewing across devices.** Enable sync on each computer to use the same complete UI at [quota.esoren.com](https://quota.esoren.com). Usage is merged and deduplicated by default, with device filters; account quotas remain separate. History remains available while collectors are offline. Full sync includes original task titles and project paths, while excluding chats, tool bodies and login credentials. This branch's updated client is pending npm release; see the [cloud setup guide](docs/USER_GUIDE.md#view-quotas-from-another-device).
 - **Reference costs are estimates.** Optional API pricing does not represent your ChatGPT subscription bill. Incomplete records or unknown prices remain marked as incomplete.
 - **Coverage follows your records.** Results reflect recognizable history retained on this computer; they are not a complete multi-device account ledger.
 

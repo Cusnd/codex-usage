@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import type { EstimatedCost, Metrics, ThreadRow } from "../shared/contracts";
+import type { EstimatedCost, Metrics, Settings, ThreadRow } from "../shared/contracts";
 import { compact, exact, percent, projectName } from "./api";
 import { Workspace } from "./workspace";
 
@@ -7,32 +7,46 @@ export const sessionTitle = (
   row: Pick<ThreadRow, "title" | "project" | "id">,
 ) => row.title || `${projectName(row.project)} · ${row.id.slice(0, 8)}`;
 
+// Keep the integer portion exact even for amounts beyond Number.MAX_SAFE_INTEGER.
+export function formatCostAmount(amount: string) {
+  if (!/^\d+(\.\d+)?$/.test(amount)) return amount;
+  const [whole, fraction = ""] = amount.split(".");
+  const rounded = BigInt(whole) * 10_000n + BigInt(fraction.padEnd(4, "0").slice(0, 4)) +
+    (fraction.length > 4 && fraction[4] >= "5" ? 1n : 0n);
+  return `${(rounded / 10_000n).toLocaleString("en-US")}.${(rounded % 10_000n).toString().padStart(4, "0")}`;
+}
+
+export const costLabel = (settings: Pick<Settings, "officialApiPricing">, cost?: EstimatedCost | null) => {
+  if (cost?.currency === "credits") return "参考消耗 · credits";
+  const basis = cost ? cost.billingBasis : settings.officialApiPricing ? "api" : "subscription";
+  return basis === "subscription" ? "订阅参考 · USD" : basis === "api" ? "API参考 · USD" : "参考成本 · USD";
+};
+const tierLabel = { standard: "Standard", fast: "Fast", unknown: "未知档位" } as const;
+const costTitle = (cost: EstimatedCost) => [
+  costLabel({}, cost),
+  ...(cost.currency === "USD" && cost.billingBasis === "subscription" ? ["按 Token 美元单价及订阅 Fast 倍率计算参考消耗，不代表实际支出"] : []),
+  ...(cost.amount == null ? [] : [`已计价小计：${cost.amount} ${cost.currency}`]),
+  ...(cost.serviceTiers ?? []).map((row) => `${tierLabel[row.tier]}：${row.eventCount} 条记录 · ${row.totalTokens == null ? "Token 未提供" : `${exact(row.totalTokens)} Token`} · ${row.amount == null ? "未计价" : `${row.amount} ${cost.currency}`}`),
+  ...cost.notes,
+].join("\n");
+
 export function CostValue({
   cost,
 }: {
   cost: EstimatedCost | null | undefined;
 }) {
   const amount = cost?.amount;
-  const display =
-    amount == null
-      ? "未配置"
-      : Number(amount).toLocaleString("en-US", {
-          minimumFractionDigits: 4,
-          maximumFractionDigits: 4,
-        });
+  const display = amount == null ? "未计价" : formatCostAmount(amount);
   return (
     <span
       className="cost-value"
       title={
-        cost
-          ? ["USD · Standard API 参考估算，不代表订阅费用", ...cost.notes].join(
-              "\n",
-            )
-          : "在设置中开启并配置模型单价"
+        cost ? costTitle(cost) : "在设置中开启美元参考消耗并选择计价方式"
       }
     >
-      {amount != null && <span className="currency">$</span>}
+      {amount != null && cost?.currency === "USD" && <span className="currency">$</span>}
       {display}
+      {amount != null && cost?.currency === "credits" && <span className="currency"> credits</span>}
       {cost && !cost.complete && <small>不完整估算</small>}
     </span>
   );
@@ -99,17 +113,23 @@ export function UsageBreakdown({
       )}
       {settings.costEnabled && (
         <div>
-          <span>参考成本 · USD</span>
+          <span>{costLabel(settings, data?.cost)}</span>
           <strong>
             <CostValue cost={data?.cost} />
           </strong>
         </div>
       )}
+      {settings.costEnabled && data?.cost?.serviceTiers?.filter((row) => row.tier !== "standard" && row.eventCount > 0).map((row) => (
+        <div key={row.tier} title={`${row.eventCount} 条记录；${row.tier === "unknown" ? "档位来源不明，未按 Standard 或 Fast 计价" : "按每条记录的 Fast 标记计价"}`}>
+          <span>{tierLabel[row.tier]} Token</span>
+          <strong title={exact(row.totalTokens)}>{row.totalTokens == null ? "未提供" : compact(row.totalTokens)}</strong>
+        </div>
+      ))}
     </div>
   );
 }
 
-export function UsageHeadings() {
+export function UsageHeadings({ cost }: { cost?: EstimatedCost | null } = {}) {
   const { settings } = useContext(Workspace);
   return (
     <>
@@ -120,7 +140,7 @@ export function UsageHeadings() {
         <>
           <th className="numeric usage-column">缓存写入</th>
           <th className="numeric">
-            参考成本 <small>USD</small>
+            {costLabel(settings, cost)}
           </th>
         </>
       )}

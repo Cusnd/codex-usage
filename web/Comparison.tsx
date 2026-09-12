@@ -1,3 +1,4 @@
+import { navigationSearch } from './navigation';
 import { Link, useLocation } from "react-router-dom";
 import type { Comparison, Metrics } from "../shared/contracts";
 import { useRange, useData } from "./workspace";
@@ -75,7 +76,7 @@ export function ComparisonSection() {
                       <td title={row.key || "未知"}>
                         {comparisonGroup === "thread" && row.key ? (
                           <Link
-                            to={"/threads/" + encodeURIComponent(row.key)}
+                            to={"/threads/" + encodeURIComponent(row.key)+'?'+navigationSearch(r.search,{},true)}
                             state={{
                               from: location.pathname + location.search,
                             }}

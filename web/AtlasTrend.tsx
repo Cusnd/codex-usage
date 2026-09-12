@@ -1,3 +1,4 @@
+import { cloudMode } from './runtime';
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { DateTime } from "luxon";
 import { useMemo, useRef } from "react";
@@ -281,8 +282,8 @@ export function TrendWorkspace() {
                             )}
                             <small>
                               {point.hasRecords
-                                ? "本机记录"
-                                : "该时段无本地记录"}
+                                ? (cloudMode ? "所选设备记录" : "本机记录")
+                                : "该时段无可统计记录"}
                             </small>
                           </div>
                         ) : null;
@@ -352,7 +353,7 @@ export function TrendWorkspace() {
             <dt>Turns</dt>
             <dd>{summary.data?.data.turnCount ?? "—"}</dd>
           </dl>
-          <small>{r.timezone} · 本机记录</small>
+          <small>{r.timezone} · {cloudMode ? "所选设备记录" : "本机记录"}</small>
         </div>
       </div>
       <UsageBreakdown data={summary.data?.data} />

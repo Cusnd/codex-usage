@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local OAuth testing; never commit real secrets.
+GITHUB_CLIENT_SECRET=""

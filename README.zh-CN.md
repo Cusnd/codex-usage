@@ -8,6 +8,8 @@
 
 Windows x64 · macOS Apple Silicon / Intel · 本地优先 · Apache-2.0
 
+当前开发树新增 Linux x64/arm64 与多设备云端面板，尚未发布到 npm。Linux 的安装路径及已验证范围见 [Linux 支持说明](docs/LINUX_COMPATIBILITY.md)，云端实现和验收进度见 [实施记录](docs/design/multi-device-cloud-panel-implementation-progress-2026-09-11.md)。
+
 0.1.3 版本新增 macOS Apple Silicon 和 Intel 支持，并通过两种架构的原生 GitHub Actions 验证，安装和运行记录见 [macOS 兼容说明](docs/MACOS_COMPATIBILITY.md)。0.1.2 及更早版本仅支持 Windows。
 
 安装前可以先体验[在线示例](https://codex-usage-showcase.sorenliu.workers.dev)：与本地应用使用同一套 React 前端，接入合成记录，可操作任务、轮次、Agent 团队、筛选和仅保存在当前浏览器的成本设置。查看自己的真实用量时，请使用本地应用。
@@ -75,6 +77,7 @@ codex-usage skill install
 
 - **本地历史留在本机。** 工具只读 Codex 原记录，不上传用量历史。缓存保存用量元数据，包括任务标题和项目路径，不保存聊天正文或工具输出。
 - **账户额度单独查看。** 可用的账户功能使用现有 Codex 登录。本机 Token 活动与账户快照的覆盖范围不同，不会相加。
+- **可选的多设备云端查看。** 在每台电脑启用同步后，[quota.esoren.com](https://quota.esoren.com) 用同一套完整 UI 展示已同步用量，默认合并去重，也可筛选设备；账户额度单独展示。电脑离线后仍可查看历史。完整同步包含原标题和项目路径，不上传聊天、工具正文或登录凭据。本分支的新版客户端尚未发布到 npm，使用方式见[云端设置指南](docs/USER_GUIDE.zh-CN.md#在手机或其他电脑查看额度)。
 - **参考成本是估算。** 可选的 API 价格换算不是 ChatGPT 订阅账单；缺失记录或未知单价仍会标注为不完整。
 - **覆盖范围取决于保留的记录。** 结果代表这台电脑上可识别的历史，不是跨设备完整账户账本。
 

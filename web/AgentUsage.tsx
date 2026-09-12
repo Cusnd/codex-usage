@@ -1,9 +1,10 @@
+import { navigationSearch } from './navigation';
 import { useContext } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { AgentUsage, Filter } from "../shared/contracts";
 import { Workspace, useData } from "./workspace";
 import { compact, exact } from "./api";
-import { CostValue, sessionTitle } from "./Usage";
+import { CostValue, costLabel, sessionTitle } from "./Usage";
 import { MotionDetails } from "./MotionPrimitives";
 import { ErrorBox, Loading } from "./ui";
 
@@ -15,7 +16,7 @@ export function AgentUsagePanel({ id, filters }: { id: string; filters: Filter }
   return (
     <section className="agent-usage" aria-label="Agent 用量">
       <h3>Agent 用量</h3>
-      <p className="agent-hint">团队合计包含嵌套 subagent；每行仅统计该 agent 自身。仅覆盖本机已保留、可识别的记录。</p>
+      <p className="agent-hint">团队合计包含嵌套 subagent；每行仅统计该 agent 自身。仅覆盖当前数据源已保留、可识别的记录。</p>
       <ErrorBox error={result.error} />
       <Loading isLoading={result.isPending} />
       {data && <>
@@ -43,13 +44,13 @@ export function AgentUsagePanel({ id, filters }: { id: string; filters: Filter }
                 <th scope="col" className="numeric">缓存命中</th>
                 <th scope="col" className="numeric">输出</th>
                 <th scope="col" className="numeric">总 Token</th>
-                {settings.costEnabled && <th scope="col" className="numeric">参考成本 · USD</th>}
+                {settings.costEnabled && <th scope="col" className="numeric">{costLabel(settings, data.team.cost)}</th>}
               </tr></thead>
               <tbody>{data.agents.map((agent) => <tr key={agent.id}>
                 <td>
                   <div className="agent-name" style={{ paddingInlineStart: Math.min(agent.depth, 5) * 14 }}>
                     <small>{agent.depth ? `子 agent · 第 ${agent.depth} 层` : "当前 agent"}</small>
-                    <Link to={`/threads/${encodeURIComponent(agent.id)}`} state={{ from: location.pathname + location.search }} title={agent.id}>
+                    <Link to={`/threads/${encodeURIComponent(agent.id)}?${navigationSearch(location.search,{},true)}`} state={{ from: location.pathname + location.search }} title={agent.id}>
                       {sessionTitle(agent)}
                     </Link>
                     {agent.usage.eventCount === 0 && <small>暂无用量记录（当前范围）</small>}

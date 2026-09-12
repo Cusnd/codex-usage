@@ -1,3 +1,4 @@
+import { CloudDeviceFilter, CloudBind, CloudSyncStatus } from './CloudWorkspace';
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -21,7 +22,7 @@ import { Overview } from "./Overview";
 import { SettingsPage } from "./SettingsPage";
 import { ErrorBox, Header, time } from "./ui";
 import { Workspace, defaultSettings } from "./workspace";
-import { currentTime, exampleMode } from './runtime';
+import { currentTime, exampleMode, cloudMode } from './runtime';
 import { beginRefreshMotion, cancelRefreshMotion } from "./motion-state";
 
 export function App() {
@@ -46,6 +47,7 @@ export function App() {
       "compareGroup",
     ])
       if (current.has(key)) scope.set(key, current.get(key)!);
+    current.getAll('deviceIds').forEach(id => scope.append('deviceIds', id));
     return scope.size ? "?" + scope.toString() : "";
   }, [location]);
   const client = useQueryClient();
@@ -89,27 +91,6 @@ export function App() {
       }
     }
   }, [status, client]);
-  useEffect(() => {
-    void mutate("refresh", { source: "all", force: false })
-      .then(() => client.invalidateQueries({ queryKey: ["status"] }))
-      .catch((e) => setRefreshError(e.message));
-  }, [client]);
-  useEffect(() => {
-    const timers: ReturnType<typeof setInterval>[] = [];
-    for (const key of ["local", "account"] as const) {
-      const seconds =
-        key === "local" ? settings.localInterval : settings.accountInterval;
-      if (seconds)
-        timers.push(
-          setInterval(() => {
-            void mutate("refresh", { source: key, force: false })
-              .then(() => client.invalidateQueries({ queryKey: ["status"] }))
-              .catch((e) => setRefreshError(e.message));
-          }, seconds * 1000),
-        );
-    }
-    return () => timers.forEach(clearInterval);
-  }, [settings.localInterval, settings.accountInterval, client]);
   const refresh = async (source: string) => {
     if (refreshRequested) return;
     setRefreshRequested(true);
@@ -118,6 +99,7 @@ export function App() {
     setRefreshMessage('');
     try {
       await mutate("refresh", { source, force: true });
+      if (cloudMode) await client.invalidateQueries();
       await client.invalidateQueries({ queryKey: ["status"] });
       if (exampleMode) setRefreshMessage('示例数据已刷新。');
     } catch (e) {
@@ -154,8 +136,8 @@ export function App() {
           </nav>
           <div className="sidebar-footer">
             <span className="live-dot" />
-            {exampleMode ? '合成示例' : '本机运行'}<small>{exampleMode ? '查询在浏览器内运行' : '数据留在这台电脑'}</small>
-            <a href={exampleMode ? 'https://github.com/Cusnd/codex-usage/blob/main/docs/TECHNICAL_REFERENCE.md' : '/docs'} target="_blank" rel="noreferrer">
+            {exampleMode ? '合成示例' : cloudMode ? '云端查看' : '本机运行'}<small>{exampleMode ? '查询在浏览器内运行' : cloudMode ? '所有已同步设备的历史' : '用量历史保存在本机'}</small>
+            <a href={exampleMode || cloudMode ? 'https://github.com/Cusnd/codex-usage/blob/main/docs/TECHNICAL_REFERENCE.md' : '/docs'} target="_blank" rel="noreferrer">
               <BookOpen size={16} /> API 文档 <ArrowUpRight size={14} />
             </a>
           </div>
@@ -181,7 +163,7 @@ export function App() {
                   : status?.account.running
                     ? "账户更新中"
                     : status?.local.updatedAt
-                      ? "本地更新 " +
+                      ? (cloudMode ? "云端接收 " : "本地更新 ") +
                         time(status.local.updatedAt, settings.timezone)
                       : "等待首次导入"}
               </span>
@@ -197,7 +179,7 @@ export function App() {
               >
                 <RefreshCw size={15} aria-hidden="true" /> 刷新全部
               </button>
-              <Choice
+              {!cloudMode && <Choice
                 label="单独刷新来源"
                 disabled={refreshRequested}
                 value=""
@@ -209,7 +191,7 @@ export function App() {
                   { value: "accountHistory", label: "仅刷新每日历史" },
                 ]}
                 onChange={(value) => void refresh(value)}
-              />
+              />}
             </div>
           </div>
           <main>
@@ -224,7 +206,10 @@ export function App() {
               </div>
             )}
             <ErrorBox error={settingsQuery.error || statusQuery.error} />
+            {cloudMode && <CloudDeviceFilter />}
+            {cloudMode && <CloudSyncStatus />}
             <Routes>
+              {cloudMode && <Route path="/bind" element={<CloudBind />} />}
               <Route path="/" element={<Overview />} />
               <Route path="/analysis" element={<AtlasAnalysis />} />
               <Route path="/threads" element={<AtlasThreads />} />
@@ -242,7 +227,7 @@ export function App() {
             </Routes>
           </main>
           <footer>
-            Codex 用量图录 <span>账户与本机数据分别统计 · 仅个人使用</span>
+            Codex 用量图录 <span>{cloudMode ? "账户与设备记录分别统计 · 私有云端空间" : "账户与本机数据分别统计 · 仅个人使用"}</span>
           </footer>
         </div>
       </div>

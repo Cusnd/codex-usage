@@ -1,10 +1,11 @@
+import { cloudMode } from './runtime';
 import { ChevronLeft, ChevronRight, Cloud, Database, X } from "lucide-react";
 import { DateTime } from "luxon";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ApiResponse, Filters, Metrics } from "../shared/contracts";
-import { compact, projectName } from "./api";
+import { compact, projectDescription, projectName } from "./api";
 import { Choice } from "./Choice";
 import { UsageBreakdown } from "./Usage";
 import { useData, useRange } from "./workspace";
@@ -19,7 +20,7 @@ export function SourceBadge({ account = false }: { account?: boolean }) {
   return (
     <span className={"source-badge " + (account ? "account" : "local")}>
       {account ? <Cloud size={15} /> : <Database size={15} />}
-      {account ? "账户官方统计" : "本机记录分析"}
+      {account ? "账户官方统计" : cloudMode ? "设备记录分析" : "本机记录分析"}
     </span>
   );
 }
@@ -52,7 +53,7 @@ export function ErrorBox({ error }: { error: Error | null | undefined }) {
 export function Loading({
   isLoading,
   empty = false,
-  emptyMessage = "这个范围内还没有可统计记录。可以调整时间范围或刷新本地记录。",
+  emptyMessage = cloudMode ? "这个范围内还没有已同步的统计记录。可以调整时间或设备范围，并查看设备同步进度。" : "这个范围内还没有可统计记录。可以调整时间范围或刷新本地记录。",
 }: {
   isLoading: boolean;
   empty?: boolean;
@@ -75,6 +76,7 @@ export function Notes({
 }) {
   return (
     <>
+      {response?.meta.devices?.length ? <p className="footnote">设备来源：{response.meta.devices.map(d=>d.name).join('、')}</p> : null}
       {response?.meta.warnings.map((w, i) => (
         <p className="footnote" key={i}>
           {w}
@@ -237,7 +239,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
                               : key === "project"
                                 ? projectName(v)
                                 : v,
-                          description: key === "project" && v ? v : undefined,
+                          description: key === "project" && v ? projectDescription(v) : undefined,
                         })),
                       ]}
                       onChange={(v) => change(key, v)}

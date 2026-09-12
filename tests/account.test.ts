@@ -247,7 +247,7 @@ test('invalid explicit CLI or unsupported login never sends OAuth HTTP',()=>fixt
  await assert.rejects(keyring.readLimits(),(e:any)=>e.code==='UNSUPPORTED_STORE');keyring.close();assert.equal(fetches,0);
 }));
 
-test('macOS repeated short-lived RPC cleanup preserves upstream errors', { skip: process.platform !== 'darwin' }, () => fixture(async root => {
+test('POSIX repeated short-lived RPC cleanup preserves upstream errors', { skip: !['darwin', 'linux'].includes(process.platform) }, () => fixture(async root => {
  await writeAuth(root); await writeScenario(root, { fail: 'account/usage/read' });
  for (let i = 0; i < 20; i++) {
   const reader = nativeReader(root);
@@ -259,7 +259,7 @@ test('macOS repeated short-lived RPC cleanup preserves upstream errors', { skip:
  }
 }));
 
-test('macOS shutdown tolerates an inconclusive probe and terminates an uncooperative descendant', { skip: process.platform !== 'darwin' }, t => fixture(async root => {
+test('POSIX shutdown tolerates an inconclusive probe and terminates an uncooperative descendant', { skip: !['darwin', 'linux'].includes(process.platform) }, t => fixture(async root => {
  await writeAuth(root); await writeScenario(root, { hang: 'account/usage/read', grandchild: true, stubborn: true });
  const reader = nativeReader(root);
  const pending = reader.readUsage();

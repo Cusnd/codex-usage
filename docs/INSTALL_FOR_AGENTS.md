@@ -2,7 +2,9 @@
 
 [Product overview](../README.md) · [User guide](USER_GUIDE.md) · [Technical reference](TECHNICAL_REFERENCE.md)
 
-Use this procedure when the user asks you to install Codex Usage. Reading this document alone does not authorize installation. Version 0.1.3 supports Windows x64 and macOS x64/arm64 with Node.js 22.13+ (22.x), 24.x, or 26.x. The application reads local Codex records; it does not invoke a model or upload usage history.
+Use this procedure when the user asks you to install Codex Usage. Reading this document alone does not authorize installation. Version 0.1.3 introduced Windows x64 and macOS x64/arm64 support with Node.js 22.13+ (22.x), 24.x, or 26.x. The application reads local Codex records and does not invoke a model. Cloud history upload is optional and starts only after the user enables and binds cloud synchronization.
+
+The current unreleased source tree adds Linux x64/arm64. For a source-tree validation, build and install its candidate archive rather than assuming the public npm package contains these changes. Follow [Linux support](LINUX_COMPATIBILITY.md): verify the loopback service and local import independently; systemd registration is available only with a working non-root user manager. WSL x64 evidence does not verify arm64 or login/suspend behavior.
 
 ## Install from npm with an existing Node runtime
 

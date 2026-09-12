@@ -1,3 +1,5 @@
+import { cloudMode } from './runtime';
+import { CloudDeviceSettings } from './CloudWorkspace';
 import { useQueryClient } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import { useContext, useEffect, useState } from "react";
@@ -7,6 +9,9 @@ import { Choice } from "./Choice";
 import { AccountNotice } from "./AccountNotice";
 import { PriceSettings } from "./PriceSettings";
 import { SystemSettings } from "./SystemSettings";
+import { CloudSettings } from './CloudSettings';
+import { CloudProjects } from './CloudProjects';
+import { CloudOrigins } from './CloudOrigins';
 import { Header, SourceBadge, time } from "./ui";
 import { Workspace } from "./workspace";
 import { AdaptiveRegion } from "./MotionPrimitives";
@@ -78,9 +83,12 @@ export function SettingsPage() {
     <>
       <Header
         title="设置"
-        description="控制更新频率，查看当前数据的覆盖与状态。"
+        description={cloudMode ? '管理采集设备，调整云端显示并查看同步状态。' : '控制更新频率，查看当前数据的覆盖与状态。'}
       />
-      <SystemSettings />
+      {!cloudMode && <SystemSettings />}
+      {cloudMode ? <CloudDeviceSettings /> : <CloudSettings />}
+      {cloudMode && <CloudProjects />}
+      {cloudMode && <CloudOrigins />}
       <section className="panel settings-panel">
         <h2>刷新与时间</h2>
         <form onSubmit={save}>
@@ -88,11 +96,11 @@ export function SettingsPage() {
             <div className="setting-row" key={key}>
               <div>
                 <label htmlFor={key + "Interval"}>
-                  {key === "local" ? "本地记录刷新" : "账户接口刷新"}
+                  {cloudMode?(key==='local'?'用量历史拉取':'账户快照拉取'):key === "local" ? "本地记录刷新" : "账户接口刷新"}
                 </label>
                 <p>
-                  {key === "local"
-                    ? "最少 10 秒；扫描新增和变化的记录。"
+                  {cloudMode?(key==='local'?'最少 10 秒；浏览器检查云端的新记录。':'最少 60 秒；浏览器检查最近账户快照。'):key === "local"
+                    ? "记录变化时增量采集，按此间隔复核来源；最少 10 秒。"
                     : "最少 60 秒；读取账户汇总和额度。"}
                   输入 0 关闭自动刷新。
                 </p>
@@ -141,7 +149,7 @@ export function SettingsPage() {
             <div>
               <label htmlFor="timezone">显示时区</label>
               <p>
-                决定“今天”的起止时间和每日趋势分组，并重算所选范围的本地用量。
+                决定“今天”的起止时间和每日趋势分组，并重算所选范围的用量。
               </p>
             </div>
             <AdaptiveRegion className="setting-control">
@@ -180,7 +188,7 @@ export function SettingsPage() {
           <p className="footnote">
             当前生效：{settings.timezone}（UTC
             {DateTime.now().setZone(settings.timezone).toFormat("ZZ")}
-            ）。时区切换后会更新本地筛选、趋势与任务时间。自动采集仅在工作台打开期间触发。
+            ）。时区切换后会更新筛选、趋势与任务时间。{cloudMode ? "这些间隔控制浏览器拉取云端数据。各电脑的采集频率在本机设置，首次补齐历史和手动刷新不受自动间隔限制。" : "后台服务运行期间持续按设置采集，关闭网页不影响自动刷新。"}
           </p>
           <button className="primary-button save-button" disabled={saving} aria-busy={saving}>
             {saving ? "保存中…" : "保存设置"}
@@ -190,7 +198,7 @@ export function SettingsPage() {
           </span>
         </form>
       </section>
-      <section className="panel">
+      {!cloudMode && <section className="panel">
         <h2>数据源状态</h2>
         <div className="source-status-grid">
           {(["local", "accountLimits", "accountHistory"] as const).map(
@@ -246,7 +254,7 @@ export function SettingsPage() {
           范围：本机 Codex 的 sessions 和
           archived_sessions。部分旧格式、缺失父任务或已删除记录不能恢复为完整账本。
         </p>
-      </section>
+      </section>}
     </>
   );
 }

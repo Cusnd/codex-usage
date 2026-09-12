@@ -6,6 +6,8 @@
 
 Codex Usage 0.1.3 supports Windows x64 and macOS x64/arm64, and requires Node.js 22.13+ (22.x), 24.x, or 26.x. Local statistics work without the Codex CLI; account features depend on an existing supported Codex login.
 
+The unreleased development tree also supports Linux x64/arm64. Use a built candidate archive when validating this tree; the public npm command does not establish that these changes have been released. See [Linux paths, systemd and validation](LINUX_COMPATIBILITY.md). The optional cloud dashboard keeps the local dashboard available, receives parsed usage and account snapshots, and supports device filtering and project organization. See [cloud implementation status](design/multi-device-cloud-panel-implementation-progress-2026-09-11.md) for completed and outstanding acceptance checks.
+
 The easiest route is to give an agent the [installation guide](INSTALL_FOR_AGENTS.md). Its installer verifies the release and can provide a user-level Node runtime. Installation requires internet access to download the package and its dependencies; the web app is already built.
 
 ### Manual installation
@@ -71,7 +73,11 @@ A normal fork is not a subagent. Only explicit recorded delegation links establi
 
 Expand **与上一时段比较** in Analysis to compare with the preceding equal-length period. Group by task to locate the work behind an increase. A custom baseline is available through the CLI/API using paired `baselineFrom` and `baselineTo` values; the web comparison uses the preceding period.
 
-The default composition is uncached input, cache reads, and output. Cache reads are part of input, not an extra amount to add to input and output. In Settings, you can enable optional API reference costs and cache-write columns. Missing information is not silently treated as zero; see [counting rules](TECHNICAL_REFERENCE.md#counting-rules).
+The default composition is uncached input, cache reads, and output. Cache reads are part of input, not an extra amount to add to input and output. In Settings, enable **显示美元参考消耗 / 成本** to include reference estimates and cache-write columns. Missing information is not silently treated as zero; see [counting rules](TECHNICAL_REFERENCE.md#counting-rules).
+
+Reference estimates always display **USD**, calculated directly from Token quantities and dollar unit prices. The default subscription mode applies a **2.5×** multiplier to identified Fast usage. API Key users can check **使用官方 API 计价（API Key 用户勾选）** and save to use the API rules, whose verified presets apply **2×** for Fast. The subscription reference table is read-only; the API editor retains custom prices when switching modes. Your existing estimate visibility setting is preserved. Local and cloud settings are saved in their respective workspaces.
+
+Fast is identified per usage record, using each task's own available history. The estimate shows Standard/Fast/unknown subtotals, and the summary shows Fast and unknown Token counts when present. Uncertain records still contribute to Token totals but remain unpriced. Mode switches within a running turn or missing historical markers can leave the estimate incomplete. After upgrading the collector, available original logs are reprocessed to recover mode evidence; deleted originals cannot be recovered. The dollar amount is a Token reference cost, not remaining plan quota or your actual subscription payment.
 
 ## Ask an agent or use the CLI
 
@@ -99,9 +105,47 @@ Replace `TASK_ID` with an actual task ID. Queries start the local service when n
 
 Account limits and local token activity are separate. Account limits can work through a compatible Codex CLI or supported existing file login; daily account history requires a CLI that supports that capability. Either account feature can be unavailable while local statistics still work. Inspect each source's status and timestamp in Settings; old snapshots are marked as such.
 
-The app updates on startup. While the page is open, default intervals are 60 seconds for local records and 300 seconds for account data. Change them separately in Settings; use 0 to disable automatic refresh. Closing the page stops its periodic requests, though an in-progress import can finish.
+The service updates once on startup and owns periodic refresh even with every browser tab closed. Defaults remain 60 seconds for local records and 300 seconds for account data. Change them separately in Settings; account intervals accept 60–86400 seconds, and 0 disables periodic refresh. Existing settings are preserved, changes immediately reschedule the next check, and waking the computer runs due work once without replaying missed intervals. Manual refresh keeps its existing behavior. Stopping the service stops collection.
 
 Set the timezone to follow the system or specify an IANA timezone manually. Local day boundaries, trends, and task times follow that choice. Official account daily buckets retain their source dates and appear separately. Existing installations retain their saved timezone behavior.
+
+## View quotas from another device
+
+Cloud viewing is available at [quota.esoren.com](https://quota.esoren.com). The local sync feature in this branch has not yet been published to npm; use a build containing `codex-usage cloud` until its release.
+
+1. On the collecting computer, open **Settings → 云端查看**, optionally name the device, and select **连接 GitHub 云端**. Or run `codex-usage cloud connect --name "My laptop"`.
+2. Sign in to GitHub on the binding page, compare its code and device name with the local app, and confirm. A code expires after 10 minutes. Binding enables sync; it is off beforehand.
+3. Open the cloud site on your phone or another computer and sign in with the same GitHub account. New devices join your space while existing devices and history remain. Upgrade an older quota-only collector using **启用完整历史同步（含原标题与路径）** in the updated local settings.
+
+Reinstallation resumes automatically when the local identity files remain. If that identity was lost, begin binding again and select **接续** for the original device on the confirmation page. This retains its cloud history and pause preference while rotating the upload credential; the former credential immediately stops working. Only your own devices with retained history are eligible. A different computer should join as a new device. Resumption cannot recover history that was explicitly deleted.
+
+The following behavior describes the unreleased v3 development build; see the [implementation record](design/multi-device-cloud-panel-implementation-progress-2026-09-11.md) for its validation status. The cloud uses the same overview, analysis, tasks, turns and Agent UI as the local app. It first reconciles usage across all sources, then applies the selected execution-device filter. **选择设备** filters one or several devices; the selection stays in the URL during navigation, pagination and task/Agent drill-down. A copied session is counted once, while new events from work continued on another computer are added. Titles, project names and equal token counts are not deduplication keys. Historical execution origin remains unknown when the evidence cannot identify it.
+
+Initial sync transfers the extracted history in batches; later uploads contain newly completed records. Rewritten sources publish their replacement events, titles and relationships together after the new generation is complete. Settings → **采集设备** distinguishes collection, durable receipt and application times, complete sources and pending batches. A receipt does not yet mean the statistics have changed. Paused, offline and failed collectors retain their previous data with a status label.
+
+The browser prepares recent history first and then completes the full baseline. Its progress describes the browser cache; device coverage describes collection and upload progress. Cloud refresh reads applied cloud results. Each computer controls its own collection interval, while cloud usage/account refresh intervals, timezone and prices are saved for the GitHub user. A zero usage interval disables periodic updates while retaining manual refresh. Offline viewing supports pages and exact filters already opened and cached; an uncached query reports that limitation. A complete entity cache does not imply every possible query can run offline.
+
+Settings → **项目归并** shows source paths and association evidence. Shared sessions, reliable repository identity and App project metadata can organize sources across devices into logical projects; conflicting evidence stays separate. Preview and apply merges, splits, renames or a reset to automatic organization. A manual split constrains later automatic associations. Operations retain source evidence and update project filters throughout the UI. Organization cannot be edited offline.
+
+Settings → **旧历史设备归属** lets you select historical sessions and assign records whose execution origin cannot be established. The records retain a **用户指定** (user assigned) label. Selection is fixed to records already present in that read version; later additions are excluded. Reliable execution origins and conflicting origin evidence cannot be overwritten with this action. The same screen can revoke assignments. Large operations publish a complete replacement together, without changing the global token total. Deleting the assigned target's history revokes its manual assignments; actual uploaded facts are still deleted according to their uploader.
+
+Cloud system-timezone mode resolves the timezone separately in each browser and checks it on window focus and once per minute. Manual mode uses the shared saved timezone. Offline account observations are shared for the current user across usage-device filters; cached usage queries still require their exact page, filters, timezone and read version.
+
+Account quotas and daily history are separate from device usage. A confirmed account shared by multiple devices has one quota view; different accounts remain separate. Unknown identity stays unknown, and switching accounts stops presenting the old account as current. Original collection time is preserved. A passed reset time displays **等待更新确认**, never an assumed 100% remaining quota. Account writes are spaced by at least 60 seconds per device, independently of usage batches. The durable outbox resumes after restarts and network failures.
+
+```powershell
+codex-usage cloud connect --name "My laptop" --no-open --json
+codex-usage cloud status --json
+codex-usage cloud pause
+codex-usage cloud resume
+codex-usage cloud disconnect
+```
+
+`connect --json` returns the verification URL without opening a browser; add `--wait` to wait for confirmation. Pause and disconnect preserve history; disconnect revokes upload access. Offline disconnect retains a pending revocation and its credential only to finish that operation. **删除云端历史** separately revokes access and deletes that device's cloud records, leaving local data and other devices' copies intact. History remains until explicitly deleted; detached storage is reclaimed in background batches. Logging out of the website does not stop device sync.
+
+Full sync includes parsed event timestamps and token components, models, reasoning effort, original titles, full project paths, task/turn/response identifiers, Agent relationships, quality flags, and account snapshots with opaque account references. Tokens stay decimal strings and missing values stay `null`. Chats, tool bodies, raw session files, login credentials, raw account identities and the original SQLite database stay local. The cloud can read the statistics metadata; this is not end-to-end encrypted storage. GitHub login requests no repository scopes. Keep `cloud-credentials.json` out of bug reports.
+
+The public example remains synthetic. [usage.esoren.com](https://usage.esoren.com) still redirects to the current computer and shows only its local data; it does not fetch other devices from the cloud. A cloud deployment does not release a new npm package.
 
 ## Start and stop
 

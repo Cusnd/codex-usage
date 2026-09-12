@@ -18,3 +18,11 @@ output/
 release-artifacts/
 .wrangler/
 showcase/build/
+cloud/build/
+cloud/.dev.vars
+cloud/.dev.vars.*
+!cloud/.dev.vars.example
+cloud/.deploy/
+
+cloud/.generated/
+shared/build-version.ts

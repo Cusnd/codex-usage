@@ -3,8 +3,9 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, mkdirSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { defaultDataRoot } from './platform.js';
+import { defaultDataRoot, xdgHome } from './platform.js';
 import { macAutostart } from './mac-autostart.js';
+import { linuxAutostart } from './linux-autostart.js';
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url));
 export const packageRoot = existsSync(path.join(sourceRoot, 'package.json')) ? sourceRoot : fileURLToPath(new URL('../../', import.meta.url));
@@ -48,11 +49,16 @@ const macStartup = () => macAutostart({
   directory: process.env.CODEX_USAGE_STARTUP_DIR || path.join(os.homedir(), 'Library/LaunchAgents'),
   dataRoot, node: process.execPath, cli: path.join(packageRoot, 'bin/codex-usage.mjs'), port, env: process.env,
 });
+const linuxStartup = () => linuxAutostart({
+  directory: process.env.CODEX_USAGE_STARTUP_DIR || path.join(xdgHome(process.env.XDG_CONFIG_HOME, path.join(os.homedir(), '.config')), 'systemd/user'),
+  dataRoot, node: process.execPath, entry: path.join(packageRoot, 'dist/server/index.js'), port, env: process.env,
+});
 function startupPath() {
   if (process.platform !== 'win32') throw new Error('Autostart is supported on Windows only.');
   return path.join(process.env.CODEX_USAGE_STARTUP_DIR || path.join(process.env.APPDATA!, 'Microsoft/Windows/Start Menu/Programs/Startup'), 'Codex Usage.lnk');
 }
 export function autostartStatus() {
+  if (process.platform === 'linux') return linuxStartup().status();
   if (process.platform === 'darwin') return macStartup().status();
   if (process.platform !== 'win32') return { supported: false, enabled: false };
   const shortcut = startupPath();
@@ -61,6 +67,7 @@ export function autostartStatus() {
   return { supported: true, enabled: target.includes(path.join(dataRoot, 'launch.ps1')), conflict: !target.includes(path.join(dataRoot, 'launch.ps1')) };
 }
 export function setAutostart(enabled: boolean) {
+  if (process.platform === 'linux') return linuxStartup().set(enabled);
   if (process.platform === 'darwin') return macStartup().set(enabled);
   const shortcut = startupPath();
   if (autostartStatus().conflict) throw new Error('An unmanaged Codex Usage startup shortcut already exists.');
