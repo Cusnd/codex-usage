@@ -26,14 +26,36 @@ export function legacyPreparations(store:Store,collectorId:string,deviceId:strin
       if(!source)continue;
       sources.set(stableJson([source.id,Number(source.generation)]),{source_id:source.id,generation:Number(source.generation)});
       // A restart can leave an older immutable packet in flight while a newer generation exists.
-      for(const pending of store.all("SELECT raw_json FROM collector_batches WHERE source_id=? AND cloud_required=1 AND cloud_state<>'applied'",[source.id]))for(const s of (JSON.parse(pending.raw_json) as UploadBatch).sources)
-        sources.set(stableJson([s.source_id,s.generation]),{source_id:s.source_id,generation:s.generation});
+      // Collector source batches each contain exactly one source, and their
+      // immutable source/generation headers are saved in the same transaction as
+      // raw_json. Read those indexed headers rather than reparsing every pending
+      // usage payload before every HTTP request. Metadata/handoff batches have
+      // different source IDs and cannot appear in this source's pending rows.
+      for(const pending of store.all("SELECT DISTINCT generation FROM collector_batches WHERE source_id=? AND cloud_required=1 AND cloud_state<>'applied'",[source.id])){
+        const generation=Number(pending.generation);
+        sources.set(stableJson([source.id,generation]),{source_id:source.id,generation});
+      }
     }
     // Preparation is additive, so generation groups can be registered separately without retiring history.
     const generations=new Map<number,{source_id:string;generation:number}[]>();for(const s of sources.values()){const list=generations.get(s.generation)||[];list.push(s);generations.set(s.generation,list);}
     for(const values of generations.values())for(let i=0;i<values.length;i+=100)requests.push({collector_id:collectorId,replacements:[{type:'legacy_replacement',dataset_id:row.dataset_id,thread_id:row.thread_id,sources:values.slice(i,i+100)}]});
   }
   return requests;
+}
+/** Pack additive registrations within the existing HTTP and source-count limits. */
+export function groupLegacyPreparations(preparations:LegacyPreparation[]):{body:LegacyPreparation;keys:string[]}[] {
+  const groups:{body:LegacyPreparation;keys:string[]}[]=[];
+  let group:typeof groups[number]|undefined,sourceCount=0,bytes=0;
+  for(const preparation of preparations){
+    const count=preparation.replacements.reduce((sum,m)=>sum+m.sources.length,0);
+    const added=preparation.replacements.reduce((sum,m)=>sum+Buffer.byteLength(JSON.stringify(m))+1,0);
+    if(!group||group.body.collector_id!==preparation.collector_id||group.body.replacements.length+preparation.replacements.length>64||sourceCount+count>500||bytes+added>48*1024){
+      group={body:{collector_id:preparation.collector_id,replacements:[]},keys:[]};groups.push(group);sourceCount=0;bytes=Buffer.byteLength(JSON.stringify(group.body));
+    }
+    group.body.replacements.push(...preparation.replacements);group.keys.push(stableJson(preparation));sourceCount+=count;bytes+=added;
+    if(bytes>64*1024)throw Object.assign(Error('legacy preparation exceeds request limit'),{code:'LEGACY_PREPARATION_TOO_LARGE'});
+  }
+  return groups;
 }
 /** Queue a handoff only after every old source is complete and applied under the same device. */
 export function queueLegacyReplacements(store:Store,collectorId:string,deviceId:string,producerEpoch:string){

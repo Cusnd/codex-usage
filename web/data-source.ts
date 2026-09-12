@@ -6,7 +6,7 @@ import { CloudSyncController, jsonRequest, SyncError } from './cloud-sync/contro
 import { sameCut, type ReadLease, type EntityRef } from './cloud-sync/cache';
 import { labelsFromEntities, namesFromProjects, referencedProjectIds, type ProjectLabelView } from './cloud-sync/project-labels';
 
-export type QueryView = { namespace: string; lease: ReadLease | null; rolling?: boolean; timezone?: string };
+export type QueryView = { namespace: string; lease: ReadLease | null; legacy?: boolean; rolling?: boolean; timezone?: string };
 export interface UsageDataSource {
   readonly mode: 'local' | 'cloud' | 'example';
   revision(): string;
@@ -56,8 +56,8 @@ export class CloudUsageDataSource implements UsageDataSource {
   private labels: { cut: SyncCut; names: Record<string, string> } | null = null;
   constructor(readonly controller: CloudSyncController, private request: typeof jsonRequest = jsonRequest, private online = () => typeof navigator === 'undefined' || navigator.onLine !== false, private systemTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone) {}
   private timezone(lease: ReadLease | null) { return lease?.settings?.timezoneMode === 'manual' ? lease.settings.timezone : this.systemTimezone(); }
-  revision() { const lease=this.controller.state().activeLease;return stableJson([USAGE_QUERY_REVISION, this.controller.namespace, lease?.cut ?? null, this.accountRefresh, this.timezone(lease)]); }
-  capture(): QueryView { const lease=this.controller.state().activeLease;return { namespace: this.controller.namespace, lease, timezone:this.timezone(lease) }; }
+  revision() { const lease=this.controller.state().activeLease;return stableJson([USAGE_QUERY_REVISION, this.controller.namespace, lease?.cut ?? null, this.accountRefresh, this.timezone(lease), this.controller.legacyViewAvailable()]); }
+  capture(): QueryView { const lease=this.controller.state().activeLease;return { namespace: this.controller.namespace, lease, legacy:this.controller.legacyViewAvailable(), timezone:this.timezone(lease) }; }
   clock = () => this.controller.state().viewAt ? Date.parse(this.controller.state().viewAt!) : Date.now();
   invalidateAccounts() {
     this.accountRefresh++;
@@ -131,7 +131,8 @@ export class CloudUsageDataSource implements UsageDataSource {
     }
     if (!this.online()) throw new OfflineCacheMiss();
     const search = queryParameters(params), prefix = route === 'account/cloud' ? '/api/v3/accounts' : '/api/v3/usage/' + route;
-    const body = await this.request<ApiResponse<T> & { accounts?: T }>(prefix + (search.size ? '?' + search : ''), { signal });
+    const body = await this.request<ApiResponse<T> & { accounts?: T; user_id?: string }>(prefix + (search.size ? '?' + search : ''), { signal });
+    if (body.user_id !== this.controller.identity.userId) throw new SyncError('The cloud user changed while this account page was loading.', 'VIEW_CHANGED');
     const result: ApiResponse<T> = body.accounts !== undefined ? { data: body.accounts, meta: { source: 'account', updatedAt: null, timezone: 'UTC', warnings: [] } } : body;
     signal?.throwIfAborted(); const at = new Date().toISOString();
     if (!await cache.putAccount(namespace, saved.generation, { key, response: result as ApiResponse<unknown>, cachedAt: at })) {
@@ -139,11 +140,45 @@ export class CloudUsageDataSource implements UsageDataSource {
     }
     await assertCurrent(); return this.withCacheMeta(result, false, at, true);
   }
+  private async legacyQuery<T>(route: string, params: Record<string, unknown>, signal?: AbortSignal, view?: QueryView): Promise<ApiResponse<T>> {
+    const assertCurrent = () => {
+      signal?.throwIfAborted();
+      if (!this.controller.legacyViewAvailable() || view && view.namespace !== this.controller.namespace) {
+        throw new SyncError('历史迁移已切换读取版本，正在重新读取页面。', 'VIEW_CHANGED');
+      }
+    };
+    assertCurrent();
+    if (!this.online()) throw new OfflineCacheMiss();
+    const search = queryParameters({ ...params, deviceIds: this.controller.identity.deviceIds, legacy_fallback: '1' });
+    let result: ApiResponse<T>;
+    try { result = await this.request<ApiResponse<T>>('/api/v2/usage/' + route + '?' + search, { signal }); }
+    catch (error) {
+      if (error instanceof SyncError && error.code === 'LEGACY_VIEW_EXPIRED') {
+        await this.controller.trigger('automatic');
+        throw new SyncError('历史迁移已切换读取版本，正在重新读取页面。', 'VIEW_CHANGED');
+      }
+      throw error;
+    }
+    assertCurrent();
+    const saved = await this.controller.cache.state(this.controller.namespace);
+    assertCurrent();
+    if (saved?.phase !== 'legacy_ready' || saved.activeLease) throw new SyncError('The saved cloud view changed in another tab.', 'VIEW_CHANGED');
+    const legacy = (result.meta as unknown as { legacyView?: { complete?: boolean; user_id?: string } }).legacyView;
+    if (legacy?.complete !== true) {
+      throw new SyncError('旧版历史响应未确认完整性。', 'LEGACY_VIEW_INCOMPLETE');
+    }
+    if (legacy.user_id !== this.controller.identity.userId) throw new SyncError('The cloud user changed while this page was loading.', 'VIEW_CHANGED');
+    // This is a live legacy observation, not a v3 fixed cut or an offline cache.
+    return { ...result, meta: { ...result.meta, warnings: [...new Set([...result.meta.warnings,
+      '正在迁移完整历史，暂时显示最近完整同步的旧版历史，完成后自动切换。'])] } };
+  }
   async query<T>(route: string, input: Record<string, unknown> = {}, signal?: AbortSignal, view?: QueryView): Promise<ApiResponse<T>> {
     if (route.startsWith('account')) return this.accountQuery(route, input, signal, view);
     await this.controller.initialize(); signal?.throwIfAborted();
     const params = canonicalParams(input, false);
+    if (view?.legacy && !this.controller.legacyViewAvailable()) throw new SyncError('The cloud view changed while this page was loading.', 'VIEW_CHANGED');
     const lease = view?.lease ?? this.controller.state().activeLease ?? (this.online() ? await this.controller.view(signal) : null);
+    if (!lease && this.controller.legacyViewAvailable()) return this.legacyQuery(route, params, signal, view);
     if (!lease) throw new OfflineCacheMiss();
     // App's existing settings query checks every minute and on window focus. Resolving
     // the browser zone here gives it a new cache key without acquiring a newer cut.

@@ -32,9 +32,12 @@ export function bigintMetrics(row: AggregateRow): AggregateRow {
 export const invalidTokenStorageSql = tokenFields.map(k => `(${k} IS NOT NULL AND (typeof(${k}) NOT IN ('integer','text') OR NOT (CAST(${k} AS TEXT)='0' OR (substr(CAST(${k} AS TEXT),1,1) BETWEEN '1' AND '9' AND CAST(${k} AS TEXT) NOT GLOB '*[^0-9]*'))))`).join(' OR ');
 
 export function* canAggregateInSql(store: QueryStore, where: SqlWhere): Generator<Statement, boolean, any> {
+  // A non-flattened, streaming projection evaluates JSON-backed token columns once
+  // per filtered row. LIMIT -1 preserves every row while retaining filter indexes;
+  // the outer proof still validates storage and every exact integer bound.
   const row = (yield* store.one(`SELECT CAST(COUNT(*) AS TEXT) n,COALESCE(MAX(CASE WHEN ${invalidTokenStorageSql} THEN 1 ELSE 0 END),0) invalid,
     ${tokenFields.map(k => `MAX(length(CAST(${k} AS TEXT))) ${k}_digits,MAX(CASE WHEN length(CAST(${k} AS TEXT))<=19 THEN printf('%019s',CAST(${k} AS TEXT)) END) ${k}_max`).join(',')}
-    FROM effective_events ${where.sql}`, where.params))!;
+    FROM (SELECT ${tokenFields.join(',')} FROM effective_events ${where.sql} LIMIT -1) checked`, where.params))!;
   if (Number(row.invalid)) throw Object.assign(new Error('Token storage contains a noncanonical value or a previously rounded REAL; exact statistics require reimporting that source.'), { code: 'INVALID_TOKEN_STORAGE' });
   const n = BigInt(exactText(row.n)), maxima = new Map<string, bigint>();
   for (const k of tokenFields) {

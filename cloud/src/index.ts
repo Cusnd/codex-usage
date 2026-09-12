@@ -25,7 +25,7 @@ export async function cleanup(env: Env, now = Date.now()) {
   ]);
 }
 export default {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request:Request, env:Env, ctx?:ExecutionContext): Promise<Response> {
     const url = new URL(request.url),
       pathname = url.pathname;
     try {
@@ -52,7 +52,7 @@ export default {
         return fail(403, "INVALID_ORIGIN", "请使用已配置的云端地址。");
       const response =
         (await authRoute(request, env, pathname)) ||
-        (await v3Route(request, env, pathname)) ||
+        (await v3Route(request, env, pathname,ctx)) ||
         (await usageSyncRoute(request, env, pathname)) ||
         (await usageQueryRoute(request, env, pathname)) ||
         (await deviceRoute(request, env, pathname)) ||
@@ -114,7 +114,9 @@ export default {
   async scheduled(_event, env) {
     await cleanup(env);
     for(let i=0;i<4;i++)await cleanupUsage(env);
-    await advanceJobs(env.DB,{maxSteps:20,budgetMs:15000});
+    // Cleanup consumes at most 323 statements across the 100-domain page. Leave
+    // headroom under D1's 1,000-query invocation limit, counting batch SQL too.
+    await advanceJobs(env.DB,{maxSteps:200,maxQueries:600,budgetMs:20000});
     await cleanupVersions(env.DB);
   },
 } satisfies ExportedHandler<Env>;

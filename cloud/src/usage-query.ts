@@ -7,6 +7,7 @@ import { officialPrices, pricingInfo } from '../../shared/pricing';
 import type { CloudAccountSnapshot, CloudAccountView, CloudHistorySource } from '../../shared/usage-sync';
 import { sessionUser } from './auth';
 import { fail, json, readJson, requireJson, requireSameOrigin } from './http';
+import { assertLegacyRead } from './v3/legacy-read';
 
 FormatRegistry.Set('date-time', v => /^\d{4}-\d\d-\d\dT/.test(v) && Number.isFinite(Date.parse(v)));
 const defaults: Settings = {localInterval:0,accountInterval:0,timezone:'America/New_York',timezoneMode:'manual',costEnabled:false,officialApiPricing:false,modelPrices:officialPrices};
@@ -102,6 +103,27 @@ export async function accountViews(env:Env,userId:string,deviceIds:string[]):Pro
 }
 export async function usageQueryRoute(request:Request,env:Env,pathname:string):Promise<Response|null> {
   if(!pathname.startsWith('/api/v2/usage/')&&pathname!=='/api/v2/accounts')return null;
+  if(new URL(request.url).searchParams.get('legacy_fallback')==='1'){
+    if(request.method!=='GET')return fail(405,'READ_ONLY','迁移期间的旧版历史仅供读取。');
+    const user=await sessionUser(request,env);
+    const version=await assertLegacyRead(env.DB,user.id);
+    let response:Response|null;
+    try{response=await legacyUsageQueryRoute(request,env,pathname);}
+    catch(error){
+      // A head change may invalidate integer-safety proofs and make a later SUM
+      // fail. Classify that race as an expired read so the caller can retry it.
+      await assertLegacyRead(env.DB,user.id,version);throw error;
+    }
+    // The legacy-head triggers advance write_version for inserts and revisions.
+    // Reject count/page, cost/total or proof/SUM results spanning those versions.
+    await assertLegacyRead(env.DB,user.id,version);
+    if(!response?.ok)return response;
+    const body=await response.json<Record<string,any>>();
+    return json({...body,meta:{...body.meta,legacyView:{complete:true,user_id:user.id}}});
+  }
+  return legacyUsageQueryRoute(request,env,pathname);
+}
+async function legacyUsageQueryRoute(request:Request,env:Env,pathname:string):Promise<Response|null> {
   const user=await sessionUser(request,env), url=new URL(request.url), deviceIds=[...new Set(url.searchParams.getAll('deviceIds'))];
   if(deviceIds.length>100||deviceIds.some(x=>!x||x.length>256))return fail(400,'INVALID_FILTER','设备筛选无效。');
   if(deviceIds.length){const {results}=await env.DB.prepare('SELECT id FROM devices WHERE user_id=? AND id IN (SELECT value FROM json_each(?))').bind(user.id,JSON.stringify(deviceIds)).all();

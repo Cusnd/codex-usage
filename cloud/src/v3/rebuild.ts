@@ -16,8 +16,8 @@ const parsedFields=['observation_id','uploader_device_id','collector_id','source
 export function proposedCandidates():string {
   return `WITH scope AS(SELECT ? user_id,? job_id), plans AS(SELECT p.* FROM v3_rebuild_sources p JOIN scope x ON p.user_id=x.user_id AND p.job_id=x.job_id),
     overlays AS(SELECT o.* FROM v3_rebuild_candidates o JOIN scope x ON o.user_id=x.user_id AND o.job_id=x.job_id),
-    proposed AS(SELECT ${parsedFields.map(f=>'c.'+f).join(',')} FROM v3_candidates c CROSS JOIN scope x LEFT JOIN plans p ON p.collector_id=c.collector_id AND p.source_id=c.source_id WHERE c.user_id=x.user_id AND CASE WHEN p.source_id IS NULL THEN c.active=1 ELSE c.generation=p.generation AND COALESCE(json_extract(p.payload,'$.active'),1)=1 END AND NOT EXISTS(SELECT 1 FROM overlays o WHERE o.observation_id=c.observation_id)
-    UNION ALL SELECT ${parsedFields.map(f=>`json_extract(payload,'$.${f}') ${f}`).join(',')} FROM overlays WHERE payload IS NOT NULL AND json_extract(payload,'$.active')=1),
+    proposed AS(SELECT ${parsedFields.map(f=>'c.'+f).join(',')} FROM v3_candidates c CROSS JOIN scope x LEFT JOIN plans p ON p.collector_id=c.collector_id AND p.source_id=c.source_id WHERE c.user_id=x.user_id AND CASE WHEN p.source_id IS NULL THEN c.active=1 ELSE c.generation=p.generation AND COALESCE(json_extract(p.payload,'$.active'),1)=1 END AND NOT EXISTS(SELECT 1 FROM v3_rebuild_candidates o WHERE o.user_id=x.user_id AND o.job_id=x.job_id AND o.observation_id=c.observation_id)
+    UNION ALL SELECT ${parsedFields.map(f=>f==='event_id'?'event_id':`json_extract(payload,'$.${f}') ${f}`).join(',')} FROM overlays WHERE payload IS NOT NULL AND json_extract(payload,'$.active')=1),
     candidates AS(SELECT * FROM proposed WHERE COALESCE(json_extract(candidate,'$.excluded'),0)=0)`;
 }
 export function stageCandidateStatements(db:D1Database,user:string,job:string,rows:Map<string,CandidateRow|null>):D1PreparedStatement[] {
@@ -37,22 +37,33 @@ export async function stagedEntities(db:D1Database,h:Domain,epoch:string,changes
   return chunks(rows).map(group=>db.prepare(`INSERT INTO v3_entity_versions(user_id,epoch,kind,entity_id,valid_from,revision,hash,at,thread_id,origin_device_id,payload) SELECT ?,?,json_extract(value,'$.kind'),json_extract(value,'$.id'),0,json_extract(value,'$.revision'),json_extract(value,'$.hash'),json_extract(value,'$.at'),json_extract(value,'$.thread_id'),json_extract(value,'$.origin_device_id'),json_extract(value,'$.payload') FROM json_each(?)`).bind(h.user_id,epoch,stableJson(group)));
 }
 async function eventStep(db:D1Database,h:Domain,job:Job,c:RebuildCheckpoint):Promise<D1PreparedStatement[]> {
-  const ids=(await db.prepare(proposedCandidates()+` SELECT DISTINCT event_id FROM candidates WHERE event_id>? ORDER BY event_id LIMIT 100`).bind(h.user_id,job.job_id,c.last||'').all<{event_id:string}>()).results.map(r=>r.event_id);
+  // Each indexed branch contributes at most one page. An outer DISTINCT over the
+  // entire proposed UNION makes SQLite scan/sort the remaining history per page.
+  const current=`SELECT DISTINCT c.event_id FROM v3_candidates c LEFT JOIN v3_rebuild_sources p ON p.user_id=c.user_id AND p.job_id=? AND p.collector_id=c.collector_id AND p.source_id=c.source_id WHERE c.user_id=? AND c.event_id>? AND CASE WHEN p.source_id IS NULL THEN c.active=1 ELSE c.generation=p.generation AND COALESCE(json_extract(p.payload,'$.active'),1)=1 END AND COALESCE(json_extract(c.candidate,'$.excluded'),0)=0 AND NOT EXISTS(SELECT 1 FROM v3_rebuild_candidates o WHERE o.user_id=c.user_id AND o.job_id=? AND o.observation_id=c.observation_id) ORDER BY c.event_id LIMIT 100`;
+  const staged=`SELECT DISTINCT event_id FROM v3_rebuild_candidates WHERE user_id=? AND job_id=? AND event_id>? AND payload IS NOT NULL AND json_extract(payload,'$.active')=1 AND COALESCE(json_extract(json_extract(payload,'$.candidate'),'$.excluded'),0)=0 ORDER BY event_id LIMIT 100`;
+  const ids=(await db.prepare(`SELECT event_id FROM (${current}) UNION SELECT event_id FROM (${staged}) ORDER BY event_id LIMIT 100`).bind(job.job_id,h.user_id,c.last||'',job.job_id,h.user_id,job.job_id,c.last||'').all<{event_id:string}>()).results.map(r=>r.event_id);
   if(!ids.length){c.phase='threads';delete c.last;return [];}
-  const rows=(await db.prepare(proposedCandidates()+` SELECT * FROM candidates WHERE event_id IN(SELECT value FROM json_each(?))`).bind(h.user_id,job.job_id,stableJson(ids)).all<CandidateRow>()).results.map(r=>({...r,active:1}));
-  const prior=(await db.prepare('SELECT * FROM v3_candidates WHERE user_id=? AND active=1 AND event_id IN(SELECT value FROM json_each(?))').bind(h.user_id,stableJson(ids)).all<CandidateRow>()).results;
-  const turns=[...new Set(rows.filter(r=>r.turn_id!==null).map(r=>stableJson([r.thread_id,r.turn_id])))].map(v=>JSON.parse(v));
+  const [loaded,rules]=await Promise.all([db.batch([
+    db.prepare(proposedCandidates()+` SELECT * FROM candidates WHERE event_id IN(SELECT value FROM json_each(?))`).bind(h.user_id,job.job_id,stableJson(ids)),
+    db.prepare('SELECT * FROM v3_candidates WHERE user_id=? AND active=1 AND event_id IN(SELECT value FROM json_each(?))').bind(h.user_id,stableJson(ids)),
+    db.prepare("SELECT entity_id,payload,revision FROM v3_entity_versions WHERE user_id=? AND epoch=? AND kind='event' AND valid_to IS NULL AND entity_id IN(SELECT value FROM json_each(?))").bind(h.user_id,h.active_epoch,stableJson(ids)),
+  ]),assignmentRules(db,h.user_id,ids)]);
+  const rows=(loaded[0].results as CandidateRow[]).map(r=>({...r,active:1})),prior=loaded[1].results as CandidateRow[],old=loaded[2].results as {entity_id:string;payload:string|null;revision:number}[];
+  const turns=[...new Set(rows.filter(r=>r.turn_id!==null&&JSON.parse(r.candidate).kind!=='record').map(r=>stableJson([r.thread_id,r.turn_id])))].map(v=>JSON.parse(v));
   const explicit=turns.length?(await db.prepare(proposedCandidates()+` SELECT DISTINCT thread_id,turn_id FROM candidates WHERE json_extract(candidate,'$.kind')='record' AND EXISTS(SELECT 1 FROM json_each(?) p WHERE thread_id=json_extract(p.value,'$[0]') AND turn_id=json_extract(p.value,'$[1]'))`).bind(h.user_id,job.job_id,stableJson(turns)).all<{thread_id:string;turn_id:string}>()).results:[],explicitTurns=new Set(explicit.map(r=>stableJson([r.thread_id,r.turn_id])));
   const allowed=new Set(rows.filter(r=>JSON.parse(r.candidate).kind==='record'||r.turn_id===null||!explicitTurns.has(stableJson([r.thread_id,r.turn_id]))).map(r=>r.observation_id)),values:CanonicalEvent[]=[],originUpdates=new Map<string,CandidateRow|null>();
   // Migration repair only hides an unchanged source until handoff; it is not a
   // correction that can revoke proof already shared with another retained copy.
-  for(const id of ids){const original=rows.filter(r=>r.event_id===id&&allowed.has(r.observation_id)),group=reconcileOriginEvidence(original,prior.filter(r=>r.event_id===id),job.kind==='legacy_stage');
-    for(const r of group)if(r.candidate!==original.find(v=>v.observation_id===r.observation_id)!.candidate)originUpdates.set(r.observation_id,r);
+  const grouped=new Map<string,CandidateRow[]>(),priorGrouped=new Map<string,CandidateRow[]>();
+  for(const r of rows)if(allowed.has(r.observation_id)){if(!grouped.has(r.event_id))grouped.set(r.event_id,[]);grouped.get(r.event_id)!.push(r);}
+  for(const r of prior){if(!priorGrouped.has(r.event_id))priorGrouped.set(r.event_id,[]);priorGrouped.get(r.event_id)!.push(r);}
+  for(const id of ids){const original=grouped.get(id)||[],byObservation=new Map(original.map(r=>[r.observation_id,r])),group=reconcileOriginEvidence(original,priorGrouped.get(id)||[],job.kind==='legacy_stage');
+    for(const r of group)if(r.candidate!==byObservation.get(r.observation_id)!.candidate)originUpdates.set(r.observation_id,r);
     const value=await canonicalFromRows(group);if(value)values.push(value);
   }
-  const rules=await assignmentRules(db,h.user_id,ids);for(let i=0;i<values.length;i++)values[i]=withAssignment(values[i],rules.get(values[i].event_id)??null)!;
-  const old=(await db.prepare("SELECT entity_id,payload,revision FROM v3_entity_versions WHERE user_id=? AND epoch=? AND kind='event' AND valid_to IS NULL AND entity_id IN(SELECT value FROM json_each(?))").bind(h.user_id,h.active_epoch,stableJson(ids)).all<{entity_id:string;payload:string|null;revision:number}>()).results;
-  const changes:EntityMutation[]=values.map(value=>{const before=old.find(r=>r.entity_id===value.event_id);return {kind:'event',id:value.event_id,value,revision:(before?.revision||0)+Number(before?.payload!==stableJson(value)),at:value.at,thread_id:value.thread_id,origin_device_id:effectiveOrigin(value)};}),out=await stagedEntities(db,h,c.epoch,changes);
+  for(let i=0;i<values.length;i++)values[i]=withAssignment(values[i],rules.get(values[i].event_id)??null)!;
+  const oldById=new Map(old.map(r=>[r.entity_id,r]));
+  const changes:EntityMutation[]=values.map(value=>{const before=oldById.get(value.event_id);return {kind:'event',id:value.event_id,value,revision:(before?.revision||0)+Number(before?.payload!==stableJson(value)),at:value.at,thread_id:value.thread_id,origin_device_id:effectiveOrigin(value)};}),out=await stagedEntities(db,h,c.epoch,changes);
   for(const group of chunks(changes.map(v=>({revision:v.revision,...v.value as CanonicalEvent,origin_device_id:v.origin_device_id,payload:stableJson(v.value)}))))out.push(db.prepare(`INSERT INTO v3_events(user_id,epoch,event_id,revision,at,thread_id,turn_id,origin_device_id,source_project_id,project,model,effort,payload) SELECT ?,?,json_extract(value,'$.event_id'),json_extract(value,'$.revision'),json_extract(value,'$.at'),json_extract(value,'$.thread_id'),json_extract(value,'$.turn_id'),json_extract(value,'$.origin_device_id'),json_extract(value,'$.source_project_id'),json_extract(value,'$.project'),json_extract(value,'$.model'),json_extract(value,'$.effort'),json_extract(value,'$.payload') FROM json_each(?)`).bind(h.user_id,c.epoch,stableJson(group)));
   out.push(...await metricStatements(db,{...h,active_epoch:c.epoch},values.map(after=>({event_id:after.event_id,before:null,after}))));
   out.push(...stageCandidateStatements(db,h.user_id,job.job_id,originUpdates));
@@ -67,8 +78,10 @@ async function threadStep(db:D1Database,h:Domain,job:Job,c:RebuildCheckpoint):Pr
   const ids=(await db.prepare(proposedThreads()+' SELECT DISTINCT thread_id FROM selected WHERE thread_id>? ORDER BY thread_id LIMIT 100').bind(h.user_id,job.job_id,c.last||'').all<{thread_id:string}>()).results.map(r=>r.thread_id);
   if(!ids.length){c.phase='metadata';delete c.last;return [];}
   const rows=(await db.prepare(proposedThreads()+' SELECT thread_id,payload FROM selected WHERE thread_id IN(SELECT value FROM json_each(?)) ORDER BY collector_id,source_id,generation').bind(h.user_id,job.job_id,stableJson(ids)).all<{thread_id:string;payload:string}>()).results,changes:EntityMutation[]=[];
-  for(const id of ids){let value:ThreadChange|undefined;for(const r of rows.filter(r=>r.thread_id===id)){const t=JSON.parse(r.payload) as ThreadChange;if(!value)value=t;else if(t.title!==undefined){if((t.title_updated_at||'')>=(value.title_updated_at||''))value={...value,title:t.title,title_updated_at:t.title_updated_at};}else value={...value,...t};}
-    if(value){const old=await db.prepare('SELECT payload,revision FROM v3_threads WHERE user_id=? AND thread_id=?').bind(h.user_id,id).first<{payload:string;revision:number}>();changes.push({kind:'thread',id,value,thread_id:id,revision:(old?.revision||0)+Number(old?.payload!==stableJson(value))});}}
+  const previous=(await db.prepare('SELECT thread_id,payload,revision FROM v3_threads WHERE user_id=? AND thread_id IN(SELECT value FROM json_each(?))').bind(h.user_id,stableJson(ids)).all<{thread_id:string;payload:string;revision:number}>()).results,oldById=new Map(previous.map(r=>[r.thread_id,r])),grouped=new Map<string,ThreadChange[]>();
+  for(const r of rows){if(!grouped.has(r.thread_id))grouped.set(r.thread_id,[]);grouped.get(r.thread_id)!.push(JSON.parse(r.payload));}
+  for(const id of ids){let value:ThreadChange|undefined;for(const t of grouped.get(id)||[]){if(!value)value=t;else if(t.title!==undefined){if((t.title_updated_at||'')>=(value.title_updated_at||''))value={...value,title:t.title,title_updated_at:t.title_updated_at};}else value={...value,...t};}
+    if(value){const old=oldById.get(id);changes.push({kind:'thread',id,value,thread_id:id,revision:(old?.revision||0)+Number(old?.payload!==stableJson(value))});}}
   c.last=ids.at(-1);return stagedEntities(db,h,c.epoch,changes);
 }
 async function metadataStep(db:D1Database,h:Domain,c:RebuildCheckpoint):Promise<D1PreparedStatement[]> {
@@ -84,8 +97,10 @@ export function rebuildPublication(db:D1Database,h:Domain,job:string,epoch:strin
   db.prepare("UPDATE v3_sync_domains SET active_epoch=?,commit_seq=0,changes_floor=0,mode='ready',rebuild_job=NULL WHERE user_id=? AND rebuild_job=?").bind(epoch,h.user_id,job),
   ...rebuildCleanup(db,h.user_id,job),
 ];}
-export async function advanceRebuild(db:D1Database,job:Job,publish:(h:Domain,c:RebuildCheckpoint)=>Promise<boolean>):Promise<boolean> {
-  const h=await domain(db,job.user_id),c=JSON.parse(job.checkpoint) as RebuildCheckpoint;if(h.mode!=='rebuilding'||h.rebuild_job!==job.job_id)throw new HttpError(409,'REBUILD_SUPERSEDED','重建已被其他操作替代。');
+export async function advanceRebuild(db:D1Database,job:Job,publish:(h:Domain,c:RebuildCheckpoint)=>Promise<boolean>,loadedDomain?:Domain):Promise<boolean> {
+  // A caller may share its just-read domain. The final guard still compares this
+  // exact epoch/write_version, so concurrent changes cannot publish stale work.
+  const h=loadedDomain??await domain(db,job.user_id),c=JSON.parse(job.checkpoint) as RebuildCheckpoint;if(h.mode!=='rebuilding'||h.rebuild_job!==job.job_id)throw new HttpError(409,'REBUILD_SUPERSEDED','重建已被其他操作替代。');
   const device=job.device_id?await currentDevice(db,h.user_id,job.device_id):undefined;
   if(c.phase==='publish')return publish(h,c);
   const statements=c.phase==='events'?await eventStep(db,h,job,c):c.phase==='threads'?await threadStep(db,h,job,c):await metadataStep(db,h,c),op=crypto.randomUUID();

@@ -18,7 +18,7 @@ export type BaselineProgress = {
   last_key: string | null; page: { entries: ManifestEntry[]; next_cursor: string | null } | null;
 };
 export type CacheState = {
-  namespace: string; version: number; phase: 'empty' | 'recent_loading' | 'recent_ready' | 'full_loading' | 'full_ready' | 'delta_loading';
+  namespace: string; version: number; phase: 'empty' | 'legacy_ready' | 'recent_loading' | 'recent_ready' | 'full_loading' | 'full_ready' | 'delta_loading';
   activeLease: ReadLease | null; coverage: { scope: 'recent' | 'full'; complete: true; cut: SyncCut; entities: number; sources: unknown } | null;
   baseline: BaselineProgress | null; deltaLease: ReadLease | null;
   receivedCommitSeq: number; appliedCommitSeq: number; lastSyncAt: string | null; viewAt: string | null; error: string | null;
@@ -134,6 +134,21 @@ const request = <T>(req: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
 const done = (tx: IDBTransaction) => new Promise<void>((resolve, reject) => {
   tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted.')); tx.onerror = () => reject(tx.error);
 });
+// Object keys are JSON tuples. An exact, terminated tuple prefix cannot match a
+// neighbouring user or run, even when identifiers contain quotes or commas.
+const tupleRange = (parts: string[], after?: string) => {
+  const prefix = stableJson(parts).slice(0, -1) + ',';
+  return IDBKeyRange.bound(after ?? prefix, prefix + '\uffff', after !== undefined, true);
+};
+async function forEachBatch<T extends { key: string }>(store: IDBObjectStore, parts: string[], visit: (rows: T[]) => Promise<void>) {
+  let after: string | undefined;
+  for (;;) {
+    const rows = await request(store.getAll(tupleRange(parts, after), 256)) as T[];
+    if (!rows.length) return;
+    await visit(rows); after = rows[rows.length - 1].key;
+    if (rows.length < 256) return;
+  }
+}
 const cursorEach = (source: IDBObjectStore | IDBIndex, range: IDBKeyRange | undefined, visit: (cursor: IDBCursorWithValue) => void | Promise<void>) => new Promise<void>((resolve, reject) => {
   const req = source.openCursor(range);
   req.onerror = () => reject(req.error);
@@ -233,24 +248,30 @@ export class IndexedDbCloudCache implements CloudCache {
       for (const row of change.stages ?? []) stages.put({ key: stagePrimary(namespace, row), namespace, runKey: stageRun(namespace, row.run), row });
       if (change.finalizeBaseline) {
         const run = change.finalizeBaseline, epoch = next.activeLease!.cut.dataset_epoch;
-        await cursorEach(stages.index('run'), IDBKeyRange.only(stageRun(namespace, run)), async cursor => {
-          const row = (cursor.value as StoredStage).row;
-          if (row.type !== 'entity') throw new Error('Unexpected baseline staging row.');
-          const key = entityId(namespace, epoch, row.entry), old = await request(entities.get(key)) as StoredEntity | undefined;
-          const value = row.entity ?? (old ? { ...old.entity, revision: row.entry.revision } : undefined);
-          if (!value || value.hash !== row.entry.hash || value.revision !== row.entry.revision) throw new Error('Incomplete baseline entity.');
-          if (!old || old.entity.hash !== value.hash || old.entity.revision !== value.revision) entities.put({ key, namespace, epoch, entity: value });
+        const keep = new Set<IDBValidKey>();
+        await forEachBatch<StoredStage>(stages, [namespace, run], async batch => {
+          // Queue reused-body reads together. Downloaded bodies need no prior read.
+          const rows = batch.map(({ row }) => {
+            if (row.type !== 'entity') throw new Error('Unexpected baseline staging row.');
+            return row;
+          });
+          const keys = rows.map(row => entityId(namespace, epoch, row.entry));
+          const prior = await Promise.all(rows.map((row, i) => row.entity ? undefined : request(entities.get(keys[i])) as Promise<StoredEntity | undefined>));
+          rows.forEach((row, i) => {
+            const key = keys[i], old = prior[i], value = row.entity ?? (old ? { ...old.entity, revision: row.entry.revision } : undefined);
+            if (!value || value.hash !== row.entry.hash || value.revision !== row.entry.revision) throw new Error('Incomplete baseline entity.');
+            keep.add(key);
+            if (!old || old.entity.hash !== value.hash || old.entity.revision !== value.revision) entities.put({ key, namespace, epoch, entity: value });
+          });
         });
-        await cursorEach(entities.index('namespace'), IDBKeyRange.only(namespace), async cursor => {
-          const row = cursor.value as StoredEntity;
-          const manifest = row.epoch === epoch ? await request(stages.get(stagePrimary(namespace, { type: 'entity', run, entry: row.entity }))) : undefined;
-          if (!manifest) cursor.delete();
-        });
+        // Read keys only: pruning must not deserialize the complete history again.
+        const keys = await request(entities.index('namespace').getAllKeys(IDBKeyRange.only(namespace)));
+        for (const key of keys) if (!keep.has(key)) entities.delete(key);
       }
       const epoch = next.deltaLease?.cut.dataset_epoch ?? next.activeLease?.cut.dataset_epoch;
       for (const entity of change.entities ?? []) { if (!epoch) throw new Error('Missing cache epoch.'); entities.put({ key: entityId(namespace, epoch, entity), namespace, epoch, entity }); }
       for (const ref of change.deleted ?? []) if (epoch) entities.delete(entityId(namespace, epoch, ref));
-      for (const run of change.clearStages ?? []) await cursorEach(stages.index('run'), IDBKeyRange.only(stageRun(namespace, run)), cursor => { cursor.delete(); });
+      for (const run of change.clearStages ?? []) stages.delete(tupleRange([namespace, run]));
       stateStore.put(next);
       await complete;
       return next;

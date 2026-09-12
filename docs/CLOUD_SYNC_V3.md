@@ -55,6 +55,12 @@ In system-timezone mode the browser sends its validated IANA timezone as query c
 
 ## Migration sequence
 
+The performance implementation collects all committed legacy heads into a private build before one rebuild and publication. It can resume the previous per-head checkpoint format by discarding only its unpublished epoch; the complete published history remains available. Bounded keyset scans avoid revisiting processed prefixes. A version fence rejects a build if committed heads change or retire before publication.
+
+During an initial migration with an entirely committed v2 history, sync status may advertise `legacy_read_available`. The shared UI can then request the complete read-only v2 view using `legacy_fallback=1`; the server checks the same write version before and after its queries. This response identifies its user and does not claim a v3 cut or populate the fixed-version entity cache. Applied v3 contributions, retired heads, deleted history or an inconsistent legacy revision disable the compatibility reader. Active migration status is polled even when ordinary automatic refresh is disabled, so completion switches the page to a verified v3 baseline without a manual reload. This polling completes already initiated work; it does not enable local collection.
+
+The `/api/v3/accounts` response includes its authenticated `user_id`; the browser verifies it before writing a namespaced account snapshot. Background HTTP job advancement uses the request execution context so persisted status can return before the work finishes. See the [performance report](design/performance-optimization-2026-09-12.md) for measured boundaries and the deployment state.
+
 The cloud migrations are additive: `0003_sync_v3.sql` through the current migration head add v3 storage while preserving existing users, devices, settings and v2 facts. Use the migration ledger, not repeated execution of individual `ALTER TABLE` statements. Apply and validate the complete migration chain on a fresh database and a backed-up v2 database before an authorized production switch.
 
 1. **Capture the baseline.** Save the deployed Worker version and migration ledger; export the existing D1 database into protected storage. For each collector, stop its service before taking a consistent backup of `usage.sqlite` and its identity/configuration files. Treat credentials and full paths as private. Record counts, token fields, titles, task relationships, settings and project choices separately.

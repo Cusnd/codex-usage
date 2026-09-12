@@ -16,12 +16,12 @@ const refs = (rows: SyncEntity[]) => rows.map(({ value: _, ...ref }) => ref);
 
 class Transport implements SyncTransport {
   head = cut(); mode = 'ready'; rows: SyncEntity[] = []; recent: SyncEntity[] | undefined;
-  settings:Settings|undefined;
+  settings:Settings|undefined; legacy_read_available = false;
   reads: { scope: string; from?: string; lease: ReadLease }[] = []; manifests: (string | null)[] = []; fetched: string[] = []; renewals: string[] = [];
   leases = new Map<string, { lease: ReadLease; rows: SyncEntity[] }>();
   failManifestAt: string | null | undefined; failEntityOnce = false; manifestPageSize = 200;
   change: ChangeResponse | ((after: number) => ChangeResponse) = { cut: cut(), commits: [], next_cursor: 1, more: false };
-  async status() { return { user_id: identity.userId, cut: this.head, mode: this.mode }; }
+  async status() { return { user_id: identity.userId, cut: this.head, mode: this.mode, legacy_read_available: this.legacy_read_available }; }
   async read(scope: 'recent' | 'full', _ids: string[], from?: string) {
     const rows = structuredClone(scope === 'recent' ? this.recent ?? this.rows : this.rows), leaseCut = from ? this.leases.get(from)!.lease.cut : this.head;
     const counts = new Map<SyncEntity['kind'], number>(); rows.forEach(row => counts.set(row.kind, (counts.get(row.kind) ?? 0) + 1));
@@ -48,9 +48,69 @@ const setup = (transport = new Transport(), cache = new MemoryCloudCache(), auto
   controller: new CloudSyncController({ transport, cache, identity, now: () => now, autoFull }) });
 const response = <T>(data: T, value: SyncCut = cut()): ApiResponse<T> => ({ data, meta: { source: 'cloud', updatedAt: null, timezone: 'UTC', warnings: [], cut: value } } as ApiResponse<T>);
 
+test('first migration reads only an explicitly complete legacy view without promoting a v3 cut or disk cache', async () => {
+  const t = new Transport(); t.legacy_read_available = true; t.mode = 'rebuilding';
+  const { controller, cache } = setup(t); let online = true; const urls: string[] = [];
+  const source = new CloudUsageDataSource(controller, async<T>(url: string) => {
+    urls.push(url); return { data: { total: '9007199254740993' }, meta: { source: 'cloud', warnings: [], legacyView: { complete: true, user_id: identity.userId } } } as T;
+  }, () => online);
+  const result = await source.query<{ total: string }>('local/overview', { deviceIds: ['untrusted'], from: '2026-01-01' });
+  assert.equal(result.data.total, '9007199254740993'); assert.match(result.meta.warnings.join(), /最近完整同步的旧版历史/);
+  const requested = new URL(urls[0], identity.origin);
+  assert.equal(requested.pathname, '/api/v2/usage/local/overview'); assert.equal(requested.searchParams.get('legacy_fallback'), '1');
+  assert.deepEqual(requested.searchParams.getAll('deviceIds'), []); assert.equal(requested.searchParams.get('from'), '2026-01-01');
+  assert.equal(controller.state().phase, 'legacy_ready'); assert.equal(controller.state().activeLease, null);
+  assert.equal(controller.state().coverage, null); assert.equal(controller.state().appliedCommitSeq, 0); assert.equal(t.reads.length, 0);
+  const oldView = source.capture(); online = false; await assert.rejects(source.query('local/overview'), OfflineCacheMiss);
+  online = true; t.legacy_read_available = false; t.mode = 'ready'; await controller.trigger('automatic');
+  assert.equal(controller.state().phase, 'full_ready'); assert.equal(controller.legacyViewAvailable(), false);
+  await assert.rejects(source.query('local/overview', {}, undefined, oldView), /view changed/);
+  const reloaded = setup(t, cache).controller; await reloaded.initialize(); assert.equal(reloaded.legacyViewAvailable(), false);
+});
+
+test('legacy fallback rejects missing completeness, a changed user and responses completing after deletion', async () => {
+  const t = new Transport(); t.legacy_read_available = true; const { controller } = setup(t); await controller.trigger('initial');
+  const incomplete = new CloudUsageDataSource(controller, async<T>() => response({}) as T);
+  await assert.rejects(incomplete.query('local/overview'), /未确认完整性/);
+  const changedUser = new CloudUsageDataSource(controller, async<T>() => ({ data: {}, meta: { warnings: [], legacyView: { complete: true, user_id: 'other' } } }) as T);
+  await assert.rejects(changedUser.query('local/summary'), /user changed/);
+  await assert.rejects(incomplete.query('local/overview', {}, undefined, { ...incomplete.capture(), namespace: namespaceOf({ ...identity, userId: 'other' }) }), /切换读取版本/);
+  let finish!: (value: unknown) => void;
+  const source = new CloudUsageDataSource(controller, async<T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T);
+  const pending = source.query('local/overview'); await new Promise(resolve => setImmediate(resolve));
+  await controller.invalidateForDeletion(); finish({ data: {}, meta: { warnings: [], legacyView: { complete: true } } });
+  await assert.rejects(pending, /切换读取版本/); assert.equal(controller.state().activeLease, null);
+});
+
+test('migration handoff retries status and existing fixed cuts never fall back to legacy', async () => {
+  const t = new Transport(); t.legacy_read_available = true; const { controller } = setup(t); await controller.trigger('initial');
+  const source = new CloudUsageDataSource(controller, async<T>() => { t.legacy_read_available = false; throw new SyncError('handoff', 'LEGACY_VIEW_EXPIRED', 409); });
+  await assert.rejects(source.query('local/overview'), /切换读取版本/); assert.equal(controller.state().phase, 'full_ready');
+  t.legacy_read_available = true; await controller.trigger('automatic'); assert.equal(controller.legacyViewAvailable(), false);
+  assert.ok(controller.state().activeLease);
+});
+
+test('another tab deletion rejects a late legacy response without restoring history', async () => {
+  const t = new Transport(); t.legacy_read_available = true; const { controller, cache } = setup(t); await controller.trigger('initial');
+  let finish!: (value: unknown) => void;
+  const source = new CloudUsageDataSource(controller, async<T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T);
+  const pending = source.query('local/summary'); await new Promise(resolve => setImmediate(resolve));
+  const other = setup(t, cache).controller; await other.invalidateForDeletion();
+  finish({ data: {}, meta: { warnings: [], legacyView: { complete: true } } });
+  await assert.rejects(pending, /another tab/); assert.equal((await cache.state(controller.namespace))?.activeLease, null);
+});
+
+test('a reopened legacy checkpoint requires a fresh server confirmation before any legacy read', async () => {
+  const t = new Transport(); t.legacy_read_available = true; const { controller, cache } = setup(t); await controller.trigger('initial'); controller.dispose();
+  const restarted = setup(t, cache).controller; await restarted.initialize();
+  assert.equal(restarted.legacyViewAvailable(), false); assert.equal(restarted.state().phase, 'empty');
+  const source = new CloudUsageDataSource(restarted, async<T>() => { throw new Error('unexpected network'); }, () => false);
+  await assert.rejects(source.query('local/overview'), OfflineCacheMiss);
+});
+
 test('minute or focus settings reads follow the browser zone without advancing the cut or the shared account cache',async()=>{
   const t=new Transport();t.settings={localInterval:0,accountInterval:0,timezoneMode:'system',timezone:'UTC'};const {controller}=setup(t);await controller.trigger('initial');const reads=t.reads.length;let zone='America/Los_Angeles',accounts=0;const urls:string[]=[];
-  const source=new CloudUsageDataSource(controller,async<T>(url:string)=>{urls.push(url);if(url==='/api/v3/accounts'){accounts++;return {accounts:[]} as T;}const timezone=new URL(url,identity.origin).searchParams.get('timezone')!;return response(url.startsWith('/api/v3/settings')?{...t.settings,timezone}:{day:timezone}) as T;},()=>true,()=>zone);
+  const source=new CloudUsageDataSource(controller,async<T>(url:string)=>{urls.push(url);if(url==='/api/v3/accounts'){accounts++;return {user_id:identity.userId,accounts:[]} as T;}const timezone=new URL(url,identity.origin).searchParams.get('timezone')!;return response(url.startsWith('/api/v3/settings')?{...t.settings,timezone}:{day:timezone}) as T;},()=>true,()=>zone);
   assert.equal((await source.query<Settings>('settings')).data.timezone,'America/Los_Angeles');await source.query('local/trend');await source.query('account/cloud');const previous=source.capture(),revision=source.revision();zone='Asia/Tokyo';
   assert.notEqual(source.revision(),revision);assert.equal((await source.query<Settings>('settings')).data.timezone,'Asia/Tokyo');assert.deepEqual((await source.query('local/trend')).data,{day:'Asia/Tokyo'});await source.query('account/cloud');assert.equal(accounts,1);assert.equal(t.reads.length,reads);
   assert.equal(urls.filter(url=>url.includes('local/trend')).length,2);await assert.rejects(source.query('local/trend',{},undefined,previous),/time zone changed/);
@@ -104,6 +164,26 @@ test('periodic deltas atomically apply complete commits and explicit refresh che
   assert.equal((await cache.entities(controller.namespace, 'epoch-a', [updated]))[0]?.revision, 2);
   const manifests = t.manifests.length, fetched = t.fetched.length;
   await controller.trigger('manual'); assert.equal(t.manifests.length, manifests + 1); assert.equal(t.fetched.length, fetched);
+});
+
+test('unchanged automatic sync avoids new leases and manifests, including filtered devices, while manual refresh verifies them', async () => {
+  for (const deviceIds of [[], ['windows']]) {
+    const t = new Transport(); t.rows = [await entity('a')]; const cache = new MemoryCloudCache();
+    const controller = new CloudSyncController({ transport: t, cache, identity: { ...identity, deviceIds }, now: () => now });
+    await controller.trigger('initial'); const reads = t.reads.length, manifests = t.manifests.length, viewAt = controller.state().viewAt;
+    for (let i = 0; i < 10; i++) await controller.trigger('automatic');
+    assert.equal(t.reads.length, reads); assert.equal(t.manifests.length, manifests); assert.equal(controller.state().viewAt, viewAt);
+    await controller.trigger('manual'); assert.equal(t.reads.length, reads + 1); assert.equal(t.manifests.length, manifests + 1);
+  }
+});
+
+test('an unchanged automatic cut obtains a fresh lease near expiration and cannot skip a deletion', async () => {
+  const t = new Transport(); let clock = now; const cache = new MemoryCloudCache();
+  const controller = new CloudSyncController({ transport: t, cache, identity, now: () => clock });
+  await controller.trigger('initial'); const reads = t.reads.length;
+  clock = Date.parse(expires_at) - 30_000; await controller.trigger('automatic'); assert.equal(t.reads.length, reads + 1);
+  t.mode = 'deleting'; await assert.rejects(controller.trigger('automatic'), /deletion/);
+  assert.equal(controller.state().activeLease, null); assert.equal(controller.state().coverage, null);
 });
 
 test('crash between received and applied commit restarts from staged data without losing the cursor', async () => {
@@ -211,7 +291,7 @@ test('a snapshot response arriving after local history invalidation cannot resto
 
 test('account observations ignore device filters and are never labeled with the usage cut', async () => {
   const { controller } = setup(); await controller.trigger('initial'); const urls: string[] = [];
-  const source = new CloudUsageDataSource(controller, async <T>(url: string) => { urls.push(url); return { accounts: [{ accountRef: 'account-a' }] } as T; });
+  const source = new CloudUsageDataSource(controller, async <T>(url: string) => { urls.push(url); return { user_id: identity.userId, accounts: [{ accountRef: 'account-a' }] } as T; });
   const value = await source.query('account/cloud', { deviceIds: ['a'] });
   assert.equal(urls[0], '/api/v3/accounts'); assert.equal((value.meta as unknown as { cut?: unknown }).cut, undefined);
   assert.equal((value.meta as unknown as { browserCache: { domain: string; queryCut?: unknown } }).browserCache.domain, 'account-observation');
@@ -219,9 +299,18 @@ test('account observations ignore device filters and are never labeled with the 
   source.invalidateAccounts(); await source.query('account/cloud'); assert.equal(urls.length, 2);
 });
 
+test('an account response after another tab switches login cannot replace this user cache', async () => {
+  const { controller, cache } = setup(); let responseUser = identity.userId;
+  const source = new CloudUsageDataSource(controller, async<T>() => ({ user_id: responseUser, accounts: [{ owner: responseUser }] }) as T);
+  await source.query('account/cloud'); await source.mutate('refresh', { source: 'account' }); responseUser = 'different-login';
+  await assert.rejects(source.query('account/cloud'), /user changed/);
+  const offline = new CloudUsageDataSource(setup(undefined, cache).controller, undefined, () => false);
+  assert.deepEqual((await offline.query('account/cloud')).data, [{ owner: identity.userId }]);
+});
+
 test('latest account observation survives reload and is shared across device scopes without a usage lease', async () => {
   const cache = new MemoryCloudCache(), first = setup(undefined, cache).controller; let value = 1, requests = 0;
-  const source = new CloudUsageDataSource(first, async <T>() => { requests++; return { accounts: [{ revision: value }] } as T; });
+  const source = new CloudUsageDataSource(first, async <T>() => { requests++; return { user_id: identity.userId, accounts: [{ revision: value }] } as T; });
   assert.deepEqual((await source.query('account/cloud', { deviceIds: ['a'] })).data, [{ revision: 1 }]);
   value = 2; await source.mutate('refresh', { source: 'account' });
   assert.deepEqual((await source.query('account/cloud')).data, [{ revision: 2 }]);
@@ -235,28 +324,28 @@ test('latest account observation survives reload and is shared across device sco
 });
 
 test('account refresh persists a stale marker while retaining the latest available offline response', async () => {
-  const { controller, cache } = setup(); const source = new CloudUsageDataSource(controller, async <T>() => ({ accounts: [{ latest: 1 }] }) as T);
+  const { controller, cache } = setup(); const source = new CloudUsageDataSource(controller, async <T>() => ({ user_id: identity.userId, accounts: [{ latest: 1 }] }) as T);
   await source.query('account/cloud'); await source.mutate('refresh', { source: 'account' });
   const restarted = setup(undefined, cache).controller;
   const offline = new CloudUsageDataSource(restarted, async <T>(): Promise<T> => { throw Error('no network'); }, () => false);
   assert.deepEqual((await offline.query('account/cloud')).data, [{ latest: 1 }]);
   let requests = 0;
-  const online = new CloudUsageDataSource(restarted, async <T>() => { requests++; return { accounts: [{ latest: 2 }] } as T; });
+  const online = new CloudUsageDataSource(restarted, async <T>() => { requests++; return { user_id: identity.userId, accounts: [{ latest: 2 }] } as T; });
   assert.deepEqual((await online.query('account/cloud')).data, [{ latest: 2 }]); assert.equal(requests, 1);
 });
 
 test('account deletion atomically rejects old responses even when another scope recreates the cache', async () => {
   const { controller, cache } = setup();
   const stranger = new CloudSyncController({ cache, identity: { ...identity, userId: 'another-user' }, transport: new Transport() });
-  const other = new CloudUsageDataSource(stranger, async <T>() => ({ accounts: [{ owner: 'other' }] }) as T);
+  const other = new CloudUsageDataSource(stranger, async <T>() => ({ user_id: 'another-user', accounts: [{ owner: 'other' }] }) as T);
   await other.query('account/cloud');
   let release!: () => void, started!: () => void;
   const waiting = new Promise<void>(resolve => { started = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
-  const slow = new CloudUsageDataSource(controller, async <T>() => { started(); await gate; return { accounts: [{ old: true }] } as T; });
+  const slow = new CloudUsageDataSource(controller, async <T>() => { started(); await gate; return { user_id: identity.userId, accounts: [{ old: true }] } as T; });
   const pending = slow.query('account/cloud'); await waiting;
   const scoped = new CloudSyncController({ cache, identity: { ...identity, deviceIds: ['windows'] }, transport: new Transport() });
   await scoped.invalidateForDeletion();
-  const fresh = new CloudUsageDataSource(scoped, async <T>() => ({ accounts: [{ fresh: true }] }) as T);
+  const fresh = new CloudUsageDataSource(scoped, async <T>() => ({ user_id: identity.userId, accounts: [{ fresh: true }] }) as T);
   await fresh.query('account/cloud'); release();
   await assert.rejects(pending, /account view changed/);
   const offline = new CloudUsageDataSource(controller, async <T>(): Promise<T> => { throw Error('no network'); }, () => false);
@@ -270,8 +359,8 @@ test('account refresh cannot let an older request replace the newly refreshed st
   const { controller } = setup(); let calls = 0, release!: () => void, started!: () => void;
   const waiting = new Promise<void>(resolve => { started = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
   const source = new CloudUsageDataSource(controller, async <T>() => {
-    if (++calls === 1) { started(); await gate; return { accounts: [{ value: 'old' }] } as T; }
-    return { accounts: [{ value: 'new' }] } as T;
+    if (++calls === 1) { started(); await gate; return { user_id: identity.userId, accounts: [{ value: 'old' }] } as T; }
+    return { user_id: identity.userId, accounts: [{ value: 'new' }] } as T;
   });
   const old = source.query('account/cloud'); await waiting; await source.mutate('refresh', { source: 'account' });
   assert.deepEqual((await source.query('account/cloud')).data, [{ value: 'new' }]); release();
@@ -282,7 +371,7 @@ test('account refresh cannot let an older request replace the newly refreshed st
 test('manual refresh all invalidates accounts and performs a full usage check', async () => {
   const { controller, transport } = setup(); await controller.trigger('initial');
   let accounts = 0;
-  const source = new CloudUsageDataSource(controller, async <T>() => { accounts++; return { accounts: [] } as T; });
+  const source = new CloudUsageDataSource(controller, async <T>() => { accounts++; return { user_id: identity.userId, accounts: [] } as T; });
   await source.query('account/cloud'); const reads = transport.reads.length;
   await source.mutate('refresh', { source: 'all' }); await source.query('account/cloud');
   assert.equal(transport.reads.length, reads + 1); assert.equal(accounts, 2);

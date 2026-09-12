@@ -16,16 +16,20 @@ import { SyncTiming } from './timing';
 import { resolveReadSettings } from './timezone';
 import { originRoute } from './origins';
 import {prepareLegacySources,validLegacyPreparation} from './legacy-staging';
+import { legacyReadAvailable } from './legacy-read';
 
 const ownKeys=(v:unknown,allowed:string[],required:string[]=[])=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(k=>allowed.includes(k))&&required.every(k=>Object.hasOwn(v,k));
 export async function syncStatus(db:D1Database,user:string) {
-  const h=await domain(db,user),devices=await deviceViews(db,user);
-  const sources=(await db.prepare(`SELECT c.device_id,s.collector_id,s.source_id,s.generation,s.cursor,s.snapshot_eof,s.complete,s.active,s.available,s.trailing_bytes FROM v3_sources s JOIN v3_collectors c USING(user_id,collector_id) WHERE s.user_id=? ORDER BY c.device_id,s.collector_id,s.source_id,s.generation`).bind(user).all()).results;
-  const pending=(await db.prepare("SELECT device_id,status,COUNT(*) count FROM v3_receipts WHERE user_id=? AND status<>'applied' GROUP BY device_id,status").bind(user).all()).results;
-  const jobs=(await db.prepare("SELECT job_id,kind,state,error_code,attempts,updated_at,json_extract(checkpoint,'$.phase') phase FROM v3_jobs WHERE user_id=? AND state IN('pending','running','failed') ORDER BY created_at LIMIT 100").bind(user).all()).results;
-  return {user_id:user,cut:cutOf(h),mode:h.mode,baseline_ready:h.mode==='ready'&&!h.legacy_baseline_pending,devices,coverage:{sources,pending_batches:pending},jobs,updated_at:new Date(h.updated_at).toISOString()};
+  const h=await domain(db,user);
+  const [devices,loaded]=await Promise.all([deviceViews(db,user),db.batch([
+    db.prepare(`SELECT c.device_id,s.collector_id,s.source_id,s.generation,s.cursor,s.snapshot_eof,s.complete,s.active,s.available,s.trailing_bytes FROM v3_sources s JOIN v3_collectors c USING(user_id,collector_id) WHERE s.user_id=? ORDER BY c.device_id,s.collector_id,s.source_id,s.generation`).bind(user),
+    db.prepare("SELECT device_id,status,COUNT(*) count FROM v3_receipts WHERE user_id=? AND status<>'applied' GROUP BY device_id,status").bind(user),
+    db.prepare("SELECT job_id,kind,state,error_code,attempts,updated_at,json_extract(checkpoint,'$.phase') phase FROM v3_jobs WHERE user_id=? AND state IN('pending','running','failed') ORDER BY created_at LIMIT 100").bind(user),
+  ])]);
+  const [sources,pending,jobs]=loaded.map(r=>r.results);
+  return {user_id:user,cut:cutOf(h),mode:h.mode,baseline_ready:h.mode==='ready'&&!h.legacy_baseline_pending,legacy_read_available:!!h.legacy_baseline_pending&&await legacyReadAvailable(db,user),devices,coverage:{sources,pending_batches:pending},jobs,updated_at:new Date(h.updated_at).toISOString()};
 }
-export async function v3Route(request:Request,env:Env,path:string):Promise<Response|null> {
+export async function v3Route(request:Request,env:Env,path:string,ctx?:ExecutionContext):Promise<Response|null> {
   if(!path.startsWith('/api/v3/'))return null;
   const url=new URL(request.url);
   if(path==='/api/v3/accounts/observations'&&request.method==='PUT')return usageSyncRoute(request,env,'/api/v2/sync/accounts');
@@ -53,7 +57,12 @@ export async function v3Route(request:Request,env:Env,path:string):Promise<Respo
   const user=await sessionUser(request,env);
   const project=await projectRoute(request,env,path,user.id);if(project)return project;
   const origin=await originRoute(request,env,path,user.id);if(origin)return origin;
-  if(path==='/api/v3/sync/status'&&request.method==='GET'){await domain(env.DB,user.id);await advanceJobs(env.DB,{user:user.id,maxSteps:2,budgetMs:4000});return json(await syncStatus(env.DB,user.id));}
+  if(path==='/api/v3/sync/status'&&request.method==='GET'){
+    if(ctx){const status=await syncStatus(env.DB,user.id);ctx.waitUntil(advanceJobs(env.DB,{user:user.id,maxSteps:200,maxQueries:800,budgetMs:20000}).catch(()=>{
+      console.error(JSON.stringify({event:'v3_background_job_failed'}));
+    }));return json(status);}
+    await domain(env.DB,user.id);await advanceJobs(env.DB,{user:user.id,maxSteps:2,budgetMs:4000});return json(await syncStatus(env.DB,user.id));
+  }
   if(path==='/api/v3/sync/read'&&request.method==='POST'){
     requireSameOrigin(request,env);requireJson(request);const b=await readJson(request,16384);if(!ownKeys(b,['scope','device_ids','from_lease_id'],['scope']))fail(400,'INVALID_SCOPE','读取范围无效。');const body=b as {scope:'recent'|'full';device_ids?:string[];from_lease_id?:string};if(!['recent','full'].includes(body.scope)||body.device_ids!==undefined&&!Array.isArray(body.device_ids)||body.from_lease_id!==undefined&&(typeof body.from_lease_id!=='string'||body.from_lease_id.length>256))fail(400,'INVALID_SCOPE','读取范围无效。');
     const read=await createRead(env.DB,user.id,body.scope,body.device_ids,body.from_lease_id);return json(read,201);
@@ -65,7 +74,7 @@ export async function v3Route(request:Request,env:Env,path:string):Promise<Respo
   }
   if(path==='/api/v3/sync/changes'&&request.method==='GET')return json(await changes(env.DB,user.id,url.searchParams.get('dataset_epoch')||'',Number(url.searchParams.get('after')||0),Number(url.searchParams.get('limit')||20),url.searchParams.get('lease_id')||undefined));
   if(path.startsWith('/api/v3/usage/')&&request.method==='GET')return json(await queryUsage(env.DB,user.id,url,path.slice('/api/v3/usage/'.length)));
-  if(path==='/api/v3/accounts'&&request.method==='GET')return json({accounts:await accountViews(env,user.id,[])});
+  if(path==='/api/v3/accounts'&&request.method==='GET')return json({user_id:user.id,accounts:await accountViews(env,user.id,[])});
   if(path==='/api/v3/devices'&&request.method==='GET')return json({devices:(await syncStatus(env.DB,user.id)).devices});
   const deviceMatch=/^\/api\/v3\/devices\/([^/]+)(?:\/(history))?$/.exec(path);
   if(deviceMatch){

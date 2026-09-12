@@ -15,6 +15,7 @@ function readOperation(key:string):Preview|null{try{const value=JSON.parse(sessi
 /** An explicit operation uses the manager's own all-device lease, even while usage is filtered. */
 export function CloudOrigins(){
   const sync=useCloudSync(),devices=useCloudDevices(),client=useQueryClient();
+  const migrating=sync?.state.phase==='legacy_ready';
   const identity=sync?.source.controller.identity,queryScope=[identity?.origin,identity?.userId],operationKey='codex-usage:origin-operation:v3:'+JSON.stringify(queryScope);
   // Re-entering the manager starts a fresh preview; an old cached initial view must not pin its lease before refetch.
   const [visit]=useState(()=>crypto.randomUUID());
@@ -24,7 +25,7 @@ export function CloudOrigins(){
   const query=useQuery({queryKey:['cloud-origins',...queryScope,visit,page.run,page.lease,page.cursor],queryFn:({signal})=>{
     const params=new URLSearchParams({limit:'50'});if(page.lease)params.set('lease_id',page.lease);if(page.cursor)params.set('cursor',page.cursor);
     return cloudRequest<View>('/api/v3/origins?'+params,'GET',undefined,signal);
-  },enabled:online&&!!identity});
+  },enabled:online&&!!identity&&!migrating});
   const progress=useQuery({queryKey:['cloud-origin-operation',...queryScope,operation?.operation.operation_id],queryFn:({signal})=>cloudRequest<Result>('/api/v3/origins/operations/'+encodeURIComponent(operation!.operation.operation_id),'GET',undefined,signal),enabled:online&&!!operation&&!sending,refetchInterval:query=>['complete','failed'].includes(query.state.data?.status||'')?false:1500,retry:1});
   const result=progress.data,busy=sending||!!operation,view=query.data,selection=Object.values(picked);
   const unknown=selection.reduce((n,s)=>n+s.unknown_events,0),assigned=selection.reduce((n,s)=>n+s.assigned_events,0);
@@ -56,6 +57,7 @@ export function CloudOrigins(){
     client.setQueryData(['cloud-origin-operation',...queryScope,preview.operation.operation_id],response);
   }catch(e){setError((e as Error).message);if([400,403,404,409,410,422].includes((e as Error&{status?:number}).status||0))setOperation(null);}finally{setSending(false);}}
   function restart(){setPage(current=>({lease:'',cursor:'',run:current.run+1}));setPicked(Object.create(null));setPreview(null);setError('');}
+  if(migrating)return <section className="panel cloud-origins"><h2>旧历史设备归属</h2><p role="status">完整历史正在迁移，完成后即可指定旧记录的设备归属。统计页面仍可查看最近完整同步的旧版历史。</p></section>;
   return <section className="panel cloud-origins" aria-labelledby="cloud-origins-title"><h2 id="cloud-origins-title">旧历史设备归属</h2>
     <p>仅为缺少可靠执行来源的旧记录指定设备，记录会保留“用户指定”标记。已有明确来源的消耗保持其来源；全局 Token 总量不变。</p>
     <p className="footnote">这里列出全部设备的历史。选择范围固定在本次读取的版本，之后新增的记录不会自动归入。每次最多选择 200 个 Session。</p>

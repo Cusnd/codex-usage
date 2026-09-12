@@ -74,6 +74,35 @@ test('a scan that advances generation during preparation cannot upload its new w
   }finally{await f.close();}
 });
 
+test('grouped preparation preserves every source and retries pending or lost responses before uploading',async()=>{
+  const preparations:{collector_id:string;replacements:{sources:{source_id:string;generation:number}[]}[]}[]=[],uploaded:Uint8Array[]=[];
+  let phase:'pending'|'lost'|'ready'='pending';
+  const f=await setup(async(url,options)=>{
+    if(new URL(String(url)).pathname==='/api/v3/legacy/prepare'){
+      const body=JSON.parse(String(options!.body));preparations.push(body);
+      assert.ok(Buffer.byteLength(String(options!.body))<=65536);
+      if(phase==='pending'&&preparations.length===2)return Response.json({status:'pending'},{status:202});
+      if(phase==='lost')throw Error('registration acknowledgement lost');
+      return Response.json({status:'ready'});
+    }
+    const wire=new Uint8Array(options!.body as Uint8Array);uploaded.push(wire);
+    return Response.json(ack(await decodeUpload(wire),wire,'received'));
+  });
+  try{
+    for(let i=1;i<200;i++)await writeFile(path.join(f.collector.sourceRoot,'sessions',`extra-${i}.jsonl`),JSON.stringify({type:'session_meta',payload:{id:'thread-'+i}})+'\n');
+    await f.collector.scan();
+    for(const source of f.store.all('SELECT id,path,identity,state FROM collector_sources'))f.store.run("INSERT INTO collector_legacy_replacements(device_id,dataset_id,thread_id,source_files) VALUES('A','v2-data',?,?)",[JSON.parse(source.state).context.thread_id,JSON.stringify([{path:source.path,identity:source.identity}])]);
+    const expected=legacyPreparations(f.store,f.collector.id,'A');assert.equal(expected.length,200);
+    const queue=f.store.all('SELECT batch_id,raw_json FROM collector_batches ORDER BY seq');
+    await f.uploader.tick(credentials);assert.equal(preparations.length,2);assert.equal(uploaded.length,0);
+    assert.deepEqual(f.store.all('SELECT batch_id,raw_json FROM collector_batches ORDER BY seq'),queue);
+    preparations.length=0;phase='lost';f.advance();await f.uploader.tick(credentials);assert.equal(preparations.length,1);assert.equal(uploaded.length,0);
+    preparations.length=0;phase='ready';f.advance();await f.uploader.tick(credentials);assert.equal(preparations.length,4);assert.equal(uploaded.length,1);
+    assert.deepEqual(preparations.flatMap(p=>p.replacements),expected.flatMap(p=>p.replacements));
+    assert.deepEqual(f.store.all('SELECT batch_id,raw_json FROM collector_batches ORDER BY seq'),queue);
+  }finally{await f.close();}
+});
+
 test('an explicit superseded handoff receipt requeues migration even when the local generation still equals the old wire',async()=>{
   let supersede=true;const handoffs:UploadBatch[]=[];const f=await setup(async(_url,options)=>{
     if(typeof options!.body==='string')return Response.json({status:'ready'});
@@ -89,13 +118,33 @@ test('an explicit superseded handoff receipt requeues migration even when the lo
 test('received retains original input, polls receipts without retransmitting, then atomically applies confirmation',async()=>{
   let saved:UploadAck|undefined,posts=0,polls=0;const f=await setup(async(url,options)=>{if(options!.method==='GET'){assert.ok(String(url).includes('/receipts?ids='));polls++;return Response.json({receipts:[{...saved!,status:'applied',applied_commit_seq:1,contiguous_applied_seq:1}]});}
     posts++;const wire=Buffer.from(options!.body as Uint8Array);saved=ack(await decodeUpload(wire),wire,'received');return Response.json(saved);});
-  try{await f.uploader.tick(credentials);assert.equal(posts,1);assert.equal(f.uploader.status().received.backfill,1);assert.equal(f.uploader.status().applied.backfill,0);assert.equal(f.store.one('SELECT cloud_state FROM collector_batches')!.cloud_state,'received');
+  try{await f.uploader.tick(credentials);assert.equal(posts,1);assert.equal(f.uploader.takeNextTickDelayMs(),1000);assert.equal(f.uploader.status().received.backfill,1);assert.equal(f.uploader.status().applied.backfill,0);assert.equal(f.store.one('SELECT cloud_state FROM collector_batches')!.cloud_state,'received');
     f.advance();await f.uploader.tick(credentials);assert.equal(posts,1);assert.equal(polls,1);assert.equal(Number(f.store.one('SELECT COUNT(*) n FROM collector_batches')!.n),0);
+  }finally{await f.close();}
+});
+
+test('successful bounded drains schedule one immediate continuation; empty, failed and cancelled work stays idle',async()=>{
+  let succeed=true,posts=0;const f=await setup(async(_url,options)=>{
+    posts++;if(!succeed)throw Error('offline');const wire=new Uint8Array(options!.body as Uint8Array);return Response.json(ack(await decodeUpload(wire),wire,'applied'));
+  });
+  try{
+    for(let i=0;i<35;i++)f.collector.enqueueMetadata([{type:'project',source_project_id:'project-'+i,value:{name:'Project '+i}}]);
+    await f.uploader.tick(credentials);assert.equal(f.uploader.takeNextTickDelayMs(),0);assert.equal(f.uploader.takeNextTickDelayMs(),1000);
+    succeed=false;f.advance();await f.uploader.tick(credentials);assert.equal(f.uploader.takeNextTickDelayMs(),1000);
+    succeed=true;f.advance();await f.uploader.tick(credentials);f.uploader.cancel();assert.equal(f.uploader.takeNextTickDelayMs(),1000);
+    f.advance();await f.uploader.tick(credentials);assert.equal(f.uploader.status().pendingBatches,0);
+    f.advance();await f.uploader.tick(credentials);assert.equal(f.uploader.takeNextTickDelayMs(),1000);assert.ok(posts>=37);
   }finally{await f.close();}
 });
 test('mismatched acknowledgement cannot delete pending input or advance either cursor',async()=>{
   const f=await setup(async(_url,options)=>{const wire=Buffer.from(options!.body as Uint8Array);return Response.json({...ack(await decodeUpload(wire),wire,'applied'),wire_hash:'0'.repeat(64)});});
   try{await f.uploader.tick(credentials);assert.ok(Number(f.store.one('SELECT COUNT(*) n FROM collector_batches')!.n)>0);assert.equal(f.uploader.status().applied.backfill,0);assert.equal(f.uploader.status().received.backfill,0);}
+  finally{await f.close();}
+});
+
+test('an acknowledgement for an unknown batch cannot trigger immediate retry scheduling',async()=>{
+  let calls=0;const f=await setup(async(_url,options)=>{calls++;const wire=new Uint8Array(options!.body as Uint8Array);return Response.json({...ack(await decodeUpload(wire),wire,'applied'),batch_id:'unknown-batch'});});
+  try{await f.uploader.tick(credentials);assert.equal(calls,1);assert.equal(f.uploader.takeNextTickDelayMs(),1000);assert.equal(f.uploader.status().pendingBatches,1);assert.equal(f.uploader.status().applied.backfill,0);}
   finally{await f.close();}
 });
 test('revocation blocks queued source while retaining usable local statistics',async()=>{

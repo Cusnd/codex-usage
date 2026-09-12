@@ -142,13 +142,23 @@ export class ProjectSourceResolver {
     return marker;
   }
   private async gitProject(marker: string): Promise<{ root: string; evidence: NonNullable<ResolvedProjectSource['git']> }> {
-    const rootInfo = await this.runGit(marker, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir']);
+    const optionalGit = async (args: readonly string[]) => {
+      try { return await this.runGit(marker, args); }
+      catch (error: any) { if (error.code === 1) return ''; throw error; }
+    };
+    // These reads do not depend on each other. Keep the same bounded, read-only
+    // commands while overlapping process startup on platforms where it is costly.
+    const reads = await Promise.allSettled([
+      this.runGit(marker, ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir']),
+      optionalGit(['symbolic-ref', '--quiet', '--short', 'HEAD']),
+      optionalGit(['config', '--null', '--get-regexp', '^remote\\..*\\.url$']),
+    ]);
+    for (const result of reads) if (result.status === 'rejected') throw result.reason;
+    const [rootInfo, branchInfo, rawRemotes] = reads.map(result => (result as PromiseFulfilledResult<string>).value);
     const [root, common] = rootInfo.trim().split(/\r?\n/);
     if (!root || !common || !path.isAbsolute(root) || !path.isAbsolute(common)) throw new Error('Unsupported Git path response');
-    let branch: string | null = null, tracking: string | null = null, rawRemotes = '';
-    try { branch = (await this.runGit(marker, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).trim() || null; } catch (error: any) { if (error.code !== 1) throw error; }
-    if (branch) try { tracking = (await this.runGit(marker, ['config', '--get', `branch.${branch}.remote`])).trim() || null; } catch (error: any) { if (error.code !== 1) throw error; }
-    try { rawRemotes = await this.runGit(marker, ['config', '--null', '--get-regexp', '^remote\\..*\\.url$']); } catch (error: any) { if (error.code !== 1) throw error; }
+    const branch = branchInfo.trim() || null;
+    const tracking = branch ? (await optionalGit(['config', '--get', `branch.${branch}.remote`])).trim() || null : null;
     const remotes = new Map<string, string[]>();
     for (const entry of rawRemotes.split('\0').filter(Boolean)) {
       const split = entry.indexOf('\n'); if (split < 0) throw new Error('Unsupported Git config response');

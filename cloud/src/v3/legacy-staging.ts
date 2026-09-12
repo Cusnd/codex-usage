@@ -21,9 +21,14 @@ async function registerLegacySources(db:D1Database,device:WriteDevice,b:LegacyPr
   const owner=await db.prepare('SELECT device_id FROM v3_collectors WHERE user_id=? AND collector_id=?').bind(h.user_id,b.collector_id).first<string>('device_id');
   if(owner&&owner!==device.id)fail(409,'COLLECTOR_BOUND','采集身份已属于另一台设备。');
   const mappings:{source_id:string;generation:number;dataset_id:string;thread_id:string}[]=[];
+  const pendingHeads=(await db.prepare(`SELECT DISTINCT h.dataset_id,h.thread_id FROM json_each(?) m
+    CROSS JOIN usage_heads h LEFT JOIN v3_legacy_heads l USING(user_id,device_id,dataset_id,thread_id)
+    WHERE h.user_id=? AND h.device_id=? AND h.dataset_id=json_extract(m.value,'$.dataset_id')
+      AND h.thread_id=json_extract(m.value,'$.thread_id') AND h.revision>COALESCE(l.retired_revision,0)`)
+    .bind(stableJson(b.replacements),h.user_id,device.id).all<{dataset_id:string;thread_id:string}>()).results;
+  const pendingKeys=new Set(pendingHeads.map(h=>stableJson([h.dataset_id,h.thread_id])));
   for(const m of b.replacements){
-    const pending=await db.prepare('SELECT 1 FROM usage_heads h LEFT JOIN v3_legacy_heads l USING(user_id,device_id,dataset_id,thread_id) WHERE h.user_id=? AND h.device_id=? AND h.dataset_id=? AND h.thread_id=? AND h.revision>COALESCE(l.retired_revision,0)').bind(h.user_id,device.id,m.dataset_id,m.thread_id).first();
-    if(pending)for(const s of m.sources)mappings.push({...s,dataset_id:m.dataset_id,thread_id:m.thread_id});
+    if(pendingKeys.has(stableJson([m.dataset_id,m.thread_id])))for(const s of m.sources)mappings.push({...s,dataset_id:m.dataset_id,thread_id:m.thread_id});
   }
   if(!mappings.length)return true;
   const active=(await db.prepare(`SELECT DISTINCT s.source_id,s.generation,s.context FROM v3_sources s JOIN json_each(?) m ON s.source_id=json_extract(m.value,'$.source_id') AND s.generation=json_extract(m.value,'$.generation') WHERE s.user_id=? AND s.collector_id=? AND s.active=1`).bind(stableJson(mappings),h.user_id,b.collector_id).all<{source_id:string;generation:number;context:string}>()).results;

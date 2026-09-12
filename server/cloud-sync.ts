@@ -261,10 +261,12 @@ export class CloudSync {
   }
   private schedule() {
     if (this.closed || this.timer) return;
+    const delay=this.state.enabled&&this.state.fullUsage&&this.state.deviceId
+      ?this.options.uploader?.takeNextTickDelayMs()??1000:1000;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       void this.tick().finally(() => this.schedule());
-    }, 1000);
+    }, delay);
     this.timer.unref();
   }
   private async request(

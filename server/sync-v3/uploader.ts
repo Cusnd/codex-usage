@@ -3,7 +3,7 @@ import type {Collector} from '../collector/store.js';
 import {V3_CONTENT_TYPE,stableJson,type UploadAck,type UploadBatch,type Lane} from '../../shared/sync-v3.js';
 import {encodeUpload} from './codec.js';
 import {sha256} from '../collector/projection.js';
-import {legacyPreparations,queueLegacyReplacements} from './migration.js';
+import {groupLegacyPreparations,legacyPreparations,queueLegacyReplacements} from './migration.js';
 
 export type UploadCredentials={deviceId:string;token:string;origin:string};
 type WireRow={batch_id:string;wire:Uint8Array;wire_hash:string;records_hash:string;attempts:number;next_at:number;status:string;error:string|null;ack_json:string|null};
@@ -11,6 +11,7 @@ type Options={fetch?:typeof fetch;now?:()=>number;random?:()=>number};
 /** At most one live and one backfill request, with an applied barrier when a source changes lanes. */
 export class V3Uploader {
   private active:Promise<void>|null=null;private stopped=false;private controller=new AbortController();private fetcher:typeof fetch;private now:()=>number;
+  private continueSoon=false;
   constructor(private store:Store,readonly collector:Collector,private options:Options={}) {
     this.fetcher=options.fetch||fetch;this.now=options.now||Date.now;
     store.db.exec(`CREATE TABLE IF NOT EXISTS collector_wire(batch_id TEXT PRIMARY KEY,wire BLOB NOT NULL,wire_hash TEXT NOT NULL,records_hash TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,next_at INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'pending',error TEXT,ack_json TEXT);
@@ -36,7 +37,10 @@ export class V3Uploader {
     const operation=this.run(credentials,current).catch(()=>{if(current()&&!this.stopped)this.store.run("UPDATE collector_upload_state SET error='用量同步失败；待处理批次已保留，将在网络恢复后继续。' WHERE id=1");});
     this.active=operation;void operation.finally(()=>{this.active=null;});return operation;
   }
+  /** Consume one progress hint; skipped/paused outer ticks cannot spin on stale work. */
+  takeNextTickDelayMs() {const delay=this.continueSoon&&!this.stopped?0:1000;this.continueSoon=false;return delay;}
   private async run(credentials:UploadCredentials,current:()=>boolean) {
+    this.continueSoon=false;
     const binding=this.collector.binding();
     if(binding.device_id!==credentials.deviceId){await this.collector.configureCloud(credentials.deviceId);this.store.transaction(()=>{this.store.run('DELETE FROM collector_wire');this.store.run('UPDATE collector_upload_state SET device_id=?,error=NULL,uploaded_at=NULL,received_seq_live=0,applied_seq_live=0,received_seq_backfill=0,applied_seq_backfill=0 WHERE id=1',[credentials.deviceId]);});
       void this.collector.scan().catch(()=>{});}
@@ -61,14 +65,14 @@ export class V3Uploader {
     if(current()&&!this.stopped)await this.reportStatus(credentials);
   }
   private async prepareMigrations(credentials:UploadCredentials,current:()=>boolean,prepared:Set<string>):Promise<boolean> {
-    for(const preparation of legacyPreparations(this.store,this.collector.id,credentials.deviceId)){
-      const key=stableJson(preparation);if(prepared.has(key))continue;
-      const {response,data}=await this.request(credentials,'/api/v3/legacy/prepare','POST',undefined,preparation);
+    const missing=legacyPreparations(this.store,this.collector.id,credentials.deviceId).filter(preparation=>!prepared.has(stableJson(preparation)));
+    for(const group of groupLegacyPreparations(missing)){
+      const {response,data}=await this.request(credentials,'/api/v3/legacy/prepare','POST',undefined,group.body);
       if(!current()||this.stopped)return false;
       if(response.status!==200||data.status!=='ready'){
         this.store.run("UPDATE collector_upload_state SET error=? WHERE id=1",[response.status===202?'旧历史仍可读取；正在准备一致的迁移版本。':'旧历史迁移准备尚未完成；上传队列已保留。']);return false;
       }
-      prepared.add(key);
+      for(const key of group.keys)prepared.add(key);
     }
     return true;
   }
@@ -90,7 +94,7 @@ export class V3Uploader {
     return this.store.db.prepare('SELECT * FROM collector_wire WHERE batch_id=?').get(batchId) as WireRow;
   }
   private async drainLane(lane:Lane,credentials:UploadCredentials,current:()=>boolean,prepared:Set<string>) {
-    const deadline=this.now()+1000;let sends=0;
+    const deadline=this.now()+1000;let sends=0,applied=false;
     while(current()&&!this.stopped&&sends++<16&&this.now()<=deadline) {
       const row=this.store.one(`SELECT b.batch_id FROM collector_batches b LEFT JOIN collector_wire w ON w.batch_id=b.batch_id WHERE b.cloud_required=1 AND b.lane=? AND b.cloud_state='pending'
         AND (w.batch_id IS NULL OR w.status='pending' AND w.next_at<=?)
@@ -104,11 +108,12 @@ export class V3Uploader {
         if(!await this.prepareMigrations(credentials,current,prepared))return;
         const {response,data}=await this.request(credentials,'/api/v3/ingest','POST',wire);
         if(!current()||this.stopped)return;
-        if(response.ok){this.acknowledge(data);if(data.status==='received')return;continue;}
+        if(response.ok){if(data.batch_id!==wire.batch_id||!this.acknowledge(data))throw Error('INVALID_ACK');if(data.status==='received')return;applied=true;continue;}
         if(this.reject(wire,response,data))return;
         this.retry(wire,response);return;
       }catch{if(current()&&!this.stopped)this.retry(wire);return;}
     }
+    if(applied&&current()&&!this.stopped)this.continueSoon=true;
   }
   private async request(credentials:UploadCredentials,route:string,method:string,wire?:WireRow,jsonBody?:unknown) {
     const response=await this.fetcher(credentials.origin+route,{method,headers:{Authorization:`Bearer ${credentials.token}`,...(wire?{'Content-Type':V3_CONTENT_TYPE,'X-Wire-SHA256':wire.wire_hash}:jsonBody?{'Content-Type':'application/json'}: {})},
@@ -151,7 +156,7 @@ export class V3Uploader {
       }
     });return true;
   }
-  cancel() {this.controller.abort();this.controller=new AbortController();}
+  cancel() {this.continueSoon=false;this.controller.abort();this.controller=new AbortController();}
   async unbind() {this.cancel();if(this.active)await this.active;await this.collector.configureCloud(null);this.store.run('DELETE FROM collector_wire');}
   async close() {this.stopped=true;this.cancel();await this.active;}
 }

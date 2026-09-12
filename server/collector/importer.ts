@@ -49,8 +49,11 @@ export class StreamingImporter implements LocalImporter {
   }
   private publishStatus(metrics:CollectionMetrics):ImportProgress {
     const now=new Date().toISOString();
-    for(const row of this.store.all('SELECT * FROM collector_sources'))this.store.run(`INSERT INTO source_files(path,identity,size,mtime,offset,fingerprint,state,issues,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET identity=excluded.identity,size=excluded.size,mtime=excluded.mtime,offset=excluded.offset,fingerprint=excluded.fingerprint,state=excluded.state,issues=excluded.issues,updated_at=excluded.updated_at`,
-      [row.path,row.identity,row.size,Number(row.mtime),row.offset,row.prefix_sha,row.state,row.issues,now]);
+    // One atomic mirror write avoids one durable SQLite commit per source on
+    // every scan, including scans that read no new source bytes.
+    this.store.run(`INSERT INTO source_files(path,identity,size,mtime,offset,fingerprint,state,issues,updated_at)
+      SELECT path,identity,size,CAST(mtime AS REAL),offset,prefix_sha,state,issues,? FROM collector_sources WHERE true
+      ON CONFLICT(path) DO UPDATE SET identity=excluded.identity,size=excluded.size,mtime=excluded.mtime,offset=excluded.offset,fingerprint=excluded.fingerprint,state=excluded.state,issues=excluded.issues,updated_at=excluded.updated_at`,[now]);
     return {filesScanned:metrics.discovered||metrics.processed,filesChanged:metrics.processed-metrics.unchanged,events:Number(this.store.one('SELECT COUNT(*) n FROM effective_events')!.n),issues:Number(this.store.one('SELECT COALESCE(SUM(issues),0) n FROM collector_sources')!.n)};
   }
   async scan(progress?:(value:ImportProgress)=>void) {

@@ -14,7 +14,7 @@ function traceReads(db:D1Database){
   return {db:new Proxy(db,{get(target,key){if(key==='prepare')return(sql:string)=>statement(target.prepare(sql));const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}}),take(){const n=rows;rows=0;return n;},takeMaximum(){const n=maximum;maximum=0;return n;}};
 }
 
-it('queries 100k fixed-cut events through every shared usage view with bounded joins and indexed thread filters',async()=>{
+it('queries 100k fixed-cut events through every shared usage view with bounded joins and indexed thread filters',async({annotate})=>{
   const user=crypto.randomUUID();
   await env.DB.prepare('INSERT INTO users(id,github_id,login,created_at) VALUES(?,?,?,?)').bind(user,user,'query-scale',Date.now()).run();
   await env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at) VALUES(?,?,?,?,?)').bind('device-a',user,'Fixture device','fixture-token',Date.now()).run();
@@ -38,9 +38,9 @@ it('queries 100k fixed-cut events through every shared usage view with bounded j
         json_object('thread_id','thread-'||(v%200),'turn_id','turn-'||(v/200),'at','2026-09-10T12:00:00.000Z','source_project_id','source-'||(v%40),'model','gpt-5','effort','high','kind','record','service_tier','standard','service_tier_source','record','input_tokens','80','cached_input_tokens','20','cache_write_input_tokens','0','output_tokens','20','reasoning_output_tokens','0','total_tokens','100','incomplete',0) FROM n`).bind(user,h.active_epoch),
   ]);
   const lease=await createRead(env.DB,user,'full',[]),traced=traceReads(env.DB);
-  const run=async(route:string,params='')=>{
+  const samples:unknown[]=[];const run=async(route:string,params='')=>{const started=performance.now();
     const result=await queryUsage(traced.db,user,new URL('https://quota.esoren.com/api/v3/usage/'+route+'?lease_id='+lease.lease_id+params),route);
-    expect(result.meta.cut).toEqual(lease.cut);return result.data as any;
+    samples.push({route,params,elapsed_ms:performance.now()-started});expect(result.meta.cut).toEqual(lease.cut);return result.data as any;
   };
   const summary=await run('local/summary');
   expect(summary).toMatchObject({eventCount:100000,threadCount:200,turnCount:100000,totalTokens:'10000000',inputTokens:'8000000',cachedInputTokens:'2000000',outputTokens:'2000000'});
@@ -72,4 +72,4 @@ it('queries 100k fixed-cut events through every shared usage view with bounded j
   expect(await run('local/summary','&project=logical-0')).toMatchObject({eventCount:2500,totalTokens:'250000'});
   const next=await createRead(env.DB,user,'full',[]),after=await queryUsage(env.DB,user,new URL('https://quota.esoren.com/?lease_id='+next.lease_id+'&project=logical-0'),'local/summary');
   expect(after.data).toMatchObject({eventCount:0,totalTokens:'0'});
-},60000);
+await annotate(JSON.stringify({rows:100000,samples}),'performance');},60000);

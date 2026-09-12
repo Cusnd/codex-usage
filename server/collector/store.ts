@@ -46,6 +46,7 @@ export class Collector {
       CREATE TABLE IF NOT EXISTS collector_origin_proofs(source_id TEXT NOT NULL,prefix_hash TEXT NOT NULL,device_id TEXT NOT NULL,PRIMARY KEY(source_id,prefix_hash));
       CREATE TABLE IF NOT EXISTS collector_batches(seq INTEGER PRIMARY KEY AUTOINCREMENT,batch_id TEXT UNIQUE NOT NULL,source_id TEXT NOT NULL,generation INTEGER NOT NULL,lane TEXT NOT NULL,lane_seq INTEGER NOT NULL,raw_json TEXT NOT NULL,local_applied INTEGER NOT NULL DEFAULT 0,cloud_required INTEGER NOT NULL,cloud_state TEXT NOT NULL DEFAULT 'pending',created_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS collector_consumer ON collector_batches(local_applied,cloud_required,cloud_state,seq);
+      CREATE INDEX IF NOT EXISTS collector_pending_source ON collector_batches(source_id,generation) WHERE cloud_required=1 AND cloud_state<>'applied';
       CREATE TABLE IF NOT EXISTS collector_lane_sequences(lane TEXT PRIMARY KEY,next_seq INTEGER NOT NULL);
       INSERT OR IGNORE INTO collector_lane_sequences VALUES('live',1),('backfill',1);
       CREATE TABLE IF NOT EXISTS collector_scan_state(id INTEGER PRIMARY KEY CHECK(id=1),completed_at TEXT,error_count INTEGER NOT NULL DEFAULT 0);

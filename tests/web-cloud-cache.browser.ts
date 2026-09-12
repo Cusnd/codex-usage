@@ -53,6 +53,18 @@ await run('incomplete finalization rolls back entities and cursor together', asy
   check(state.version === checkpoint.version && state.appliedCommitSeq === previous.appliedCommitSeq, 'failed cursor was committed');
   check((await cache.entities(namespace, cut.dataset_epoch, [a]))[0]?.revision === 2, 'existing entity was rolled back incorrectly');
 });
+await run('batched promotion crosses page boundaries and exact run prefixes preserve neighbouring stages', async () => {
+  const run = 'quoted,"run]😀', neighbour = run + 'x';
+  const rows = Array.from({ length: 600 }, (_, i) => ({ ...a, id: 'batch-' + String(i).padStart(4, '0') }));
+  const next = { ...lease, lease_id: run, cut: { ...cut, commit_seq: 3 }, total_entities: rows.length, expected_entities: [{ kind: 'event' as const, count: rows.length }] };
+  state = await cache.write(state, { state, stages: [...rows.map(entity => ({ type: 'entity' as const, run, entry: entity, entity })), { type: 'entity', run: neighbour, entry: b, entity: b }] });
+  state = await cache.write(state, { state: { ...state, activeLease: next, appliedCommitSeq: 3 }, finalizeBaseline: run, clearStages: [run] });
+  const stored = await cache.entities(namespace, cut.dataset_epoch, rows);
+  check(stored.length === 600 && stored.every(row => row?.hash === a.hash), 'batch boundary lost history');
+  check((await cache.stages(namespace, run)).length === 0, 'exact run was not cleared');
+  check((await cache.stages(namespace, neighbour)).length === 1, 'neighbouring run was cleared');
+  check(!(await cache.entities(namespace, cut.dataset_epoch, [a]))[0], 'prior epoch entities were not pruned');
+});
 await run('concurrent tabs use compare-and-swap and stale query writes cannot resurrect removed history', async () => {
   const other = new IndexedDbCloudCache(indexedDB, name);
   const prior = (await other.state(namespace))!; state = await cache.write(state, { state });

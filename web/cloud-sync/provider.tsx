@@ -70,6 +70,12 @@ function ActiveCloudSync({ source, children }: { source: CloudUsageDataSource; c
     return () => window.clearInterval(timer);
   }, [controller, online, settings.localInterval]);
   useEffect(() => {
+    // Complete initial migration even when normal usage polling is disabled in settings.
+    if (!online || state.phase !== 'legacy_ready') return;
+    const timer = window.setInterval(() => { void controller.trigger('automatic').catch(() => {}); }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [controller, online, state.phase]);
+  useEffect(() => {
     if (!online || settings.accountInterval <= 0) return;
     const timer = window.setInterval(() => { source.invalidateAccounts(); void client.invalidateQueries({ queryKey: ['account'] }); }, settings.accountInterval * 1000);
     return () => window.clearInterval(timer);
