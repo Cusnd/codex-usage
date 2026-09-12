@@ -1,5 +1,21 @@
 # Cloud quota deployment record
 
+## 2026-09-12 — performance preview; collector rollout still pending
+
+- Runtime source: [`ed18d5aff9ac6c7a7895ffc357d08be734b49b05`](https://github.com/Cusnd/codex-usage/commit/ed18d5aff9ac6c7a7895ffc357d08be734b49b05), pushed to `origin/preview` before `npm run cloud:preview`. The snapshot includes the collector, upload, migration and browser performance changes and their verification reports. Local guidance changes, raw artifacts and benchmark drivers remain outside the snapshot.
+- Worker/assets version: `2d92b340-42db-4c2d-b259-2adcf4bac4d0`, deployed at `2026-09-12T10:52:22.440511Z` to `https://quota.esoren.com`. Wrangler reports 100% traffic on this version and the exact runtime SHA in its annotation. The immediately preceding version was `230a882c-1a25-4fdd-9738-f13f6c636c8e`; no rollback was exercised.
+- Deployment preparation passed production Worker TypeScript, the cloud Vite build, Wrangler dry-run and module/data-boundary checks. Remote D1 reported no pending migrations. The existing custom domain and one-minute Cron remain configured. The deployment process exited successfully.
+- Public checks passed: all 10 served HTML/JS/CSS/font files matched the local build by SHA-256; health returned `ok: true`, schema 2, usage protocol 3 and configured login. Unauthenticated identity, v2 usage and v3 sync-status requests returned 401. Full suites, remote CI, develop/main integration, tags and npm publication were not run for this preview.
+- CUA with the existing authenticated Chrome session showed the shared overview, the explicit complete-legacy-history migration fallback, populated usage totals and a rendered trend, plus retained account snapshots. The final screenshot also showed a temporary cloud-service-unavailable banner while the previously loaded data remained visible. This is partial page evidence, not a clean end-to-end acceptance.
+
+**Cloud deployment succeeded; live migration and collector acceptance remain pending.** Before deployment, 63 of 219 legacy heads had been imported. A later successful read found 64 imported heads and the new format-2 migration job in its events phase, with no persisted error code. Original row counts remained 219 legacy heads and 19,319 records. A subsequent read-only verification failed with Cloudflare D1 error 7429, "D1 DB exceeded its CPU time limit and was reset." The last observation does not establish migration completion, stable availability or full semantic parity. No manual database reset or destructive recovery was performed.
+
+The desktop collector was **not upgraded by this cloud preview command**. Live inspection found the service on `127.0.0.1:8765` running the globally installed `@esoren/codex-usage` 0.1.6 package, with no v3 uploader module and no cloud-status route. D1 contained zero v3 upload receipts and zero non-legacy collector registrations. Therefore the displayed history and the ongoing cloud migration are based on previously uploaded legacy data; they do not prove new v3 uploads from this computer. The next collector rollout must preserve the existing local database and binding, verify receipt/application and explicit legacy handoff, and compare the actual data as required by [the v3 migration sequence](../docs/CLOUD_SYNC_V3.md#migration-sequence).
+
+Evidence is retained in ignored local `artifacts/preview-performance-20260912/`: `deploy.log`, before/after deployment listings, `public-verification.json`, successful D1 observations in `before-d1.json`, `after-d1.json` and `collector-protocol-d1.json`, and the failed verification in `final-d1.json`. CUA observations are recorded in the task tool history. A documentation-only follow-up commit records these findings; the deployed runtime remains the SHA above.
+
+---
+
 ## 2026-09-12 — manual preview branch, first v3 production rollout
 
 - Channel: manual `preview` snapshots at the existing `https://quota.esoren.com`; ordinary pushes do not deploy. No develop/main integration, GitHub CI run, Git version tag or npm release was performed.
