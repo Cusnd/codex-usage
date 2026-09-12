@@ -1,8 +1,9 @@
 import { stableJson, type ChangesPage, type SnapshotManifestPage, type SyncCut, type SyncEntity, type EntityKind } from '../../shared/sync-v3';
+import { SYNC_HEADER, SYNC_VERSION, assertCloudVersion, VERSION_MISMATCH } from '../../shared/cloud-version';
 import { CacheConflict, emptyState, entityKey, namespaceOf, sameCut, type CacheIdentity, type CacheState, type CacheWrite, type CloudCache,
   type ReadLease, type ManifestEntry, type StagedCommit, type StagedEntity } from './cache';
 
-export type SyncStatus = { user_id: string; cut: SyncCut; mode: string; legacy_read_available?: boolean; coverage?: unknown; devices?: unknown[] };
+export type SyncStatus = { user_id: string; cut: SyncCut; mode: string; coverage?: unknown; devices?: unknown[] };
 type EntityPage = { lease_id: string; cut: SyncCut; entities: SyncEntity[]; expires_at?: string };
 type Commit = ChangesPage['commits'][number] & { entity_count?: number; chunk_index?: number; chunk_count?: number; complete?: boolean };
 export type ChangeResponse = Omit<ChangesPage, 'commits'> & { commits: Commit[] };
@@ -16,8 +17,14 @@ export interface SyncTransport {
 }
 export class SyncError extends Error { constructor(message: string, readonly code = 'SYNC_PROTOCOL', readonly status?: number) { super(message); } }
 export async function jsonRequest<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, { credentials: 'same-origin', ...init });
+  const headers = new Headers(init.headers);
+  const cloud = /^\/api\/v[123]\//.test(url);
+  if (cloud) headers.set(SYNC_HEADER, SYNC_VERSION);
+  const response = await fetch(url, { credentials: 'same-origin', ...init, headers });
+  try { if (cloud) assertCloudVersion(response); }
+  catch(error) { if(typeof window!=='undefined')window.dispatchEvent(new Event('cloud-version-mismatch'));throw error; }
   const body = await response.json();
+  if(body.error?.code===VERSION_MISMATCH&&typeof window!=='undefined')window.dispatchEvent(new Event('cloud-version-mismatch'));
   if (!response.ok) throw new SyncError(body.error?.message || 'Cloud request failed.', body.error?.code || 'HTTP_ERROR', response.status);
   return body as T;
 }
@@ -95,21 +102,17 @@ export class CloudSyncController {
   private listeners = new Set<() => void>();
   private writes: Promise<unknown> = Promise.resolve();
   private generation = 0;
-  private legacyAvailable = false;
   constructor(options: Options) {
     this.identity = { ...options.identity, deviceIds: [...new Set(options.identity.deviceIds)].sort() };
     this.namespace = namespaceOf(this.identity); this.cache = options.cache; this.transport = options.transport ?? new HttpSyncTransport();
     this.now = options.now ?? Date.now; this.autoFull = options.autoFull !== false; this.current = emptyState(this.namespace);
   }
   state = () => this.current;
-  legacyViewAvailable = () => this.legacyAvailable && !this.current.activeLease;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private emit() { for (const listener of this.listeners) listener(); }
   initialize() {
     return this.initialized ??= this.cache.state(this.namespace).then(state => {
       this.current = state ?? emptyState(this.namespace);
-      // A legacy view is only authorized by a live status response, never by disk state.
-      if (this.current.phase === 'legacy_ready') this.current = { ...this.current, phase: 'empty' };
       this.emit();
     });
   }
@@ -133,7 +136,6 @@ export class CloudSyncController {
   async settle() { await this.running?.catch(() => {}); }
   async invalidateForDeletion() {
     await this.initialize();
-    this.legacyAvailable = false;
     this.generation++;
     await this.persist(state => ({ state: { ...emptyState(this.namespace), version: state.version }, resetUser: true }));
   }
@@ -148,7 +150,7 @@ export class CloudSyncController {
         next = this.pending;
       } while (next && !this.abort.signal.aborted);
     })().catch(async error => {
-      if (error instanceof CacheConflict) { this.legacyAvailable = false; this.current = await this.cache.state(this.namespace) ?? emptyState(this.namespace); this.emit(); }
+      if (error instanceof CacheConflict) { this.current = await this.cache.state(this.namespace) ?? emptyState(this.namespace); this.emit(); }
       else if (!this.abort.signal.aborted) await this.persist(state => ({ state: { ...state, error: error instanceof Error ? error.message : String(error) } })).catch(() => {});
       throw error;
     }).finally(() => { this.running = null; });
@@ -158,17 +160,11 @@ export class CloudSyncController {
     this.abort.signal.throwIfAborted();
     const head = await this.request(() => this.transport.status(this.abort.signal));
     assert(head.user_id === this.identity.userId && validCut(head.cut), 'Cloud cache identity or status is invalid.');
-    this.legacyAvailable = head.legacy_read_available === true && head.mode !== 'deleting';
     const active = this.current.activeLease?.cut;
     if (head.mode === 'deleting' || active && head.cut.deletion_version > active.deletion_version) {
       await this.invalidateForDeletion();
       if (head.mode === 'deleting') throw new SyncError('Cloud history deletion is still in progress.', 'HISTORY_UPDATING', 409);
     }
-    if (this.legacyViewAvailable()) {
-      await this.persist(state => ({ state: { ...state, phase: 'legacy_ready', error: null } }));
-      return;
-    }
-    if (this.current.phase === 'legacy_ready') await this.persist(state => ({ state: { ...state, phase: 'empty', error: null } }));
     if (reason === 'automatic' && head.mode === 'ready' && this.current.phase === 'full_ready' && !this.current.baseline && !this.current.deltaLease &&
       sameCut(active, head.cut) && Date.parse(this.current.activeLease!.expires_at) > this.now() + 60_000) {
       // Status already proves this complete fixed cut is current, including a device scope.
@@ -220,19 +216,18 @@ export class CloudSyncController {
   }
   async view(signal?: AbortSignal): Promise<ReadLease | null> {
     await this.initialize(); signal?.throwIfAborted();
-    if (this.legacyViewAvailable()) return null;
     if (!this.current.activeLease) {
       const work = this.running ?? this.trigger('initial');
       await new Promise<void>((resolve, reject) => {
         const cleanup = () => { unsubscribe(); signal?.removeEventListener('abort', cancelled); };
-        const ready = () => { if (this.current.activeLease || this.legacyViewAvailable()) { cleanup(); resolve(); } };
+        const ready = () => { if (this.current.activeLease) { cleanup(); resolve(); } };
         const unsubscribe = this.subscribe(ready);
         const cancelled = () => { cleanup(); reject(signal?.reason); };
         signal?.addEventListener('abort', cancelled, { once: true });
-        ready(); work.then(() => { if (!this.current.activeLease && !this.legacyViewAvailable()) { cleanup(); reject(new SyncError('No completed cloud view is available.')); } }, error => { cleanup(); reject(error); });
+        ready(); work.then(() => { if (!this.current.activeLease) { cleanup(); reject(new SyncError('No completed cloud view is available.')); } }, error => { cleanup(); reject(error); });
       });
     }
-    assert(this.current.activeLease || this.legacyViewAvailable(), 'No completed cloud view is available.');
+    assert(this.current.activeLease, 'No completed cloud view is available.');
     return this.current.activeLease;
   }
   async renewView(lease: ReadLease) { return this.freshLease(lease); }

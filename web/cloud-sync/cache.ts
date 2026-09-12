@@ -18,7 +18,7 @@ export type BaselineProgress = {
   last_key: string | null; page: { entries: ManifestEntry[]; next_cursor: string | null } | null;
 };
 export type CacheState = {
-  namespace: string; version: number; phase: 'empty' | 'legacy_ready' | 'recent_loading' | 'recent_ready' | 'full_loading' | 'full_ready' | 'delta_loading';
+  namespace: string; version: number; phase: 'empty' | 'recent_loading' | 'recent_ready' | 'full_loading' | 'full_ready' | 'delta_loading';
   activeLease: ReadLease | null; coverage: { scope: 'recent' | 'full'; complete: true; cut: SyncCut; entities: number; sources: unknown } | null;
   baseline: BaselineProgress | null; deltaLease: ReadLease | null;
   receivedCommitSeq: number; appliedCommitSeq: number; lastSyncAt: string | null; viewAt: string | null; error: string | null;
@@ -162,7 +162,7 @@ const cursorEach = (source: IDBObjectStore | IDBIndex, range: IDBKeyRange | unde
 
 export class IndexedDbCloudCache implements CloudCache {
   private connection: Promise<IDBDatabase>;
-  constructor(factory: IDBFactory = indexedDB, name = 'codex-usage-v3') {
+  constructor(factory: IDBFactory = indexedDB, name = 'codex-usage-cloud-current') {
     this.connection = new Promise((resolve, reject) => {
       const req = factory.open(name, 1);
       req.onupgradeneeded = () => {

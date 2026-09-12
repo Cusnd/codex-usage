@@ -1,13 +1,17 @@
+import {gzipSync} from 'node:zlib';
+import {stableJson} from '../../shared/sync-v3';
+import {hashBytes} from '../src/v3/codec';
+import {MatchingRequest} from './matching-build';
 import {env} from 'cloudflare:workers';
 import {expect,it} from 'vitest';
 import worker from '../src/index';
 import {SESSION_COOKIE} from '../src/http';
-import {domain} from '../src/v3/store';
+import {domain,currentDevice,receive} from '../src/v3/store';
 import {queryBudget} from '../src/v3/query-budget';
-import {actor,call,legacy,origin} from './performance-fixture';
+import {actor,call,batch,origin} from './performance-fixture';
 
-it('returns persisted migration status before background work completes',async()=>{
-  const a=await actor();await legacy(a,'9007199254740993');await domain(env.DB,a.user);
+it('returns persisted v3 status before background work completes',async()=>{
+  const a=await actor(),b=await batch(a),wire=gzipSync(stableJson(b));await receive(env.DB,await currentDevice(env.DB,a.user,a.device),b,wire,await hashBytes(wire));
   let unblock!:()=>void,claimed=false;
   const blocked=new Promise<void>(resolve=>{unblock=resolve;}),pending:Promise<unknown>[]=[];
   const db=new Proxy(env.DB,{get(target,key){
@@ -23,10 +27,10 @@ it('returns persisted migration status before background work completes',async()
   }});
   const ctx={waitUntil(promise:Promise<unknown>){pending.push(promise);},passThroughOnException(){},props:{}} as ExecutionContext;
   try{
-    const response=await worker.fetch(new Request(origin+'/api/v3/sync/status',{headers:{Cookie:SESSION_COOKIE+'='+a.session}}),{...env,DB:db},ctx);
+    const response=await worker.fetch(new MatchingRequest(origin+'/api/v3/sync/status',{headers:{Cookie:SESSION_COOKIE+'='+a.session}}),{...env,DB:db},ctx);
     expect(response.status).toBe(200);expect(claimed).toBe(true);expect(pending).toHaveLength(1);
     const status=await response.json<any>();expect(status.user_id).toBe(a.user);
-    expect(status.baseline_ready).toBe(false);expect(status.legacy_read_available).toBe(true);
+    expect(status.baseline_ready).toBe(true);expect(status.coverage.pending_batches).toHaveLength(1);
     expect(await env.DB.prepare('SELECT attempts FROM v3_jobs WHERE user_id=?').bind(a.user).first<number>('attempts')).toBe(0);
   }finally{unblock();await Promise.all(pending);}
   expect(await env.DB.prepare('SELECT attempts FROM v3_jobs WHERE user_id=?').bind(a.user).first<number>('attempts')).toBeGreaterThan(0);
@@ -45,12 +49,13 @@ it('keeps scheduled jobs plus the maximum 100-domain cleanup within one invocati
     env.DB.prepare("INSERT INTO users(id,github_id,login,created_at) SELECT value,value,'cron-budget',? FROM json_each(?)").bind(now,raw),
     env.DB.prepare('INSERT INTO v3_sync_domains(user_id,active_epoch,commit_seq,updated_at) SELECT value,value,1,? FROM json_each(?)').bind(now,raw),
     env.DB.prepare('INSERT INTO v3_commits(user_id,epoch,commit_seq,created_at,entity_count) SELECT value,value,1,?,0 FROM json_each(?)').bind(now-8*86400_000,raw),
-    env.DB.prepare("INSERT INTO v3_jobs(user_id,job_id,kind,payload,created_at,updated_at) SELECT value,'legacy','legacy_migrate','{}',?,? FROM json_each(?)").bind(now,now,raw),
+    env.DB.prepare("INSERT INTO devices(id,user_id,name,token_hash,bound_at,revoked_at,history_deleted_at) SELECT value,value,'test',value,?,?,? FROM json_each(?)").bind(now,now,now,raw),
+    env.DB.prepare("INSERT INTO v3_jobs(user_id,job_id,kind,device_id,payload,created_at,updated_at) SELECT value,'delete:'||value,'delete_device',value,'{}',?,? FROM json_each(?)").bind(now,now,raw),
   ]);
   const counted=queryBudget(env.DB,1001);
   await worker.scheduled({} as ScheduledController,{...env,DB:counted.db});
   expect(counted.stats.queries).toBeLessThanOrEqual(923);
-  expect(await env.DB.prepare("SELECT COUNT(*) n FROM v3_jobs WHERE state='complete'").first<number>('n')).toBeGreaterThan(20);
+  expect(await env.DB.prepare("SELECT COUNT(*) n FROM v3_jobs WHERE state='complete'").first<number>('n')).toBeGreaterThan(0);
   expect(await env.DB.prepare("SELECT COUNT(*) n FROM v3_jobs WHERE state='pending'").first<number>('n')).toBeGreaterThan(0);
   expect(await env.DB.prepare('SELECT COUNT(*) n FROM v3_commits').first<number>('n')).toBe(0);
 });

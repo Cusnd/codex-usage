@@ -8,7 +8,7 @@ import { Workspace,defaultSettings } from '../../web/workspace';
 import { installCloudDataSource } from '../../web/data-source';
 import { dataQuery } from '../../web/data-query';
 import { hooks } from './cloud-display-hooks';
-import type { CloudSource,CloudAccountView } from '../../shared/usage-sync';
+import type { CloudSource,CloudAccountView } from '../../shared/cloud-accounts';
 
 export { hooks,CloudProjects };
 export function projectTree(){hooks.cursor=0;return CloudProjects();}

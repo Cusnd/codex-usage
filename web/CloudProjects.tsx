@@ -14,9 +14,8 @@ function repositoryLabel(value:string){try{if(value.startsWith('repo1:')){const 
 
 export function CloudProjects(){
   const client=useQueryClient(),sync=useCloudSync(),devices=useCloudDevices();
-  const migrating=sync?.state.phase==='legacy_ready';
   const deviceNames=new Map(devices.data?.devices.map(d=>[d.id,d.name])||[]);
-  const query=useQuery({queryKey:['cloud-projects',sync?.state.activeLease?.cut.organization_version],queryFn:({signal})=>cloudRequest<View>('/api/v3/projects','GET',undefined,signal),enabled:sync?.online!==false&&!migrating});
+  const query=useQuery({queryKey:['cloud-projects',sync?.state.activeLease?.cut.organization_version],queryFn:({signal})=>cloudRequest<View>('/api/v3/projects','GET',undefined,signal),enabled:sync?.online!==false});
   const [selected,setSelected]=useState<string[]>([]),[sourceSelection,setSourceSelection]=useState<Record<string,string[]>>({}),[names,setNames]=useState<Record<string,string>>({});
   const [pending,setPending]=useState<{operation:Operation;description:string;id:string;version:number}|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const view=query.data,sources=new Map(view?.sources.map(s=>[s.id,s])||[]),picked=selected.filter(id=>view?.projects.some(p=>p.id===id));
@@ -26,7 +25,6 @@ export function CloudProjects(){
     await cloudRequest('/api/v3/projects/operations','POST',{operation_id:pending.id,base_organization_version:pending.version,...pending.operation});
     await sync?.refresh();await client.invalidateQueries({queryKey:['cloud-projects']});await client.invalidateQueries({queryKey:['local']});setSelected([]);setSourceSelection({});setPending(null);
   }catch(e){setError((e as Error).message);await client.invalidateQueries({queryKey:['cloud-projects']});}finally{setBusy(false);}}
-  if(migrating)return <section className="panel cloud-projects"><h2>项目归并</h2><p role="status">完整历史正在迁移，完成后即可管理项目归并。统计页面仍可查看最近完整同步的旧版历史。</p></section>;
   return <section className="panel cloud-projects" aria-labelledby="cloud-projects-title"><h2 id="cloud-projects-title">项目归并</h2>
     <p>根据会话身份、主仓库和本机项目信息归并来源。人工合并、拆分和命名会保留；恢复自动归并会移除所选项目的人工分组。</p>
     <ErrorBox error={query.error||(error?new Error(error):undefined)}/>{sync?.online===false&&<p className="notice">联网后可管理项目归并。</p>}

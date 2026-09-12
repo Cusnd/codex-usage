@@ -6,7 +6,7 @@ it('reports v3 readiness only when the current storage shape is available', asyn
   const request = () => worker.fetch(new Request('https://quota.esoren.com/api/health'), env);
   const ready = await request();
   expect(ready.status).toBe(200);
-  expect(await ready.json()).toMatchObject({ ok: true, schemaVersion: 2, usageProtocol: 3 });
+  expect(await ready.json()).toMatchObject({ ok: true, schemaVersion:3, usageProtocol: 3 });
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   try {
     for (const table of ['v3_rebuild_candidates', 'v3_origin_operations']) {

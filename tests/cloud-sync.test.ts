@@ -1,10 +1,13 @@
+import {versionedFetch} from './fixtures/versioned-fetch.js';
+import {SYNC_VERSION} from '../shared/cloud-version.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Store } from "../server/db.js";
-import { CloudSync, cloudSnapshot } from "../server/cloud-sync.js";
+import { CloudSync } from "../server/cloud-sync.js";
+import {cloudSnapshot} from '../server/account-sync.js';
 import type { LimitObservation } from "../server/refresh.js";
 import { isCloudSnapshot, type CloudSnapshot } from "../shared/cloud.js";
 
@@ -13,6 +16,7 @@ function observation(patch: Partial<LimitObservation> = {}): LimitObservation {
   return {
     identityKey: "secret-raw-account@example.com",
     identityKnown: true,
+    stableIdentity: "synthetic-stable-identity",
     collectedAt: "2026-09-09T00:00:00.000Z",
     attemptedAt: "2026-09-09T00:00:00.000Z",
     provider: "app-server",
@@ -37,7 +41,7 @@ function observation(patch: Partial<LimitObservation> = {}): LimitObservation {
     ...patch,
   };
 }
-function fixture() {
+function fixture(serverBuild:()=>string|null=()=>SYNC_VERSION) {
   const directory = mkdtempSync(path.join(os.tmpdir(), "codex-cloud-test-"));
   const store = new Store(path.join(directory, "usage.sqlite"));
   let now = baseTime,
@@ -76,22 +80,17 @@ function fixture() {
       if (failRevoke) throw new Error("offline");
       return Response.json({ ok: true });
     }
-    assert.equal(route, "/api/v1/snapshot");
-    if (failUpload) throw new Error("SENSITIVE-UPSTREAM-ERROR");
-    if (throttle)
-      return Response.json(
-        { error: { code: "SYNC_RATE_LIMITED" } },
-        { status: 429, headers: { "Retry-After": "120" } },
-      );
-    uploads.push(JSON.parse(String(init.body)));
-    return Response.json({
-      receivedAt: new Date(now).toISOString(),
-      nextAllowedAt: new Date(now + 60000).toISOString(),
-    });
+    if(route==='/api/v3/collector/config')return Response.json({accountKey:'k'.repeat(43),paused:false});
+    if(route==='/api/v3/collector/pause')return Response.json({ok:true});
+    assert.equal(route,'/api/v3/accounts/observations');
+    uploads.push(JSON.parse(String(init.body)).quota);
+    return Response.json({acceptedSequence:uploads.at(-1)!.sequence});
   }) as typeof fetch;
+  const uploader={status:()=>({error:null,collectedAt:null,uploadedAt:null,nextUploadAt:null,pendingBatches:0}),takeNextTickDelayMs:()=>1000,tick:async()=>{},cancel(){},unbind:async()=>{},close:async()=>{}} as unknown as import('../server/sync-v3/uploader.js').V3Uploader;
   const options = {
+    uploader,
     credentialFile: path.join(directory, "cloud-credentials.json"),
-    fetch: fetcher,
+    fetch: versionedFetch(fetcher,serverBuild),
     observation: async () => reading,
     refreshLimits: async () => {},
     now: () => now,
@@ -146,7 +145,7 @@ test("cloud payload enumerates quotas, preserves nulls and rejects extra sensiti
   (original.data!.buckets[0] as any).email = "PRIVATE-EMAIL";
   const snapshot = cloudSnapshot(
     original,
-    { salt: "s".repeat(43) },
+    "s".repeat(43),
     "device-1",
     1,
   );
@@ -176,7 +175,6 @@ test("cloud payload enumerates quotas, preserves nulls and rejects extra sensiti
 test("sync is opt-in and local public state never returns bearer or salt", async () => {
   const f = fixture();
   try {
-    await f.cloud.capture();
     await f.cloud.tick();
     assert.equal(f.calls.length, 0);
     assert.equal(f.cloud.status().enabled, false);
@@ -193,100 +191,10 @@ test("sync is opt-in and local public state never returns bearer or salt", async
     await f.dispose();
   }
 });
-test("rapid manual results coalesce, respect 60 seconds, and keep yesterday collectedAt", async () => {
-  const f = fixture();
-  try {
-    await f.bind();
-    assert.equal(f.uploads.length, 1);
-    assert.equal(f.uploads[0].collectedAt, "2026-09-09T00:00:00.000Z");
-    for (let i = 1; i <= 4; i++) {
-      f.reading(
-        observation({
-          attemptedAt: new Date(baseTime + i * 1000).toISOString(),
-        }),
-      );
-      await f.cloud.capture();
-      await f.cloud.tick();
-    }
-    assert.equal(f.uploads.length, 1);
-    assert.equal(f.cloud.status().pending, true);
-    f.advance(59999);
-    await f.cloud.tick();
-    assert.equal(f.uploads.length, 1);
-    f.advance(1);
-    await f.cloud.tick();
-    assert.equal(f.uploads.length, 2);
-    assert.equal(f.uploads[1].attemptedAt, "2026-09-10T00:00:04.000Z");
-    assert.equal(f.cloud.status().pending, false);
-  } finally {
-    await f.dispose();
-  }
-});
-test("outbox survives restart, enforces Retry-After, and isolates sync errors", async () => {
-  const f = fixture();
-  try {
-    f.fail(true);
-    await f.bind();
-    assert.equal(f.cloud.status().pending, true);
-    assert.ok(!f.cloud.status().error?.includes("SENSITIVE"));
-    await f.restart();
-    f.advance(5000);
-    f.fail(false);
-    f.throttle(true);
-    await f.cloud.tick();
-    const next = Date.parse(f.cloud.status().nextUploadAt!);
-    assert.ok(next >= baseTime + 125000);
-    await f.restart();
-    f.throttle(false);
-    f.advance(119999);
-    await f.cloud.tick();
-    assert.equal(f.uploads.length, 0);
-    f.advance(1);
-    await f.cloud.tick();
-    assert.equal(f.uploads.length, 1);
-    assert.equal(f.uploads[0].collectedAt, "2026-09-09T00:00:00.000Z");
-  } finally {
-    await f.dispose();
-  }
-});
-test("retry drops former account data when identity changes or becomes unknown", async () => {
-  const f = fixture();
-  try {
-    f.fail(true);
-    await f.bind();
-    f.reading(
-      observation({
-        identityKey: "second-account",
-        data: { accountId: "second", buckets: [] },
-        collectedAt: "2026-09-10T00:00:01.000Z",
-      }),
-    );
-    f.fail(false);
-    f.advance(5000);
-    await f.cloud.tick();
-    assert.equal(f.uploads[0].buckets.length, 0);
-    f.reading(
-      observation({
-        identityKnown: false,
-        identityKey: null,
-        data: null,
-        errorCode: "IDENTITY_UNKNOWN",
-      }),
-    );
-    await f.cloud.capture();
-    f.advance(60000);
-    await f.cloud.tick();
-    assert.equal(f.uploads[1].accountRef, null);
-    assert.equal(f.uploads[1].collectedAt, null);
-    assert.deepEqual(f.uploads[1].buckets, []);
-  } finally {
-    await f.dispose();
-  }
-});
 test("confirmed-account collection failure retains measured values with error status", () => {
   const snapshot = cloudSnapshot(
     observation({ errorCode: "HTTP_TIMEOUT" }),
-    { salt: "s".repeat(43) },
+    "s".repeat(43),
     "device-1",
     2,
   );
@@ -295,36 +203,13 @@ test("confirmed-account collection failure retains measured values with error st
   assert.equal(snapshot.buckets[0].primary?.remainingPercent, 75);
   assert.ok(isCloudSnapshot(snapshot));
 });
-test("pause keeps cloud snapshot, offline disconnect stops sends and resumes revocation after restart", async () => {
-  const f = fixture();
-  try {
-    await f.bind();
-    await f.cloud.setEnabled(false);
-    f.advance(60000);
-    await f.cloud.tick();
-    assert.equal(f.uploads.length, 1);
-    f.failRevoke(true);
-    await f.cloud.disconnect();
-    assert.equal(f.cloud.status().enabled, false);
-    assert.equal(f.cloud.status().revokePending, true);
-    await f.restart();
-    f.advance(5000);
-    f.failRevoke(false);
-    await f.cloud.tick();
-    assert.equal(f.cloud.status().connected, false);
-    assert.equal(f.cloud.status().revokePending, false);
-    assert.equal(f.uploads.length, 1);
-  } finally {
-    await f.dispose();
-  }
-});
 test("disconnect cancels an unconfirmed request, including an approval race", async () => {
   const f = fixture();
   try {
     await f.cloud.connect();
     await f.cloud.disconnect();
-    assert.ok(f.calls.includes("DELETE /api/v1/device-authorizations"));
-    assert.ok(f.calls.includes("DELETE /api/v1/device"));
+    assert.ok(f.calls.includes("DELETE /api/v3/device-authorizations"));
+    assert.ok(f.calls.includes("DELETE /api/v3/device"));
     assert.equal(f.cloud.status().binding, null);
   } finally {
     await f.dispose();
@@ -346,8 +231,19 @@ test("expired binding revokes the proposed token after request cleanup, retainin
     f.failRevoke(false);
     f.advance(5000);
     await f.cloud.tick();
-    assert.ok(f.calls.includes("DELETE /api/v1/device"));
+    assert.ok(f.calls.includes("DELETE /api/v3/device"));
     assert.equal(f.cloud.status().revokePending, false);
     assert.equal(f.cloud.status().connected, false);
   } finally { await f.dispose(); }
+});
+
+
+test('a version mismatch cannot prevent revoking a binding without sending statistics',async()=>{
+  let build=SYNC_VERSION;const f=fixture(()=>build);
+  try{
+    await f.bind();const uploads=f.uploads.length;build='0.1.6+old-cloud';
+    await f.cloud.disconnect();await f.cloud.tick();
+    assert.equal(f.cloud.status().connected,false);assert.equal(f.cloud.status().revokePending,false);
+    assert.equal(f.uploads.length,uploads);assert.ok(f.calls.includes('DELETE /api/v3/device'));
+  }finally{await f.dispose();}
 });

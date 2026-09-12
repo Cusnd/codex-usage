@@ -1,8 +1,9 @@
 import type { Observation, ExtractionContext, SourceKind } from './usage-domain/types.js';
 import { projectRecord } from './usage-domain/normalize.js';
 
-export const SYNC_V3 = 3;
-export const EXTRACTOR_VERSION = 2;
+import { SYNC_PROTOCOL, SYNC_SCHEMA, EXTRACTOR_VERSION } from './sync-version.js';
+export { EXTRACTOR_VERSION };
+export const SYNC_V3 = SYNC_PROTOCOL;
 export const V3_CONTENT_TYPE = 'application/vnd.codex-usage.v3+json+gzip';
 export const V3_MAX_WIRE_BYTES = 512 * 1024;
 export const V3_MAX_DECODED_BYTES = 1024 * 1024;
@@ -18,23 +19,19 @@ export type SourceCheckpoint = {
 };
 export type SyncMetadata =
   | { type: 'source_availability'; source_id: string; available: boolean }
-  | { type: 'legacy_replacement'; dataset_id: string; thread_id: string; sources: {source_id:string;generation:number}[] }
   | { type: 'project'; source_project_id: string; value: Record<string, unknown> };
 export type UploadBatch = {
-  protocol: 3; schema_version: 1; extractor_version: number;
+  protocol: typeof SYNC_PROTOCOL; schema_version: typeof SYNC_SCHEMA; extractor_version: number;
   collector_id: string; producer_epoch: string; lane: Lane; lane_seq: number;
   batch_id: string; records_hash: string; sources: SourceCheckpoint[];
   records: Observation[]; metadata: SyncMetadata[];
 };
-export type LegacyPreparation = {collector_id:string;replacements:Extract<SyncMetadata,{type:'legacy_replacement'}>[]};
-export type LegacyHandoffResult = {dataset_id:string;thread_id:string;status:'applied'|'superseded'};
 export type UploadAck = {
   batch_id: string; wire_hash: string; records_hash: string;
   status: 'received' | 'applied'; received_at: string;
   dataset_epoch: string; applied_commit_seq: number | null;
   contiguous_received_seq: number; contiguous_applied_seq: number;
   retry_after_ms: number; current_config_version: number;
-  handoff_results?: LegacyHandoffResult[];
 };
 export type SyncCut = { dataset_epoch: string; commit_seq: number; deletion_version: number; organization_version: number; config_version: number };
 export type EntityKind = 'event' | 'thread' | 'project' | 'device' | 'settings' | 'account';
@@ -73,7 +70,7 @@ export function validProjectedRecord(v:unknown):boolean {
 }
 export function validUploadBatch(value:unknown):value is UploadBatch {
   if(!obj(value)||!keys(value,['protocol','schema_version','extractor_version','collector_id','producer_epoch','lane','lane_seq','batch_id','records_hash','sources','records','metadata']))return false;
-  if(value.protocol!==3||value.schema_version!==1||![1,EXTRACTOR_VERSION].includes(Number(value.extractor_version))||!integer(value.extractor_version,1)||!id(value.collector_id)||!id(value.producer_epoch)||!id(value.batch_id)||
+  if(value.protocol!==SYNC_PROTOCOL||value.schema_version!==SYNC_SCHEMA||value.extractor_version!==EXTRACTOR_VERSION||!integer(value.extractor_version,1)||!id(value.collector_id)||!id(value.producer_epoch)||!id(value.batch_id)||
     !['live','backfill'].includes(String(value.lane))||!integer(value.lane_seq,1)||!hash(value.records_hash)||
     !Array.isArray(value.sources)||value.sources.length>64||!Array.isArray(value.records)||value.records.length>V3_MAX_RECORDS||!Array.isArray(value.metadata)||value.metadata.length>500||!value.sources.length&&(!value.metadata.length||value.records.length))return false;
   const sources=new Map<string,SourceCheckpoint>();
@@ -100,10 +97,6 @@ export function validUploadBatch(value:unknown):value is UploadBatch {
   for(const m of value.metadata) {
     if(!obj(m))return false;
     if(m.type==='source_availability') {if(!keys(m,['type','source_id','available'])||!id(m.source_id)||typeof m.available!=='boolean')return false;}
-    else if(m.type==='legacy_replacement') {
-      if(!keys(m,['type','dataset_id','thread_id','sources'])||!id(m.dataset_id)||!id(m.thread_id)||!Array.isArray(m.sources)||!m.sources.length||m.sources.length>500||
-        m.sources.some(s=>!obj(s)||!keys(s,['source_id','generation'])||!id(s.source_id)||!integer(s.generation,1))||new Set(m.sources.map(s=>s.source_id)).size!==m.sources.length)return false;
-    }
     else if(m.type==='project') {
       if(!keys(m,['type','source_project_id','value'])||!id(m.source_project_id)||!obj(m.value)||
         Object.keys(m.value).some(k=>!['id','kind','name','root','app_project_id','repository','common_dir','confidence','reason','thread_ids'].includes(k))||

@@ -70,8 +70,8 @@ function ActiveCloudSync({ source, children }: { source: CloudUsageDataSource; c
     return () => window.clearInterval(timer);
   }, [controller, online, settings.localInterval]);
   useEffect(() => {
-    // Complete initial migration even when normal usage polling is disabled in settings.
-    if (!online || state.phase !== 'legacy_ready') return;
+    // Complete initial synchronization even when normal usage polling is disabled in settings.
+    if (!online || state.phase !== 'empty') return;
     const timer = window.setInterval(() => { void controller.trigger('automatic').catch(() => {}); }, 15_000);
     return () => window.clearInterval(timer);
   }, [controller, online, state.phase]);

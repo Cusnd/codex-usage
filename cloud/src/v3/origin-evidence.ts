@@ -10,7 +10,7 @@ const proofKey=(p:Proof)=>stableJson([p.observation_id,p.record_revision,p.devic
 const direct=(c:Candidate)=>!!c.origin.device_id&&['execution','local_append'].includes(c.origin.kind);
 function ownProof(row:CandidateRow):Proof[]{
   const c=parse(row);
-  if(!direct(c)&&!(c.origin.kind==='preserved'&&!c.origin_proofs))return [];
+  if(!direct(c))return [];
   return [{observation_id:c.observation_id,record_revision:c.record_revision,collector_id:row.collector_id,source_id:row.source_id,device_id:c.origin.device_id!,kind:c.origin.kind as Proof['kind'],value:valueKey(c)}];
 }
 
@@ -28,9 +28,6 @@ export function reconcileOriginEvidence(rows:CandidateRow[],before:CandidateRow[
   }
   const proofs=new Map<string,Proof>();
   for(const row of [...active,...recovered])for(const p of [...ownProof(row),...(parse(row).origin_proofs||[])])if(!withdrawn.has(proofKey(p)))proofs.set(proofKey(p),p);
-  // Deleting an uploader withdraws that uploader's bytes, not evidence already shared by
-  // a surviving copy. Include the old proof during this transaction for pre-upgrade copies.
-  if(preserveRemoved)for(const r of before.filter(r=>r.active))for(const p of [...ownProof(r),...(parse(r).origin_proofs||[])])proofs.set(proofKey(p),p);
   return rows.map(row=>{
     if(!row.active)return row;
     const c=parse(row),strong=c.identity_quality!=='source_position';

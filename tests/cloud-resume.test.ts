@@ -1,3 +1,4 @@
+import {versionedFetch} from './fixtures/versioned-fetch.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -5,9 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../server/app.js';
 import { AccountError, type AccountSource } from '../server/account.js';
-import type { CloudAccountSnapshot } from '../shared/usage-sync.js';
+import type { CloudAccountSnapshot } from '../shared/cloud-accounts.js';
 import { Store } from '../server/db.js';
-import { UsageSync } from '../server/usage-sync.js';
+import { AccountSync } from '../server/account-sync.js';
 
 function deferred(){let resolve!:()=>void;const promise=new Promise<void>(done=>resolve=done);return{promise,resolve};}
 async function setup(){
@@ -24,13 +25,13 @@ async function setup(){
     const route=new URL(String(input)).pathname,body=init?.body?JSON.parse(String(init.body)):undefined;
     if(route.endsWith('/device-authorizations'))return Response.json({requestId:'resume-request',pollSecret:'p'.repeat(43),userCode:'ABCD-2345',expiresAt:new Date(Date.now()+600000).toISOString()},{status:201});
     if(route.endsWith('/device-authorizations/poll'))return Response.json({status:'approved',deviceId:'resume-device',deviceName:'Resume fixture',userLogin:'fixture'});
-    if(route.endsWith('/sync/config'))return Response.json({accountKey:'k'.repeat(43),paused});
-    if(route.endsWith('/sync/pause')){paused=body.paused;trace.push('paused:'+paused);return Response.json({ok:true});}
+    if(route.endsWith('/collector/config'))return Response.json({accountKey:'k'.repeat(43),paused});
+    if(route.endsWith('/collector/pause')){paused=body.paused;trace.push('paused:'+paused);return Response.json({ok:true});}
     if(route.endsWith('/accounts/observations')){uploads.push(body);trace.push('quota:'+body.quota.buckets[0]?.primary?.usedPercent);return Response.json({receivedAt:new Date().toISOString(),acceptedSequence:body.quota.sequence});}
     if(route.endsWith('/sync/status'))return Response.json({ok:true});
     throw Error('Unexpected transport route '+route);
   };
-  const instance=await createApp({database:path.join(directory,'usage.sqlite'),codexHome:directory,startup:false,accountReader:account,cloudCredentialFile:null,cloudOrigin:'https://synthetic.example',cloudFetch:transport});
+  const instance=await createApp({database:path.join(directory,'usage.sqlite'),codexHome:directory,startup:false,accountReader:account,cloudCredentialFile:null,cloudOrigin:'https://synthetic.example',cloudFetch:versionedFetch(transport)});
   instance.store.saveSettings({...instance.store.settings(),localInterval:0,accountInterval:0});
   const toggle=async(enabled:boolean)=>{const response=await instance.app.inject({method:'PATCH',url:'/api/cloud/settings',payload:{enabled}});assert.equal(response.statusCode,200,response.body);return response.json().data;};
   return{...instance,uploads,trace,entered,toggle,get reads(){return reads;},get paused(){return paused;},setUsed(value:number){used=value;},fail(){failed=true;},holdRead(){readGate=deferred();},releaseRead(){readGate?.resolve();},
@@ -69,15 +70,15 @@ test('a newer pause cancels activation while resume is waiting for the account r
 
 test('explicit account refresh preserves a server Retry-After delay',async()=>{
   const store=new Store(':memory:');let now=Date.now(),attempts=0;
-  const sync=new UsageSync(store,async(route)=>{
-    if(route==='sync/config')return{response:Response.json({}),data:{accountKey:'k'.repeat(43),paused:false}};
-    assert.equal(route,'sync/accounts');attempts++;
+  const sync=new AccountSync(store,async(route)=>{
+    if(route==='collector/config')return{response:Response.json({}),data:{accountKey:'k'.repeat(43),paused:false}};
+    assert.equal(route,'accounts/observations');attempts++;
     return attempts===1?{response:Response.json({}, {status:429,headers:{'Retry-After':'120'}}),data:{error:{code:'SYNC_RATE_LIMITED'}}}:{response:Response.json({}),data:{}};
   },async()=>({stableIdentity:'account',identityKey:'account',identityKnown:true,data:{accountId:'account',buckets:[]},provider:'app-server',collectedAt:new Date(now).toISOString(),attemptedAt:new Date(now).toISOString(),errorCode:null,refreshInterval:0}),undefined,()=>now);
   try{
-    await sync.tick('device',()=>true,'accounts');assert.equal(attempts,1);
-    sync.refreshAccounts();await sync.tick('device',()=>true,'accounts');assert.equal(attempts,1);
-    now+=119999;await sync.tick('device',()=>true,'accounts');assert.equal(attempts,1);
-    now++;await sync.tick('device',()=>true,'accounts');assert.equal(attempts,2);assert.equal(sync.status().error,null);
+    await sync.tick('device',()=>true);assert.equal(attempts,1);
+    sync.refreshAccounts();await sync.tick('device',()=>true);assert.equal(attempts,1);
+    now+=119999;await sync.tick('device',()=>true);assert.equal(attempts,1);
+    now++;await sync.tick('device',()=>true);assert.equal(attempts,2);assert.equal(sync.status().error,null);
   }finally{store.close();}
 });

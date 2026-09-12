@@ -122,34 +122,6 @@ test("cost and incomplete metrics retain existing aggregation semantics", async 
   assert.deepEqual(result.team, q.summary());
 }));
 
-test("database migration reparses unchanged old source state once without modifying logs", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "codex-agent-migration-"));
-  await mkdir(path.join(dir, "sessions"));
-  const filename = path.join(dir, "usage.sqlite");
-  let store = new Store(filename);
-  try {
-    const file = await log(dir, "child", [meta("child", "root"), context(), record("child", 10)]);
-    await log(dir, "root", [meta("root"), context(), record("root", 20)]);
-    const original = await readFile(file);
-    const before = await stat(file);
-    await new Importer(store, dir).scan(() => {});
-    store.db.exec("DROP INDEX threads_subagent_parent; ALTER TABLE threads DROP COLUMN subagent_parent_id; ALTER TABLE threads DROP COLUMN forked_from_id;");
-    for (const row of store.all("SELECT path,state FROM source_files")) {
-      const state = JSON.parse(row.state); delete state.metadataVersion;
-      store.run("UPDATE source_files SET state=? WHERE path=?", [JSON.stringify(state), row.path]);
-    }
-    store.close(); store = new Store(filename);
-    const importer = new Importer(store, dir);
-    assert.equal(await importer.importFile(file), true);
-    assert.equal(store.one("SELECT subagent_parent_id FROM threads WHERE id='child'")!.subagent_parent_id, "root");
-    await importer.scan(() => {});
-    assert.equal(new Queries(store).agents("root")!.team.totalTokens, "30");
-    assert.equal(await importer.importFile(file), false);
-    assert.deepEqual(await readFile(file), original);
-    assert.equal((await stat(file)).mtimeMs, before.mtimeMs);
-  } finally { store.close(); await rm(dir, { recursive: true, force: true }); }
-});
-
 test("agents API validates ranges, serializes exact metrics, supports empty sessions and 404", async () => {
   const a = await createApp({ database: ":memory:", startup: false });
   try {

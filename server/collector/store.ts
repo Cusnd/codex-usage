@@ -51,20 +51,10 @@ export class Collector {
       INSERT OR IGNORE INTO collector_lane_sequences VALUES('live',1),('backfill',1);
       CREATE TABLE IF NOT EXISTS collector_scan_state(id INTEGER PRIMARY KEY CHECK(id=1),completed_at TEXT,error_count INTEGER NOT NULL DEFAULT 0);
       INSERT OR IGNORE INTO collector_scan_state(id) VALUES(1);
-      CREATE TABLE IF NOT EXISTS collector_extractor_state(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL);
     `);
     const binding=store.one('SELECT * FROM collector_binding WHERE id=1');
     if(binding&&(binding.collector_id!==this.id||binding.source_root!==this.sourceRoot))throw failure('COLLECTOR_BINDING_MISMATCH');
     store.run('INSERT OR IGNORE INTO collector_binding VALUES(1,?,?,NULL,?)',[this.id,this.sourceRoot,randomUUID()]);
-    const extractor=Number(store.one('SELECT version FROM collector_extractor_state WHERE id=1')?.version??1);
-    if(extractor<EXTRACTOR_VERSION)store.transaction(()=>{
-      // Re-read native logs through the normal atomic generation replacement. Keep
-      // old pending wire bytes, source identities, and append witnesses untouched.
-      store.run('UPDATE collector_sources SET reset_required=1,version=version+1');
-      store.run('UPDATE collector_scan_state SET completed_at=NULL WHERE id=1');
-      store.run('INSERT OR REPLACE INTO collector_extractor_state VALUES(1,?)',[EXTRACTOR_VERSION]);
-    });
-    else store.run('INSERT OR IGNORE INTO collector_extractor_state VALUES(1,?)',[EXTRACTOR_VERSION]);
   }
   private source(file:string):Source|undefined {return this.store.db.prepare('SELECT * FROM collector_sources WHERE path=?').get(file) as Source|undefined;}
   binding():{device_id:string|null;producer_epoch:string} {return this.store.one('SELECT device_id,producer_epoch FROM collector_binding WHERE id=1')!;}

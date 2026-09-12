@@ -52,12 +52,10 @@ async function eventStep(db:D1Database,h:Domain,job:Job,c:RebuildCheckpoint):Pro
   const turns=[...new Set(rows.filter(r=>r.turn_id!==null&&JSON.parse(r.candidate).kind!=='record').map(r=>stableJson([r.thread_id,r.turn_id])))].map(v=>JSON.parse(v));
   const explicit=turns.length?(await db.prepare(proposedCandidates()+` SELECT DISTINCT thread_id,turn_id FROM candidates WHERE json_extract(candidate,'$.kind')='record' AND EXISTS(SELECT 1 FROM json_each(?) p WHERE thread_id=json_extract(p.value,'$[0]') AND turn_id=json_extract(p.value,'$[1]'))`).bind(h.user_id,job.job_id,stableJson(turns)).all<{thread_id:string;turn_id:string}>()).results:[],explicitTurns=new Set(explicit.map(r=>stableJson([r.thread_id,r.turn_id])));
   const allowed=new Set(rows.filter(r=>JSON.parse(r.candidate).kind==='record'||r.turn_id===null||!explicitTurns.has(stableJson([r.thread_id,r.turn_id]))).map(r=>r.observation_id)),values:CanonicalEvent[]=[],originUpdates=new Map<string,CandidateRow|null>();
-  // Migration repair only hides an unchanged source until handoff; it is not a
-  // correction that can revoke proof already shared with another retained copy.
   const grouped=new Map<string,CandidateRow[]>(),priorGrouped=new Map<string,CandidateRow[]>();
   for(const r of rows)if(allowed.has(r.observation_id)){if(!grouped.has(r.event_id))grouped.set(r.event_id,[]);grouped.get(r.event_id)!.push(r);}
   for(const r of prior){if(!priorGrouped.has(r.event_id))priorGrouped.set(r.event_id,[]);priorGrouped.get(r.event_id)!.push(r);}
-  for(const id of ids){const original=grouped.get(id)||[],byObservation=new Map(original.map(r=>[r.observation_id,r])),group=reconcileOriginEvidence(original,priorGrouped.get(id)||[],job.kind==='legacy_stage');
+  for(const id of ids){const original=grouped.get(id)||[],byObservation=new Map(original.map(r=>[r.observation_id,r])),group=reconcileOriginEvidence(original,priorGrouped.get(id)||[]);
     for(const r of group)if(r.candidate!==byObservation.get(r.observation_id)!.candidate)originUpdates.set(r.observation_id,r);
     const value=await canonicalFromRows(group);if(value)values.push(value);
   }

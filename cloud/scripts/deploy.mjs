@@ -6,8 +6,9 @@ import { parseEnv } from 'node:util';
 const cloud = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(cloud, '..');
 const preview = process.argv.includes('--preview');
+if (process.argv.includes('--backend-first')) throw new Error('Backend and browser assets must use the same build; --backend-first is retired.');
 const prepareOnly = process.argv.includes('--prepare-only');
-const deploymentInputs = ['cloud', 'shared', 'web', 'vite.config.ts', 'tsconfig.json', 'package.json', 'package-lock.json'];
+const deploymentInputs = ['cloud', 'shared', 'web', 'server', 'bin', 'scripts/build-version.mjs', 'vite.config.ts', 'tsconfig.json', 'tsconfig.server.json', 'package.json', 'package-lock.json'];
 function git(args) {
   const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
   if (result.error || result.status !== 0) throw new Error(`Cannot verify preview source: git ${args[0]} failed.`);
@@ -37,6 +38,9 @@ function run(script, args, cwd = cloud) {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Command failed: ${path.basename(script)} ${args[0]}`);
 }
+run(path.join(root, 'scripts/build-version.mjs'), [], root);
+const expectedBuild = JSON.parse(readFileSync(path.join(root,'shared/build-version.ts'),'utf8').match(/export const BUILD_VERSION = ("[^"]+");/)?.[1] || 'null');
+if (typeof expectedBuild !== 'string') throw new Error('Missing generated application build.');
 run(path.join(cloud, 'node_modules/typescript/bin/tsc'), ['--noEmit', '--project', 'tsconfig.deploy.json']);
 run(path.join(root, 'node_modules/vite/bin/vite.js'), ['build', '--mode', 'cloud'], root);
 run(wrangler, ['deploy', '--dry-run', '--outdir', '.deploy/bundle', '--metafile', '.deploy/bundle-meta.json']);
@@ -55,37 +59,11 @@ if (prepareOnly) {
 const varsFile = path.join(cloud, '.dev.vars');
 const secret = process.env.GITHUB_CLIENT_SECRET || (existsSync(varsFile) ? parseEnv(readFileSync(varsFile, 'utf8')).GITHUB_CLIENT_SECRET : undefined);
 const secretFile = path.join(local, 'secrets.json');
-// Keep the deployed UI for a compatibility backend rollout before enabling the shared UI.
-// Only public same-origin static assets are copied; private API responses are never captured.
-let previousAssets;
-if(process.argv.includes('--backend-first')) {
-  previousAssets=path.join(local,'previous-assets-'+Date.now());mkdirSync(previousAssets,{recursive:true});
-  const pending=['/'],seen=new Set();
-  while(pending.length){const pathname=pending.shift();if(seen.has(pathname))continue;seen.add(pathname);
-    if(seen.size>100)throw new Error('Unexpected number of previous static assets.');
-    const response=await fetch(config.vars.APP_ORIGIN+pathname,{redirect:'error',signal:AbortSignal.timeout(20000)});
-    if(!response.ok)throw new Error('Cannot preserve the currently deployed static assets.');
-    const bytes=Buffer.from(await response.arrayBuffer()),target=path.resolve(previousAssets,pathname==='/'?'index.html':pathname.slice(1));
-    if(!target.startsWith(previousAssets+path.sep))throw new Error('Invalid static asset path.');
-    mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,bytes);
-    if(pathname==='/'||pathname.endsWith('.css'))for(const match of bytes.toString('utf8').matchAll(/(?:src=|href=|url\()["']?([^"')\s>]+)/g)){
-      const asset=new URL(match[1],config.vars.APP_ORIGIN+pathname);if(asset.origin===config.vars.APP_ORIGIN&&asset.pathname.startsWith('/assets/'))pending.push(asset.pathname);
-    }
-  }
-  const headers=path.join(cloud,'build','_headers');if(existsSync(headers))writeFileSync(path.join(previousAssets,'_headers'),readFileSync(headers));
-  console.log('Previous public UI preserved for the compatibility rollout.');
-}
 try {
   if (secret) writeFileSync(secretFile, JSON.stringify({ GITHUB_CLIENT_SECRET: secret }), { mode: 0o600 });
-  // Incremental migrations preserve existing user data. Schema rollback requires a separate migration.
+  // Current initializer requires empty storage; existing current deployments use the D1 ledger.
+  // Retired schemas must be reprovisioned explicitly; never reset remote data here.
   run(wrangler, ['d1', 'migrations', 'apply', 'DB', '--remote']);
-  if(previousAssets){
-    verifyPreviewSource();
-    run(wrangler,['deploy','--assets',previousAssets,...versionArgs,...(secret?['--secrets-file',secretFile]:[])]);
-    const health=await (await fetch(config.vars.APP_ORIGIN+'/api/health',{signal:AbortSignal.timeout(15000)})).json();
-    if(health.schemaVersion!==2||health.usageProtocol!==3||!health.ok)throw new Error('Compatible v3 backend verification failed; shared UI was not enabled.');
-    console.log('Compatibility backend verified; enabling the shared UI next.');
-  }
   verifyPreviewSource();
   run(wrangler, ['deploy', ...versionArgs, ...(secret ? ['--secrets-file', secretFile] : [])]);
   let verified = false;
@@ -93,7 +71,7 @@ try {
     try {
       const health = await fetch(config.vars.APP_ORIGIN + '/api/health', { signal: AbortSignal.timeout(15000) });
       const result = await health.json();
-      if (health.ok && result.ok && result.usageProtocol === 3 && result.loginConfigured) { verified = true; break; }
+      if (health.ok && result.ok && result.usageProtocol === 3 && result.loginConfigured && result.buildVersion === expectedBuild && health.headers.get('X-Codex-Usage-Build') === expectedBuild) { verified = true; break; }
     } catch { /* A newly created custom domain may still have negative DNS caches. */ }
     if (attempt < 5) {
       console.log('Worker deployed; retrying public health verification in 10 seconds.');
@@ -101,5 +79,5 @@ try {
     }
   }
   if (!verified) throw new Error('Worker deployment completed, but public health verification failed. Check DNS propagation, HTTPS and /api/health before declaring the deployment ready.');
-  console.log('Verified https://quota.esoren.com: D1 ready; GitHub login configured.');
+  console.log('Verified https://quota.esoren.com: D1 ready; GitHub login configured; deployed source build ' + expectedBuild);
 } finally { if (existsSync(secretFile)) rmSync(secretFile); }

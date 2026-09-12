@@ -8,7 +8,11 @@
     "check": "tsc --noEmit",
     "test": "vitest run",
     "migrate:local": "wrangler d1 migrations apply DB --local",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "precheck": "node ../scripts/build-version.mjs",
+    "pretest": "node ../scripts/build-version.mjs",
+    "predev": "node ../scripts/build-version.mjs",
+    "predeploy": "node ../scripts/build-version.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.1.6",
@@ -16,5 +20,7 @@
     "vitest": "^4.1.0",
     "wrangler": "4.130.0"
   },
-  "overrides": { "sharp": "^0.35.4" }
+  "overrides": {
+    "sharp": "^0.35.4"
+  }
 }

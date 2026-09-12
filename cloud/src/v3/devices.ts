@@ -1,4 +1,4 @@
-import type { CloudSource } from '../../../shared/usage-sync';
+import type { CloudSource } from '../../../shared/cloud-accounts';
 
 const iso=(value:number|null|undefined)=>value==null?null:new Date(value).toISOString();
 /** Coverage counts describe applied source generations, including sources that produced no usage.

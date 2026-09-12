@@ -1,4 +1,5 @@
 import { CLOUD_MAX_BODY_BYTES } from "../../shared/cloud";
+import { BUILD_HEADER, BUILD_VERSION, SYNC_HEADER, SYNC_VERSION } from '../../shared/cloud-version';
 
 export class HttpError extends Error {
   constructor(
@@ -17,6 +18,8 @@ export const json = (data: unknown, status = 200, headers: HeadersInit = {}) =>
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
+      [BUILD_HEADER]: BUILD_VERSION,
+      [SYNC_HEADER]: SYNC_VERSION,
       ...headers,
     },
   });

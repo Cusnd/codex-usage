@@ -3,7 +3,7 @@ import { fail,sha256 } from '../http';
 import { advanceHead,domain,endGuard,entityStatements,guard,isCasFailure } from './store';
 import { loadSettings,validSettings } from './queries';
 
-/** Absolute-value patches remain compatible; explicit operation IDs replay their original result. */
+/** Settings patches use absolute values; explicit operation IDs replay their original result. */
 export async function updateSettings(db:D1Database,user:string,body:unknown) {
   const allowed=['localInterval','accountInterval','timezone','timezoneMode','costEnabled','officialApiPricing','modelPrices','operation_id','base_config_version'];
   if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!allowed.includes(k)))fail(400,'INVALID_SETTINGS','设置字段无效。');

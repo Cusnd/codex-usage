@@ -1,3 +1,5 @@
+import {matchingDevice} from './matching-build';
+import {MatchingRequest} from './matching-build';
 import {env} from 'cloudflare:workers';
 import {it,expect} from 'vitest';
 import {gzipSync} from 'node:zlib';
@@ -15,13 +17,13 @@ async function actor(name:keyof typeof fixture.devices,user?:string):Promise<Act
   const id=user||crypto.randomUUID(),device=fixture.devices[name],session=token(),credential=token();
   if(!user)await env.DB.prepare('INSERT INTO users(id,github_id,login,created_at) VALUES(?,?,?,?)').bind(id,id,'origin-regression',Date.now()).run();
   await env.DB.prepare('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await sha256(session),id,Date.now()+86400000).run();
-  await env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at,protocol) VALUES(?,?,?,?,?,3)').bind(device,id,name,await sha256(credential),Date.now()).run();
+  await env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at,protocol) VALUES(?,?,?,?,?,3)').bind(device,id,name,await sha256(credential),Date.now()).run();await matchingDevice(env.DB,device);
   return {user:id,device,session,credential};
 }
-const call=(a:Actor,path:string,method='GET')=>worker.fetch(new Request(origin+path,{method,headers:{Origin:origin,Cookie:SESSION_COOKIE+'='+a.session}}),env);
+const call=(a:Actor,path:string,method='GET')=>worker.fetch(new MatchingRequest(origin+path,{method,headers:{Origin:origin,Cookie:SESSION_COOKIE+'='+a.session}}),env);
 async function drain(a:Actor){for(let i=0;i<80;i++){await env.DB.prepare("UPDATE v3_jobs SET next_attempt_at=0 WHERE user_id=? AND state='pending'").bind(a.user).run();if(!(await advanceJobs(env.DB,{user:a.user,maxSteps:1,budgetMs:10000})).steps)return;}throw Error('origin jobs did not finish');}
 async function send(a:Actor,phase:string,afterBatch?:(batch:UploadBatch)=>Promise<void>){for(const entry of fixture.batches.filter(b=>b.phase===phase)){
-  const r=await worker.fetch(new Request(origin+'/api/v3/ingest',{method:'POST',headers:{Authorization:'Bearer '+a.credential,'Content-Type':V3_CONTENT_TYPE},body:Uint8Array.from(atob(entry.wireBase64),c=>c.charCodeAt(0))}),env);
+  const r=await worker.fetch(new MatchingRequest(origin+'/api/v3/ingest',{method:'POST',headers:{Authorization:'Bearer '+a.credential,'Content-Type':V3_CONTENT_TYPE},body:Uint8Array.from(atob(entry.wireBase64),c=>c.charCodeAt(0))}),env);
   expect([200,202]).toContain(r.status);await drain(a);expect((await receipt(env.DB,a.user,entry.batch.batch_id))?.status).toBe('applied');
   await afterBatch?.(entry.batch as UploadBatch);
 }}
@@ -38,7 +40,7 @@ it('recovers the unchanged raw prefix from an older Collector rescan and still w
   const a=await actor('A'),b=await actor('B',a.user);await initial(a);await send(b,'copy-B');
   const oldClient=structuredClone(fixture.batches.find(b=>b.phase==='rebind-A')!.batch) as UploadBatch;
   for(const r of oldClient.records)r.origin={kind:'observed_local',device_id:a.device};oldClient.records_hash=await sha256(stableJson(oldClient.records));
-  const r=await worker.fetch(new Request(origin+'/api/v3/ingest',{method:'POST',headers:{Authorization:'Bearer '+a.credential,'Content-Type':V3_CONTENT_TYPE},body:gzipSync(stableJson(oldClient))}),env);expect([200,202]).toContain(r.status);await drain(a);
+  const r=await worker.fetch(new MatchingRequest(origin+'/api/v3/ingest',{method:'POST',headers:{Authorization:'Bearer '+a.credential,'Content-Type':V3_CONTENT_TYPE},body:gzipSync(stableJson(oldClient))}),env);expect([200,202]).toContain(r.status);await drain(a);
   expect((await summary(a,a.device)).totalTokens).toBe('20');await send(a,'corrected-A');expect((await event(a)).origin_device_id).toBeNull();
   await remove(a);expect((await event(b)).origin_device_id).toBeNull();
 });
@@ -63,7 +65,7 @@ it('clears copied origin when a new source generation explicitly withdraws execu
   const a=await actor('A'),b=await actor('B',a.user);await initial(a);await send(b,'copy-B');
   const revised=structuredClone(fixture.batches.find(b=>b.phase==='rebind-A')!.batch) as UploadBatch;revised.batch_id=crypto.randomUUID();
   for(const record of revised.records)record.origin={kind:'unknown',device_id:null};revised.records_hash=await sha256(stableJson(revised.records));
-  const response=await worker.fetch(new Request(origin+'/api/v3/ingest',{method:'POST',headers:{Authorization:'Bearer '+a.credential,'Content-Type':V3_CONTENT_TYPE},body:gzipSync(stableJson(revised))}),env);expect([200,202]).toContain(response.status);await drain(a);
+  const response=await worker.fetch(new MatchingRequest(origin+'/api/v3/ingest',{method:'POST',headers:{Authorization:'Bearer '+a.credential,'Content-Type':V3_CONTENT_TYPE},body:gzipSync(stableJson(revised))}),env);expect([200,202]).toContain(response.status);await drain(a);
   expect(await event(a)).toMatchObject({origin_device_id:null,total_tokens:'20'});expect((await receipt(env.DB,a.user,revised.batch_id))?.status).toBe('applied');
 });
 it('retracts inherited witnesses and produces a new event revision for a corrected observation',async()=>{
@@ -87,19 +89,3 @@ it('publishes correction and inherited-origin withdrawal together when a real 50
   expect(copy).toHaveLength(502);expect(copy.every(r=>JSON.parse(r.candidate).origin_proofs.length===0)).toBe(true);
   await remove(e);expect((await summary(f)).totalTokens).toBe('521');expect((await summary(f,e.device)).totalTokens).toBe('0');
 },30000);
-it('preserves shared proof while migration temporarily hides its original source, then deletes that uploader',async()=>{
-  const a=await actor('A'),b=await actor('B',a.user),at='2026-09-11T12:00:00.000Z';
-  const thread={id:fixture.thread,title:'Old history',titleUpdatedAt:null,project:null,source:'cli',parentId:null,subagentParentId:null,forkedFromId:null};
-  const manifest={schemaVersion:2,datasetId:'origin-legacy',thread,revision:1,parserVersion:1,collectedAt:at,eventCount:1,chunkCount:1,contentHash:'0'.repeat(64)};
-  await env.DB.batch([
-    env.DB.prepare('INSERT INTO usage_revisions(user_id,device_id,dataset_id,thread_id,revision,parser_version,collected_at,manifest,received_at,committed) VALUES(?,?,?,?,1,1,?,?,?,1)').bind(a.user,a.device,'origin-legacy',fixture.thread,at,JSON.stringify(manifest),Date.now()),
-    env.DB.prepare("INSERT INTO usage_records(user_id,device_id,dataset_id,thread_id,revision,event_key,turn_id,response_id,at,kind,incomplete,input_tokens,output_tokens,total_tokens) VALUES(?,?,?,?,1,'old','turn',?,?,'record',0,20,0,20)").bind(a.user,a.device,'origin-legacy',fixture.thread,fixture.response,at),
-    env.DB.prepare('INSERT INTO usage_heads(user_id,device_id,dataset_id,thread_id,revision) VALUES(?,?,?,?,1)').bind(a.user,a.device,'origin-legacy',fixture.thread),
-  ]);
-  await domain(env.DB,a.user);await drain(a);await initial(a);await send(b,'copy-B');expect((await summary(a,a.device)).totalTokens).toBe('20');
-  const original=fixture.batches.find(b=>b.phase==='append-A')!.batch,source=original.sources[0];
-  const prepare=await worker.fetch(new Request(origin+'/api/v3/legacy/prepare',{method:'POST',headers:{Authorization:'Bearer '+a.credential,'Content-Type':'application/json'},body:JSON.stringify({collector_id:original.collector_id,replacements:[{type:'legacy_replacement',dataset_id:'origin-legacy',thread_id:fixture.thread,sources:[{source_id:source.source_id,generation:source.generation}]}]})}),env);
-  expect(prepare.status).toBe(202);await drain(a);expect(await env.DB.prepare('SELECT active FROM v3_sources WHERE user_id=? AND collector_id=? AND source_id=?').bind(a.user,original.collector_id,source.source_id).first('active')).toBe(0);
-  expect((await summary(b)).totalTokens).toBe('20');expect((await summary(b,a.device)).totalTokens).toBe('20');
-  await remove(a);expect((await summary(b)).totalTokens).toBe('20');expect((await summary(b,a.device)).totalTokens).toBe('20');expect((await event(b)).origin_device_id).toBe(a.device);
-});

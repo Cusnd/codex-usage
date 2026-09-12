@@ -35,7 +35,7 @@ async function start(db:D1Database,user:string,b:Input){
   if(saved){if(saved.request_hash!==hash)fail(409,'OPERATION_CONFLICT','同一操作编号已经对应其他内容。');return saved;}
   const lease=await getRead(db,user,b.lease_id);if(lease.scope!=='full'||JSON.parse(lease.device_ids).length)fail(400,'INVALID_SCOPE','归属管理需要全部设备的完整读取版本。');
   if(b.action==='assign')await assertTarget(db,user,b.device_id!);
-  const h=await domain(db,user);if(h.mode!=='ready'||h.legacy_baseline_pending)fail(409,'DATASET_UPDATING','历史正在更新，请稍后重试。');
+  const h=await domain(db,user);if(h.mode!=='ready')fail(409,'DATASET_UPDATING','历史正在更新，请稍后重试。');
   const job='origin:'+b.operation_id,op=crypto.randomUUID(),now=Date.now(),checkpoint:Checkpoint={phase:'select',epoch:crypto.randomUUID(),source_epoch:lease.epoch,source_cut:lease.cut,selected:0};
   try{await db.batch([guard(db,h,op),
     db.prepare('INSERT INTO v3_origin_operations(user_id,operation_id,request_hash,action,device_id,payload,created_at) VALUES(?,?,?,?,?,?,?)').bind(user,b.operation_id,hash,b.action,b.device_id??null,stableJson(b),now),

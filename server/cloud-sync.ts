@@ -1,4 +1,5 @@
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { SYNC_HEADER, SYNC_VERSION, CloudVersionError, checkCloudVersion } from '../shared/cloud-version.js';
+import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -11,23 +12,17 @@ import path from "node:path";
 import { hostname } from "node:os";
 import {
   CLOUD_ORIGIN,
-  CLOUD_SYNC_MIN_MS,
-  cloudErrorCodes,
-  isCloudSnapshot,
-  type CloudSnapshot,
   type CloudStatus,
-  type CloudWindow,
 } from "../shared/cloud.js";
 import type { LimitObservation } from "./refresh.js";
 import type { Store } from "./db.js";
-import { UsageSync } from './usage-sync.js';
+import { AccountSync } from './account-sync.js';
 import type { V3Uploader } from './sync-v3/uploader.js';
 import type { AccountUsage } from '../shared/contracts.js';
 
 type Credentials = {
   origin: string;
   token: string;
-  salt: string;
   requestId?: string;
   pollSecret?: string;
 };
@@ -35,11 +30,7 @@ type State = Omit<
   CloudStatus,
   "origin" | "connected" | "running" | "pending"
 > & {
-  sequence: number;
-  outbox: CloudSnapshot | null;
-  fingerprint: string | null;
   failures: number;
-  fullUsage: boolean;
   pausePending: boolean | null;
 };
 type Options = {
@@ -51,8 +42,7 @@ type Options = {
   now?: () => number;
   random?: () => number;
   history?: () => Promise<{data:AccountUsage|null;collectedAt:string|null;identityKey:string|null}>;
-  collection?: () => {running:boolean;updatedAt:string|null;error:string|null};
-  uploader?: V3Uploader;
+  uploader: V3Uploader;
 };
 const empty = (): State => ({
   enabled: false,
@@ -65,75 +55,12 @@ const empty = (): State => ({
   uploadedAt: null,
   nextUploadAt: null,
   error: null,
-  sequence: 0,
-  outbox: null,
-  fingerprint: null,
   failures: 0,
-  fullUsage: false,
   pausePending: null,
 });
 const token = () => randomBytes(32).toString("base64url");
 const iso = (n: number) => new Date(n).toISOString();
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
-export function accountRef(identity: string | null, salt: string) {
-  return identity
-    ? createHmac("sha256", salt).update(identity).digest("hex")
-    : null;
-}
-function window(w: CloudWindow | null): CloudWindow | null {
-  return w
-    ? {
-        usedPercent: w.usedPercent,
-        remainingPercent: w.remainingPercent,
-        windowDurationMins: w.windowDurationMins,
-        resetsAt: w.resetsAt,
-      }
-    : null;
-}
-// Deliberately enumerate fields: never serialize the account response or source errors.
-export function cloudSnapshot(
-  observation: LimitObservation,
-  credentials: Pick<Credentials, "salt">,
-  deviceId: string,
-  sequence: number,
-): CloudSnapshot {
-  const known = observation.identityKnown && !!observation.identityKey;
-  const data = known ? observation.data : null;
-  const error =
-    observation.errorCode &&
-    cloudErrorCodes.includes(
-      observation.errorCode as (typeof cloudErrorCodes)[number],
-    )
-      ? (observation.errorCode as (typeof cloudErrorCodes)[number])
-      : observation.errorCode
-        ? "ACCOUNT_FAILED"
-        : null;
-  return {
-    schemaVersion: 1,
-    deviceId,
-    sequence,
-    accountRef: known
-      ? accountRef(observation.identityKey, credentials.salt)
-      : null,
-    collectedAt: data ? observation.collectedAt : null,
-    attemptedAt: observation.attemptedAt,
-    provider: data ? observation.provider : null,
-    refreshInterval: observation.refreshInterval,
-    status: !known ? "identity_unknown" : error || !data ? "error" : "ok",
-    errorCode: !known
-      ? error || "IDENTITY_UNKNOWN"
-      : error || (!data ? "ACCOUNT_FAILED" : null),
-    buckets: data
-      ? data.buckets.map((b) => ({
-          id: b.id,
-          name: b.name,
-          primary: window(b.primary),
-          secondary: window(b.secondary),
-        }))
-      : [],
-  };
-}
-
 export class CloudSync {
   private state: State;
   private credentials: Credentials | null = null;
@@ -147,7 +74,7 @@ export class CloudSync {
   readonly origin: string;
   private now: () => number;
   private fetcher: typeof fetch;
-  private usage: UsageSync;
+  private accounts: AccountSync;
   constructor(
     private store: Store,
     private options: Options,
@@ -171,10 +98,7 @@ export class CloudSync {
     this.origin = url.origin;
     this.now = options.now || Date.now;
     this.fetcher = options.fetch || fetch;
-    this.usage = new UsageSync(store, (route,method,body) => {
-      const v3Account = !!options.uploader && route === 'sync/accounts';
-      return this.request(v3Account ? 'accounts/observations' : route,method,body,true,v3Account ? 3 : 2);
-    }, options.observation, options.history, this.now, options.collection);
+    this.accounts = new AccountSync(store, (route,method,body) => this.request(route,method,body,true), options.observation, options.history, this.now);
     store.db.exec(
       "CREATE TABLE IF NOT EXISTS cloud_sync (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)",
     );
@@ -187,8 +111,7 @@ export class CloudSync {
         ) as Credentials;
         if (
           c.origin === this.origin &&
-          /^[A-Za-z0-9_-]{43}$/.test(c.token) &&
-          /^[A-Za-z0-9_-]{43}$/.test(c.salt)
+          /^[A-Za-z0-9_-]{43}$/.test(c.token)
         )
           this.credentials = c;
       } catch {
@@ -200,13 +123,12 @@ export class CloudSync {
       (this.state.deviceId || this.state.binding || this.state.revokePending)
     ) {
       this.state.enabled = false;
-      this.state.outbox = null;
       this.state.error =
         "同步凭据缺失或云端地址已改变，请在原云端撤销设备后重新绑定。";
     }
   }
   status(): CloudStatus {
-    const usage=this.options.uploader?.status()||this.usage.status();
+    const usage=this.options.uploader.status();
     const {
       enabled,
       revokePending,
@@ -228,14 +150,13 @@ export class CloudSync {
       deviceName,
       userLogin,
       binding,
-      collectedAt: this.state.fullUsage ? usage.collectedAt : collectedAt,
-      uploadedAt: this.state.fullUsage ? usage.uploadedAt : uploadedAt,
-      nextUploadAt: this.state.fullUsage && deviceId ? usage.nextUploadAt : nextUploadAt,
-      error: this.state.fullUsage ? usage.error || this.usage.status().error || error : error,
-      pending: this.state.fullUsage ? usage.pendingThreads > 0 : !!this.state.outbox,
+      collectedAt: usage.collectedAt,
+      uploadedAt: usage.uploadedAt,
+      nextUploadAt: nextUploadAt || usage.nextUploadAt,
+      error: usage.error || this.accounts.status().error || error,
+      pending: usage.pendingBatches > 0,
       running: !!this.active,
-      fullUsage: this.state.fullUsage,
-      usage: this.state.fullUsage ? usage : null,
+      usage,
     };
   }
   private save() {
@@ -261,8 +182,8 @@ export class CloudSync {
   }
   private schedule() {
     if (this.closed || this.timer) return;
-    const delay=this.state.enabled&&this.state.fullUsage&&this.state.deviceId
-      ?this.options.uploader?.takeNextTickDelayMs()??1000:1000;
+    const delay=this.state.enabled&&this.state.deviceId
+      ?this.options.uploader.takeNextTickDelayMs()??1000:1000;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       void this.tick().finally(() => this.schedule());
@@ -274,12 +195,16 @@ export class CloudSync {
     method: string,
     body?: unknown,
     bearer = false,
-    version = 1,
+
   ) {
     this.controller = new AbortController();
-    const response = await this.fetcher(this.origin + `/api/v${version}/` + route, {
+    // Cancellation/revocation sends no statistics and must remain possible during an upgrade.
+    if (!(method === 'DELETE' && ['device', 'device-authorizations'].includes(route)))
+      await checkCloudVersion(this.fetcher, this.origin, AbortSignal.any([this.controller.signal, AbortSignal.timeout(15000)]), bearer ? this.credentials!.token : undefined);
+    const response = await this.fetcher(this.origin + `/api/v3/` + route, {
       method,
       headers: {
+        [SYNC_HEADER]: SYNC_VERSION,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         ...(bearer
           ? { Authorization: `Bearer ${this.credentials!.token}` }
@@ -328,7 +253,7 @@ export class CloudSync {
         data && typeof data === "object" && !Array.isArray(data) ? data : {},
     };
   }
-  async connect(deviceName = hostname(), fullUsage = false) {
+  async connect(deviceName = hostname()) {
     if (this.starting)
       throw Object.assign(new Error("正在发起绑定，请稍候。"), {
         statusCode: 409,
@@ -367,13 +292,12 @@ export class CloudSync {
       const c: Credentials = {
         origin: this.origin,
         token: token(),
-        salt: token(),
       };
       const { response, data } = await this.request(
         "device-authorizations",
         "POST",
         { deviceName, tokenHash: hash(c.token) },
-        false, fullUsage ? 2 : 1,
+        false,
       );
       if (
         !response.ok ||
@@ -389,7 +313,6 @@ export class CloudSync {
       this.saveCredentials(c);
       this.state = {
         ...empty(),
-        fullUsage,
         deviceName,
         binding: {
           userCode: data.userCode,
@@ -401,53 +324,13 @@ export class CloudSync {
       this.save();
       this.schedule();
       return this.status();
-    } catch {
-      throw Object.assign(new Error("无法发起云端绑定，请检查网络后重试。"), {
+    } catch (error) {
+      throw Object.assign(new Error(error instanceof CloudVersionError ? error.message : "无法发起云端绑定，请检查网络后重试。"), {
         statusCode: 502,
       });
     } finally {
       this.starting = false;
     }
-  }
-  async capture() {
-    if (
-      this.closed ||
-      this.state.fullUsage ||
-      !this.state.enabled ||
-      !this.state.deviceId ||
-      !this.credentials ||
-      this.state.revokePending
-    )
-      return;
-    const epoch = this.epoch,
-      observation = await this.options.observation();
-    if (
-      this.closed ||
-      epoch !== this.epoch ||
-      !this.state.enabled ||
-      !this.credentials ||
-      !this.state.deviceId
-    )
-      return;
-    const snapshot = cloudSnapshot(
-      observation,
-      this.credentials,
-      this.state.deviceId,
-      this.state.sequence + 1,
-    );
-    if (!isCloudSnapshot(snapshot)) {
-      this.state.outbox = null;
-      this.state.error = "额度格式未通过同步校验，未上传。";
-      this.save();
-      return;
-    }
-    const fingerprint = hash(JSON.stringify({ ...snapshot, sequence: 0 }));
-    if (fingerprint === this.state.fingerprint) return;
-    this.state.fingerprint = fingerprint;
-    this.state.sequence = snapshot.sequence;
-    this.state.outbox = snapshot;
-    this.state.collectedAt = snapshot.collectedAt;
-    this.save();
   }
   async setEnabled(enabled: boolean) {
     if (!this.credentials || !this.state.deviceId || this.state.revokePending)
@@ -457,29 +340,21 @@ export class CloudSync {
       // Keep uploads paused while obtaining a current observation, even when automatic refresh is off.
       await this.options.refreshLimits();
       if(this.closed||epoch!==this.epoch||!this.credentials||this.state.revokePending)return this.status();
-      this.usage.refreshAccounts();
+      this.accounts.refreshAccounts();
     }
     this.state.enabled = enabled;
-    if(this.state.fullUsage)this.state.pausePending=!enabled;
-    if (!enabled) {this.controller?.abort();this.options.uploader?.cancel();}
+    this.state.pausePending=!enabled;
+    if (!enabled) {this.controller?.abort();this.options.uploader.cancel();}
     this.save();
     if (enabled) {
-      await this.capture();
       // A pause request from the preceding epoch must finish before the resume request is sent.
       if(this.active)await this.active;
       if(!this.closed&&epoch===this.epoch)void this.tick();
     }
     return this.status();
   }
-  async setFullUsage(fullUsage: boolean) {
-    this.state.fullUsage=fullUsage;this.save();
-    if(!fullUsage)await this.options.uploader?.unbind();
-    else void this.tick();
-    return this.status();
-  }
   async disconnect() {
     this.state.enabled = false;
-    this.state.outbox = null;
     this.state.revokePending = !!this.credentials;
     this.state.nextUploadAt = null;
     this.state.error = this.credentials
@@ -487,12 +362,12 @@ export class CloudSync {
       : null;
     ++this.epoch;
     this.controller?.abort();
-    this.options.uploader?.cancel();
+    this.options.uploader.cancel();
     this.save();
     if (this.active) await this.active;
     if (this.credentials) await this.tick();
     else {
-      await this.options.uploader?.unbind();
+      await this.options.uploader.unbind();
       this.state = empty();
       this.save();
     }
@@ -529,11 +404,11 @@ export class CloudSync {
       return Promise.resolve();
     const epoch = this.epoch;
     this.active = this.run(epoch)
-      .catch(() => {
+      .catch((error) => {
         if (!this.closed && epoch === this.epoch)
           this.retry(
             undefined,
-            this.state.revokePending
+            error instanceof CloudVersionError ? error.message : this.state.revokePending
               ? "云端撤销尚未完成；本地已停止同步，将联网重试。"
               : undefined,
           );
@@ -565,7 +440,7 @@ export class CloudSync {
       if (!current()) return;
       if (response.ok || response.status === 401 || response.status === 410) {
         this.saveCredentials(null);
-        await this.options.uploader?.unbind();
+        await this.options.uploader.unbind();
         this.state = empty();
         this.save();
       } else
@@ -621,87 +496,29 @@ export class CloudSync {
       this.saveCredentials({
         origin: this.origin,
         token: this.credentials!.token,
-        salt: this.credentials!.salt,
       });
       this.save();
-      await this.capture();
     }
-    if(this.state.fullUsage && this.state.deviceId && this.state.pausePending!==null && current()) {
+    if(this.state.deviceId && this.state.pausePending!==null && current()) {
       const pending=this.state.pausePending;
-      const result=await this.request('sync/pause','PUT',{paused:pending},true,2);
+      const result=await this.request('collector/pause','PUT',{paused:pending},true);
       if(!current())return;
       if(!result.response.ok){this.retry(result.response);return;}
       this.state.pausePending=null;this.save();
     }
-    if (this.state.enabled && this.state.fullUsage && this.state.deviceId && current()) {
-      const enabled=()=>current()&&this.state.enabled&&this.state.fullUsage;
-      if(this.options.uploader)await Promise.all([
+    if (this.state.enabled && this.state.deviceId && current()) {
+      const enabled=()=>current()&&this.state.enabled;
+      await Promise.all([
         this.options.uploader.tick({deviceId:this.state.deviceId,token:this.credentials!.token,origin:this.origin},enabled),
-        this.usage.tick(this.state.deviceId,enabled,'accounts'),
+        this.accounts.tick(this.state.deviceId,enabled),
       ]);
-      else await this.usage.tick(this.state.deviceId,enabled);
-      return;
     }
-    if (!this.state.enabled || !this.state.outbox || !current()) return;
-    // Recheck the selected identity immediately before retrying persisted data.
-    const observation = await this.options.observation();
-    if (!current() || !this.state.enabled) return;
-    const expected = observation.identityKnown
-      ? accountRef(observation.identityKey, this.credentials!.salt)
-      : null;
-    if (expected !== this.state.outbox.accountRef) await this.capture();
-    if (!current() || !this.state.outbox) return;
-    const snapshot = this.state.outbox;
-    const { response, data } = await this.request(
-      "snapshot",
-      "PUT",
-      snapshot,
-      true,
-    );
-    if (!current()) return;
-    if (response.status === 401) {
-      this.state.enabled = false;
-      this.state.outbox = null;
-      this.state.error = "云端设备已撤销或替换，请断开后重新绑定。";
-      this.save();
-      return;
-    }
-    if (
-      response.status === 409 &&
-      data.error?.code === "STALE_SEQUENCE" &&
-      Number.isSafeInteger(data.acceptedSequence)
-    ) {
-      this.state.sequence = Math.max(
-        this.state.sequence,
-        data.acceptedSequence,
-      );
-      this.state.fingerprint = null;
-      await this.capture();
-      this.retry(response);
-      return;
-    }
-    if (!response.ok || !Number.isFinite(Date.parse(data.receivedAt))) {
-      this.retry(response);
-      return;
-    }
-    this.state.uploadedAt = data.receivedAt;
-    this.state.nextUploadAt = iso(
-      Math.max(
-        this.now() + CLOUD_SYNC_MIN_MS,
-        Date.parse(data.nextAllowedAt) || 0,
-      ),
-    );
-    if (this.state.outbox?.sequence === snapshot.sequence)
-      this.state.outbox = null;
-    this.state.failures = 0;
-    this.state.error = null;
-    this.save();
   }
   async close() {
     this.closed = true;
     if (this.timer) clearTimeout(this.timer);
     this.controller?.abort();
-    await this.options.uploader?.close();
+    await this.options.uploader.close();
     if (this.active) await this.active;
   }
 }

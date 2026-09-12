@@ -28,7 +28,7 @@ export function bigintMetrics(row: AggregateRow): AggregateRow {
   return result;
 }
 
-/** This predicate is also useful before migrating an old INTEGER-affinity table. REAL is never rescued. */
+/** Reject noncanonical token values before selecting an exact aggregation path. */
 export const invalidTokenStorageSql = tokenFields.map(k => `(${k} IS NOT NULL AND (typeof(${k}) NOT IN ('integer','text') OR NOT (CAST(${k} AS TEXT)='0' OR (substr(CAST(${k} AS TEXT),1,1) BETWEEN '1' AND '9' AND CAST(${k} AS TEXT) NOT GLOB '*[^0-9]*'))))`).join(' OR ');
 
 export function* canAggregateInSql(store: QueryStore, where: SqlWhere): Generator<Statement, boolean, any> {

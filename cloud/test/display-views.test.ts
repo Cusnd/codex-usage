@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { expect, it } from 'vitest';
-import { accountViews } from '../src/usage-query';
+import { accountViews } from '../src/accounts';
 import { deviceViews } from '../src/v3/devices';
-import type { CloudAccountSnapshot } from '../../shared/usage-sync';
+import type { CloudAccountSnapshot } from '../../shared/cloud-accounts';
 
 async function accountFixture() {
   const user=crypto.randomUUID(),now=Date.now(),account='account-'+user;
@@ -11,7 +11,7 @@ async function accountFixture() {
   async function add(name:string,options:{quotaAge?:number;historyAge?:number;receivedAge?:number;days?:[string,string][];tokens?:string;quotaError?:boolean;paused?:boolean;noHistory?:boolean}={}) {
     const device=crypto.randomUUID();
     await env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at,current_account_ref,paused) VALUES(?,?,?,?,?,?,?)').bind(device,user,name,device,now,account,Number(!!options.paused)).run();
-    const payload:CloudAccountSnapshot={schemaVersion:2,quota:{schemaVersion:1,deviceId:device,sequence:1,accountRef:account,collectedAt:at(options.quotaAge??10000),attemptedAt:at(0),provider:'app-server',refreshInterval:60,status:options.quotaError?'error':'ok',errorCode:options.quotaError?'HTTP_NETWORK':null,buckets:[]},
+    const payload:CloudAccountSnapshot={schemaVersion:3,quota:{schemaVersion:3,deviceId:device,sequence:1,accountRef:account,collectedAt:at(options.quotaAge??10000),attemptedAt:at(0),provider:'app-server',refreshInterval:60,status:options.quotaError?'error':'ok',errorCode:options.quotaError?'HTTP_NETWORK':null,buckets:[]},
       history:options.noHistory?null:{summary:{lifetimeTokens:options.tokens||'100',peakDailyTokens:'100',longestRunningTurnSec:'1',currentStreakDays:'1',longestStreakDays:'1'},dailyUsageBuckets:options.days?.map(([startDate,tokens])=>({startDate,tokens}))||null},historyCollectedAt:options.noHistory?null:at(options.historyAge??10000)};
     await env.DB.prepare('INSERT INTO cloud_accounts(user_id,device_id,account_ref,sequence,payload,received_at,request_hash) VALUES(?,?,?,1,?,?,?)').bind(user,device,account,JSON.stringify(payload),now-(options.receivedAge??0),device).run();
     return device;

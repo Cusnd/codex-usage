@@ -84,9 +84,9 @@ test("unknown models and missing custom Fast rates produce incomplete estimates"
   assert.equal(estimateCost([fast], selected)?.complete, false);
   assert.equal(estimateCost([fast], {...selected, modelPrices: [custom({fastMultiplier: "3"})]})?.amount, "3.000000000000");
   assert.equal(estimateCost([fast], {...selected, modelPrices: [custom({fastMultiplier: "0"})]})?.amount, "0.000000000000");
-  const older = officialPrices.map(({fastMultiplier: _, ...p}) => p);
-  assert.equal(estimateCost([row({service_tier: "fast"})], {...api, modelPrices: older})?.amount, "20.000000000000");
-  const explicitlyUnset = older.map(p => ({...p, fastMultiplier: null}));
+  const missingRate = officialPrices.map(({fastMultiplier: _, ...p}) => p);
+  assert.equal(estimateCost([row({service_tier: "fast"})], {...api, modelPrices: missingRate})?.amount, null);
+  const explicitlyUnset = missingRate.map(p => ({...p, fastMultiplier: null}));
   assert.equal(estimateCost([row({service_tier: "fast"})], {...api, modelPrices: explicitlyUnset})?.amount, null);
 });
 

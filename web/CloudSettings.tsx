@@ -22,7 +22,7 @@ export function CloudSettings() {
     [name, setName] = useState("");
   const state = query.data?.data;
   const action = async (
-    kind: "connect" | "pause" | "resume" | "disconnect" | "upgrade",
+    kind: "connect" | "pause" | "resume" | "disconnect",
   ) => {
     if (busy) return;
     setBusy(true);
@@ -38,7 +38,7 @@ export function CloudSettings() {
             ? await mutate<CloudStatus>("cloud/connection", undefined, "DELETE")
             : await mutate<CloudStatus>(
                 "cloud/settings",
-                { enabled: kind === "resume" || kind === "upgrade", ...(kind === "upgrade" ? {fullUsage:true} : {}) },
+                { enabled: kind === "resume" },
                 "PATCH",
               );
       client.setQueryData(["cloud"], result);
@@ -102,10 +102,8 @@ export function CloudSettings() {
               </button>
             )}
           </div>
-          {state.connected && !state.fullUsage && <button disabled={busy} onClick={() => void action("upgrade")}>启用完整历史同步（含原标题与路径）</button>}
           {state.usage && <p role="status">{state.usage.totalSources!==undefined?`待同步 ${state.usage.pendingSources??0} / ${state.usage.totalSources} 个来源`:`已完成 ${Math.max(0,state.usage.totalThreads-state.usage.pendingThreads)} / ${state.usage.totalThreads} 个会话`} · {state.usage.error || (state.usage.pendingBatches?'后台同步中':'已确认的批次可在云端查询')}
             {!!state.usage.receivedBatches&&` · ${state.usage.receivedBatches} 个批次已接收，等待云端应用`}</p>}
-          {!!state.usage?.migrationPending&&<p className="footnote">{state.usage.migrationPending} 个旧版会话等待完成历史交接；原有云端历史继续保留。</p>}
           {state.error && (
             <p className="notice" role="status">
               {state.error}
@@ -115,7 +113,7 @@ export function CloudSettings() {
             <dl className="cloud-settings-times">
               <dt>最近采集</dt>
               <dd>{stamp(state.collectedAt)}</dd>
-              <dt>{state.fullUsage?'云端可查询确认':'云端接收'}</dt>
+              <dt>云端可查询确认</dt>
               <dd>{stamp(state.uploadedAt)}</dd>
               <dt>下次允许发送 / 重试</dt>
               <dd>

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import type { CloudAccountView,CloudSource } from '../shared/usage-sync';
+import type { CloudAccountView,CloudSource } from '../shared/cloud-accounts';
 
 type Components=typeof import('./fixtures/cloud-display-components');
 let components:Components;
@@ -55,14 +55,8 @@ test('browser sync completion follows the workspace timezone',()=>{
   assert.match(text(components.renderCloud('sync',[],'UTC')),/最近完成 09-12 11:59:00/);components.hooks.sync=null;
 });
 
-test('first migration explicitly shows complete legacy history without claiming a fixed version or offline completion',()=>{
-  components.hooks.sync={online:true,state:{phase:'legacy_ready',baseline:null,lastSyncAt:null,receivedCommitSeq:0,appliedCommitSeq:0}};
-  const html=text(components.renderCloud('sync',[]));
-  assert.match(html,/最近完整同步的旧版历史，完成后自动切换/);assert.match(html,/迁移期间需保持联网/);
-  assert.doesNotMatch(html,/已有固定版本|完整历史缓存已就绪|最近完成/);components.hooks.sync=null;
-});
 
-const account:CloudAccountView={accountRef:'known',deviceId:'a',deviceName:'Quota A',receivedAt:'2026-09-12T11:59:50.000Z',stale:false,quota:{schemaVersion:1,deviceId:'a',sequence:1,accountRef:'known',collectedAt:'2026-09-12T11:59:00.000Z',attemptedAt:'2026-09-12T11:59:00.000Z',provider:'app-server',refreshInterval:60,status:'ok',errorCode:null,buckets:[]},history:{summary:{lifetimeTokens:'999',peakDailyTokens:'100',longestRunningTurnSec:'1',currentStreakDays:'1',longestStreakDays:'1'},dailyUsageBuckets:null},historyCollectedAt:'2026-09-12T11:58:00.000Z',historyMeta:{summarySource:{deviceId:'b',deviceName:'History B',collectedAt:'2026-09-12T11:58:00.000Z',receivedAt:'2026-09-12T11:58:50.000Z',stale:true},dailySources:[]}};
+const account:CloudAccountView={accountRef:'known',deviceId:'a',deviceName:'Quota A',receivedAt:'2026-09-12T11:59:50.000Z',stale:false,quota:{schemaVersion:3,deviceId:'a',sequence:1,accountRef:'known',collectedAt:'2026-09-12T11:59:00.000Z',attemptedAt:'2026-09-12T11:59:00.000Z',provider:'app-server',refreshInterval:60,status:'ok',errorCode:null,buckets:[]},history:{summary:{lifetimeTokens:'999',peakDailyTokens:'100',longestRunningTurnSec:'1',currentStreakDays:'1',longestStreakDays:'1'},dailyUsageBuckets:null},historyCollectedAt:'2026-09-12T11:58:00.000Z',historyMeta:{summarySource:{deviceId:'b',deviceName:'History B',collectedAt:'2026-09-12T11:58:00.000Z',receivedAt:'2026-09-12T11:58:50.000Z',stale:true},dailySources:[]}};
 test('account history renders its own source, timestamps and freshness without borrowing quota metadata',()=>{
   const html=text(components.renderCloud('accounts',[account]));assert.match(html,/账户 1 · History B/);assert.match(html,/汇总来源：History B · 历史快照 · 尚未确认更新 09-12 20:58:00 · 接收 09-12 20:58:50/);assert.match(html,/累计 999/);assert.doesNotMatch(html,/Quota A|20:59:50/);
   const quota=text(components.renderCloud('quota',[account]));assert.match(quota,/账户 1 · Quota A/);assert.match(quota,/最近采集 09-12 20:59:00 · 接收 09-12 20:59:50/);

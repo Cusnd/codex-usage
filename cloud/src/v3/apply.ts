@@ -7,18 +7,15 @@ import { advanceHead, assertWritableDevice, chunks, endGuard, entityStatements, 
 import { metricStatements } from './metrics';
 import { prepareProjectMetadata } from './projects';
 import { rebuildPublication,startReplacement } from './rebuild';
-import { prepareHandoff } from './legacy';
-import { pendingLegacySources } from './legacy-staging';
 import { measured,type SyncTiming } from './timing';
 import { assignmentRules,effectiveOrigin,withAssignment,type UserAssignment } from './origin-rules';
 import { candidatesWithOriginEvidence,reconcileOriginEvidence } from './origin-evidence';
 
-type SourceRow={user_id:string;collector_id:string;source_id:string;generation:number;kind:string;cursor:number;snapshot_eof:number;context_hash:string;context:string;legacy_state:string|null;active:number;complete:number;available:number;trailing_bytes:number};
+type SourceRow={user_id:string;collector_id:string;source_id:string;generation:number;kind:string;cursor:number;snapshot_eof:number;context_hash:string;context:string;parser_state:string|null;active:number;complete:number;available:number;trailing_bytes:number};
 export type CandidateRow={observation_id:string;uploader_device_id:string;collector_id:string;source_id:string;generation:number;record_revision:number;event_id:string;thread_id:string;turn_id:string|null;at:string;signature:string|null;active:number;candidate:string;origin_claim?:string|null};
 type SavedObservation={observation_id:string;record_revision:number;content_hash:string;collector_id:string;source_id:string;generation:number};
 const pair=(c:Pick<Candidate,'thread_id'|'turn_id'>)=>stableJson([c.thread_id,c.turn_id]);
 const candidateValue=(r:CandidateRow)=>JSON.parse(r.candidate) as Candidate;
-const sourceKey=(s:{source_id:string;generation:number})=>stableJson([s.source_id,s.generation]);
 function byEvent(rows:Iterable<CandidateRow>):Map<string,CandidateRow[]> {
   const groups=new Map<string,CandidateRow[]>();for(const row of rows){const group=groups.get(row.event_id);if(group)group.push(row);else groups.set(row.event_id,[row]);}return groups;
 }
@@ -54,7 +51,7 @@ export async function prepareMaterialization(db:D1Database,h:Domain,initial:Cand
   for(const id of ids)for(const updated of reconcileOriginEvidence(grouped.get(id)||[],before.get(id)||[],preserveRemovedOrigins)){
     if(updated.candidate!==current.get(updated.observation_id)!.candidate){current.set(updated.observation_id,updated);mutations.set(updated.observation_id,updated);}}
   const visible=[...current.values()].filter(r=>r.active).map(candidateValue);
-  // Explicit records in a turn suppress its compatibility records even when their event IDs differ.
+  // Explicit records in a turn suppress its cumulative token records even when their event IDs differ.
   const candidateTurns=[...new Set(visible.filter(c=>c.turn_id!==null&&c.kind==='legacy'&&!c.excluded).map(pair))];
   const removedExplicit=[...mutations.keys()],externalTurns=new Set<string>();
   if(candidateTurns.length){const explicit=await db.prepare(`SELECT json_extract(p.value,'$[0]') thread_id,json_extract(p.value,'$[1]') turn_id FROM json_each(?) p WHERE EXISTS(SELECT 1 FROM v3_candidates c WHERE c.user_id=? AND c.thread_id=json_extract(p.value,'$[0]') AND c.turn_id IS json_extract(p.value,'$[1]') AND c.active=1 AND json_extract(c.candidate,'$.kind')='record' AND json_extract(c.candidate,'$.excluded')=0 AND c.observation_id NOT IN(SELECT value FROM json_each(?)))`).bind(stableJson(candidateTurns.map(s=>JSON.parse(s))),h.user_id,stableJson(removedExplicit)).all<{thread_id:string;turn_id:string}>();for(const r of explicit.results)externalTurns.add(pair(r));}
@@ -96,21 +93,20 @@ export async function applyBatch(db:D1Database,user:string,b:UploadBatch,job?:Jo
       ...b.records.some(r=>r.origin.kind==='preserved'&&r.origin.device_id)?[db.prepare('SELECT id FROM devices WHERE user_id=? AND id IN(SELECT value FROM json_each(?))').bind(user,stableJson([...new Set(b.records.filter(r=>r.origin.kind==='preserved').map(r=>r.origin.device_id))]))]:[],
     ]));
     const saved=loaded[0].results[0] as Receipt|undefined;if(!saved)throw Error('missing receipt');if(saved.status==='applied')return true;if(saved.status!=='received')return false;
-    const device=assertWritableDevice(loaded[2].results[0] as WriteDevice|null),h=loaded[1].results[0] as Domain|undefined;if(!h)return false;if(publishEpoch?(h.mode!=='rebuilding'||h.rebuild_job!==job?.job_id):(h.mode!=='ready'||h.legacy_baseline_pending))return false;
+    const device=assertWritableDevice(loaded[2].results[0] as WriteDevice|null),h=loaded[1].results[0] as Domain|undefined;if(!h)return false;if(publishEpoch?(h.mode!=='rebuilding'||h.rebuild_job!==job?.job_id):(h.mode!=='ready'))return false;
     const publication=publishEpoch?{...h,active_epoch:publishEpoch,commit_seq:0}:h;
     const progress=(loaded[3].results[0] as {applied_seq:number}|undefined)?.applied_seq;
     if(b.lane_seq!==(progress||0)+1)return false;
     const sources=loaded[4].results as SourceRow[],priorObservations=loaded[5].results as SavedObservation[],inputOld=loaded[6].results as CandidateRow[];
     const observationsById=new Map(priorObservations.map(r=>[r.observation_id,r])),ownedDevices=new Set((loaded[7]?.results as {id:string}[]|undefined)?.map(r=>r.id));
     const dep=await dependencies(db,user,b.records),candidateMutations=new Map<string,CandidateRow|null>(),sourceUpdates:SourceRow[]=[],observationUpdates:SavedObservation[]=[],threadWrites:{source_id:string;generation:number;thread_id:string;payload:string}[]=[],deferred:{observation_id:string;source_id:string;generation:number;locator:number;observation:string}[]=[],resolvedIds:string[]=[],dependencyRows:{source_id:string;generation:number;parent_thread_id:string;initial_state:string}[]=[],replacements:SourceRow[]=[];
-    const migrationPending=await pendingLegacySources(db,h,device,b);
     for(const source of b.sources){
       const same=sources.find(s=>s.source_id===source.source_id&&s.generation===source.generation),active=sources.find(s=>s.source_id===source.source_id&&s.active),latest=Math.max(0,...sources.filter(s=>s.source_id===source.source_id).map(s=>s.generation));
       if(source.generation<latest)fail(409,'STALE_GENERATION','来源代次已更新。');
       if(source.from_cursor!==(same?.cursor||0)||!same&&!source.replace_start) return false;
-      let state:LegacyState=same?.legacy_state?JSON.parse(same.legacy_state):initialLegacyState(source.context.thread_id);
-      const replace=!!active&&active.generation!==source.generation,visible=(!replace||source.generation_complete&&source.replace_end)&&!migrationPending.has(sourceKey(source));
-      const next:SourceRow={user_id:user,collector_id:b.collector_id,source_id:source.source_id,generation:source.generation,kind:source.kind,cursor:source.to_cursor,snapshot_eof:source.snapshot_eof,context_hash:source.context_hash,context:stableJson(source.context),legacy_state:null,active:visible?1:0,complete:source.generation_complete?1:0,available:source.available?1:0,trailing_bytes:source.trailing_bytes};
+      let state:LegacyState=same?.parser_state?JSON.parse(same.parser_state):initialLegacyState(source.context.thread_id);
+      const replace=!!active&&active.generation!==source.generation,visible=(!replace||source.generation_complete&&source.replace_end);
+      const next:SourceRow={user_id:user,collector_id:b.collector_id,source_id:source.source_id,generation:source.generation,kind:source.kind,cursor:source.to_cursor,snapshot_eof:source.snapshot_eof,context_hash:source.context_hash,context:stableJson(source.context),parser_state:null,active:visible?1:0,complete:source.generation_complete?1:0,available:source.available?1:0,trailing_bytes:source.trailing_bytes};
       if(replace&&visible)replacements.push(active!);
       const records=b.records.filter(r=>r.source_id===source.source_id&&r.generation===source.generation);
       for(const original of records){
@@ -123,10 +119,8 @@ export async function applyBatch(db:D1Database,user:string,b:UploadBatch,job?:Jo
         for(const t of parsed.threads)threadWrites.push({source_id:row.source_id,generation:row.generation,thread_id:t.id,payload:stableJson({...t,source_project_id:await scopedProjectId(b.collector_id,t.source_project_id)})});
         if(state.parent_id&&state.deferred){deferred.push({observation_id:row.observation_id,source_id:row.source_id,generation:row.generation,locator:row.locator,observation:stableJson(row)});dependencyRows.push({source_id:row.source_id,generation:row.generation,parent_thread_id:state.parent_id,initial_state:stableJson(beforeState)});}else resolvedIds.push(row.observation_id);
       }
-      next.legacy_state=stableJson(state);sourceUpdates.push(next);
+      next.parser_state=stableJson(state);sourceUpdates.push(next);
     }
-    const handoff=await prepareHandoff(db,h,device,b);
-    if(!publishEpoch&&handoff.plans.length){await startReplacement(db,h,device,b,job,[...sourceUpdates,...handoff.plans],candidateMutations,threadWrites);return false;}
     if(!publishEpoch&&replacements.length){const n=await db.prepare('SELECT COUNT(*) n FROM v3_candidates WHERE user_id=? AND collector_id=? AND source_id IN(SELECT value FROM json_each(?))').bind(user,b.collector_id,stableJson(replacements.map(r=>r.source_id))).first<number>('n');if((n||0)>500){await startReplacement(db,h,device,b,job,sourceUpdates,candidateMutations,threadWrites);return false;}}
     const initial=[...inputOld];
     if(!publishEpoch&&replacements.length){const replaced=new Map(replacements.map(s=>[s.source_id,s])),related=await db.prepare('SELECT * FROM v3_candidates WHERE user_id=? AND collector_id=? AND source_id IN(SELECT value FROM json_each(?))').bind(user,b.collector_id,stableJson([...replaced.keys()])).all<CandidateRow>();for(const r of related.results){const old=replaced.get(r.source_id)!;initial.push(r);if(r.generation===old.generation)candidateMutations.set(r.observation_id,{...r,active:0});else if(r.generation===sourceUpdates.find(s=>s.source_id===old.source_id)!.generation&&!candidateMutations.has(r.observation_id))candidateMutations.set(r.observation_id,{...r,active:1});}}
@@ -150,9 +144,9 @@ export async function applyBatch(db:D1Database,user:string,b:UploadBatch,job?:Jo
     const availability=new Map<string,number>();for(const m of b.metadata)if(m.type==='source_availability')availability.set(m.source_id,Number(m.available));
     if(availability.size){const updates=stableJson([...availability].map(([source_id,available])=>({source_id,available})));statements.push(db.prepare(`UPDATE v3_sources SET available=(SELECT json_extract(value,'$.available') FROM json_each(?) WHERE source_id=json_extract(value,'$.source_id')) WHERE user_id=? AND collector_id=? AND source_id IN(SELECT json_extract(value,'$.source_id') FROM json_each(?))`).bind(updates,user,b.collector_id,updates));}
     if(replacements.length)statements.push(db.prepare('UPDATE v3_sources SET active=0 WHERE user_id=? AND collector_id=? AND source_id IN(SELECT value FROM json_each(?)) AND active=1').bind(user,b.collector_id,stableJson(replacements.map(s=>s.source_id))));
-    for(const group of chunks(sourceUpdates))statements.push(db.prepare(`INSERT INTO v3_sources(user_id,collector_id,source_id,generation,kind,cursor,snapshot_eof,context_hash,context,legacy_state,active,complete,available,trailing_bytes)
-      SELECT ?,?,json_extract(value,'$.source_id'),json_extract(value,'$.generation'),json_extract(value,'$.kind'),json_extract(value,'$.cursor'),json_extract(value,'$.snapshot_eof'),json_extract(value,'$.context_hash'),json_extract(value,'$.context'),json_extract(value,'$.legacy_state'),json_extract(value,'$.active'),json_extract(value,'$.complete'),json_extract(value,'$.available'),json_extract(value,'$.trailing_bytes') FROM json_each(?) WHERE true
-      ON CONFLICT(user_id,collector_id,source_id,generation) DO UPDATE SET cursor=excluded.cursor,snapshot_eof=excluded.snapshot_eof,context_hash=excluded.context_hash,context=excluded.context,legacy_state=excluded.legacy_state,active=excluded.active,complete=excluded.complete,available=excluded.available,trailing_bytes=excluded.trailing_bytes`).bind(user,b.collector_id,stableJson(group)));
+    for(const group of chunks(sourceUpdates))statements.push(db.prepare(`INSERT INTO v3_sources(user_id,collector_id,source_id,generation,kind,cursor,snapshot_eof,context_hash,context,parser_state,active,complete,available,trailing_bytes)
+      SELECT ?,?,json_extract(value,'$.source_id'),json_extract(value,'$.generation'),json_extract(value,'$.kind'),json_extract(value,'$.cursor'),json_extract(value,'$.snapshot_eof'),json_extract(value,'$.context_hash'),json_extract(value,'$.context'),json_extract(value,'$.parser_state'),json_extract(value,'$.active'),json_extract(value,'$.complete'),json_extract(value,'$.available'),json_extract(value,'$.trailing_bytes') FROM json_each(?) WHERE true
+      ON CONFLICT(user_id,collector_id,source_id,generation) DO UPDATE SET cursor=excluded.cursor,snapshot_eof=excluded.snapshot_eof,context_hash=excluded.context_hash,context=excluded.context,parser_state=excluded.parser_state,active=excluded.active,complete=excluded.complete,available=excluded.available,trailing_bytes=excluded.trailing_bytes`).bind(user,b.collector_id,stableJson(group)));
     const removed=[...candidateMutations].filter(([,r])=>!r).map(([id])=>id);if(removed.length)statements.push(db.prepare('DELETE FROM v3_candidates WHERE user_id=? AND observation_id IN(SELECT value FROM json_each(?))').bind(user,stableJson(removed)));
     for(const group of chunks([...candidateMutations.values()].filter((r):r is CandidateRow=>!!r)))statements.push(db.prepare(`INSERT INTO v3_candidates(user_id,observation_id,uploader_device_id,collector_id,source_id,generation,record_revision,event_id,thread_id,turn_id,at,signature,active,candidate,origin_claim)
       SELECT ?,json_extract(value,'$.observation_id'),json_extract(value,'$.uploader_device_id'),json_extract(value,'$.collector_id'),json_extract(value,'$.source_id'),json_extract(value,'$.generation'),json_extract(value,'$.record_revision'),json_extract(value,'$.event_id'),json_extract(value,'$.thread_id'),json_extract(value,'$.turn_id'),json_extract(value,'$.at'),json_extract(value,'$.signature'),json_extract(value,'$.active'),json_extract(value,'$.candidate'),json_extract(value,'$.origin_claim') FROM json_each(?) WHERE true
@@ -162,7 +156,7 @@ export async function applyBatch(db:D1Database,user:string,b:UploadBatch,job?:Jo
     for(const group of chunks(deferred))statements.push(db.prepare(`INSERT INTO v3_deferred_records(user_id,observation_id,collector_id,source_id,generation,locator,observation) SELECT ?,json_extract(value,'$.observation_id'),?,json_extract(value,'$.source_id'),json_extract(value,'$.generation'),json_extract(value,'$.locator'),json_extract(value,'$.observation') FROM json_each(?) WHERE true ON CONFLICT(user_id,observation_id) DO UPDATE SET observation=excluded.observation`).bind(user,b.collector_id,stableJson(group)));
     for(const group of chunks(dependencyRows))statements.push(db.prepare(`INSERT INTO v3_dependencies(user_id,collector_id,source_id,generation,parent_thread_id,initial_state) SELECT ?,?,json_extract(value,'$.source_id'),json_extract(value,'$.generation'),json_extract(value,'$.parent_thread_id'),json_extract(value,'$.initial_state') FROM json_each(?) WHERE true ON CONFLICT DO NOTHING`).bind(user,b.collector_id,stableJson(group)));
     if(resolvedIds.length)statements.push(db.prepare('DELETE FROM v3_deferred_records WHERE user_id=? AND observation_id IN(SELECT value FROM json_each(?))').bind(user,stableJson(resolvedIds)));
-    const resolvedSources=sourceUpdates.filter(s=>!JSON.parse(s.legacy_state!).deferred).map(s=>({source_id:s.source_id,generation:s.generation}));
+    const resolvedSources=sourceUpdates.filter(s=>!JSON.parse(s.parser_state!).deferred).map(s=>({source_id:s.source_id,generation:s.generation}));
     if(resolvedSources.length)statements.push(db.prepare(`DELETE FROM v3_deferred_records WHERE user_id=? AND collector_id=? AND EXISTS(SELECT 1 FROM json_each(?) WHERE source_id=json_extract(value,'$.source_id') AND generation=json_extract(value,'$.generation'))`).bind(user,b.collector_id,stableJson(resolvedSources)));
     const completedParents=[...new Set(b.sources.filter(s=>s.generation_complete).map(s=>s.context.thread_id))];
     if(completedParents.length)statements.push(db.prepare(`INSERT INTO v3_jobs(user_id,job_id,kind,payload,created_at,updated_at)
@@ -170,9 +164,9 @@ export async function applyBatch(db:D1Database,user:string,b:UploadBatch,job?:Jo
       ON CONFLICT(user_id,job_id) DO UPDATE SET state='pending',next_attempt_at=0 WHERE v3_jobs.state<>'running'`).bind(Date.now(),Date.now(),user,stableJson(completedParents)));
     // Superseded generations are no longer current facts or pending replay inputs.
     if(replacedSources.length)for(const table of ['v3_candidates','v3_observations','v3_source_threads','v3_deferred_records','v3_dependencies','v3_sources'])statements.push(db.prepare(`DELETE FROM ${table} WHERE user_id=? AND collector_id=? AND EXISTS(SELECT 1 FROM json_each(?) WHERE source_id=json_extract(value,'$.source_id') AND generation<json_extract(value,'$.generation'))`).bind(user,b.collector_id,stableJson(replacedSources)));
-    statements.push(...materialized.statements,...threadStatements,...projects.statements,...handoff.statements,...await entityStatements(db,publication,changes),
+    statements.push(...materialized.statements,...threadStatements,...projects.statements,...await entityStatements(db,publication,changes),
       ...publishEpoch?rebuildPublication(db,h,'apply:'+b.batch_id,publishEpoch):[],
-      db.prepare("UPDATE v3_receipts SET status='applied',applied_epoch=?,applied_commit_seq=?,applied_at=?,handoff_results=? WHERE user_id=? AND batch_id=?").bind(publication.active_epoch,publication.commit_seq+Number(changes.length>0),Date.now(),handoff.outcomes.length?stableJson(handoff.outcomes):null,user,b.batch_id),
+      db.prepare("UPDATE v3_receipts SET status='applied',applied_epoch=?,applied_commit_seq=?,applied_at=? WHERE user_id=? AND batch_id=?").bind(publication.active_epoch,publication.commit_seq+Number(changes.length>0),Date.now(),user,b.batch_id),
       db.prepare('UPDATE devices SET protocol=3 WHERE user_id=? AND id=?').bind(user,device.id),
       db.prepare('DELETE FROM v3_pending_inputs WHERE user_id=? AND batch_id=?').bind(user,b.batch_id),
       db.prepare("UPDATE v3_jobs SET state='complete',lease_token=NULL,lease_until=0,updated_at=? WHERE user_id=? AND job_id=?").bind(Date.now(),user,'apply:'+b.batch_id),

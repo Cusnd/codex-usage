@@ -68,10 +68,9 @@ export async function createApp(
     observation: () => refresh.cloudObservation(), origin: options.cloudOrigin || process.env.CODEX_USAGE_CLOUD_ORIGIN, fetch: options.cloudFetch,
     refreshLimits: () => refresh.refreshAccountLimits(),
     history: async () => ({data: await refresh.accountSnapshot('usage'),collectedAt:refresh.status.accountHistory.updatedAt,identityKey:refresh.status.accountHistory.identityKey}),
-    collection: () => refresh.status.local,
     uploader,
   });
-  refresh.onLimits(async () => { await cloud.capture(); void cloud.tick(); });
+  refresh.onLimits(async () => { void cloud.tick(); });
   await app.register(swagger, {
     openapi: {
       info: {
@@ -186,12 +185,12 @@ export async function createApp(
   };
   app.get("/openapi.json", async () => app.swagger());
   app.get('/api/cloud/status', async () => wrap(cloud.status(), 'settings'));
-  app.post<{ Body: { deviceName?: string; fullUsage?: boolean } }>('/api/cloud/connect', {
-    schema: { body: Type.Object({ deviceName: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),fullUsage:Type.Optional(Type.Boolean()) }, { additionalProperties: false }) },
-  }, async req => wrap(await cloud.connect(req.body.deviceName,req.body.fullUsage ?? true), 'settings'));
-  app.patch<{ Body: { enabled: boolean; fullUsage?: boolean } }>('/api/cloud/settings', {
-    schema: { body: Type.Object({ enabled: Type.Boolean(),fullUsage:Type.Optional(Type.Boolean()) }, { additionalProperties: false }) },
-  }, async req => { if(req.body.fullUsage!==undefined)await cloud.setFullUsage(req.body.fullUsage);return wrap(await cloud.setEnabled(req.body.enabled), 'settings'); });
+  app.post<{ Body: { deviceName?: string } }>('/api/cloud/connect', {
+    schema: { body: Type.Object({ deviceName: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })) }, { additionalProperties: false }) },
+  }, async req => wrap(await cloud.connect(req.body.deviceName), 'settings'));
+  app.patch<{ Body: { enabled: boolean } }>('/api/cloud/settings', {
+    schema: { body: Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false }) },
+  }, async req => { return wrap(await cloud.setEnabled(req.body.enabled), 'settings'); });
   app.delete('/api/cloud/connection', async () => wrap(await cloud.disconnect(), 'settings'));
   app.get('/api/system/autostart', async () => wrap(autostartStatus(), 'settings'));
   app.post<{ Body: { enabled: boolean } }>('/api/system/autostart', {
@@ -279,7 +278,6 @@ export async function createApp(
       store.saveSettings(next);
       scheduler.reschedule();
       if(options.startup!==false){if(next.localInterval>0)importer.startWatching();else importer.stopWatching();}
-      await cloud.capture();
       return wrap(next, "settings");
     },
   );

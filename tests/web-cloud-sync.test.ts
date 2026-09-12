@@ -16,12 +16,12 @@ const refs = (rows: SyncEntity[]) => rows.map(({ value: _, ...ref }) => ref);
 
 class Transport implements SyncTransport {
   head = cut(); mode = 'ready'; rows: SyncEntity[] = []; recent: SyncEntity[] | undefined;
-  settings:Settings|undefined; legacy_read_available = false;
+  settings:Settings|undefined;
   reads: { scope: string; from?: string; lease: ReadLease }[] = []; manifests: (string | null)[] = []; fetched: string[] = []; renewals: string[] = [];
   leases = new Map<string, { lease: ReadLease; rows: SyncEntity[] }>();
   failManifestAt: string | null | undefined; failEntityOnce = false; manifestPageSize = 200;
   change: ChangeResponse | ((after: number) => ChangeResponse) = { cut: cut(), commits: [], next_cursor: 1, more: false };
-  async status() { return { user_id: identity.userId, cut: this.head, mode: this.mode, legacy_read_available: this.legacy_read_available }; }
+  async status() { return { user_id: identity.userId, cut: this.head, mode: this.mode }; }
   async read(scope: 'recent' | 'full', _ids: string[], from?: string) {
     const rows = structuredClone(scope === 'recent' ? this.recent ?? this.rows : this.rows), leaseCut = from ? this.leases.get(from)!.lease.cut : this.head;
     const counts = new Map<SyncEntity['kind'], number>(); rows.forEach(row => counts.set(row.kind, (counts.get(row.kind) ?? 0) + 1));
@@ -47,66 +47,6 @@ class Transport implements SyncTransport {
 const setup = (transport = new Transport(), cache = new MemoryCloudCache(), autoFull = true) => ({ transport, cache,
   controller: new CloudSyncController({ transport, cache, identity, now: () => now, autoFull }) });
 const response = <T>(data: T, value: SyncCut = cut()): ApiResponse<T> => ({ data, meta: { source: 'cloud', updatedAt: null, timezone: 'UTC', warnings: [], cut: value } } as ApiResponse<T>);
-
-test('first migration reads only an explicitly complete legacy view without promoting a v3 cut or disk cache', async () => {
-  const t = new Transport(); t.legacy_read_available = true; t.mode = 'rebuilding';
-  const { controller, cache } = setup(t); let online = true; const urls: string[] = [];
-  const source = new CloudUsageDataSource(controller, async<T>(url: string) => {
-    urls.push(url); return { data: { total: '9007199254740993' }, meta: { source: 'cloud', warnings: [], legacyView: { complete: true, user_id: identity.userId } } } as T;
-  }, () => online);
-  const result = await source.query<{ total: string }>('local/overview', { deviceIds: ['untrusted'], from: '2026-01-01' });
-  assert.equal(result.data.total, '9007199254740993'); assert.match(result.meta.warnings.join(), /最近完整同步的旧版历史/);
-  const requested = new URL(urls[0], identity.origin);
-  assert.equal(requested.pathname, '/api/v2/usage/local/overview'); assert.equal(requested.searchParams.get('legacy_fallback'), '1');
-  assert.deepEqual(requested.searchParams.getAll('deviceIds'), []); assert.equal(requested.searchParams.get('from'), '2026-01-01');
-  assert.equal(controller.state().phase, 'legacy_ready'); assert.equal(controller.state().activeLease, null);
-  assert.equal(controller.state().coverage, null); assert.equal(controller.state().appliedCommitSeq, 0); assert.equal(t.reads.length, 0);
-  const oldView = source.capture(); online = false; await assert.rejects(source.query('local/overview'), OfflineCacheMiss);
-  online = true; t.legacy_read_available = false; t.mode = 'ready'; await controller.trigger('automatic');
-  assert.equal(controller.state().phase, 'full_ready'); assert.equal(controller.legacyViewAvailable(), false);
-  await assert.rejects(source.query('local/overview', {}, undefined, oldView), /view changed/);
-  const reloaded = setup(t, cache).controller; await reloaded.initialize(); assert.equal(reloaded.legacyViewAvailable(), false);
-});
-
-test('legacy fallback rejects missing completeness, a changed user and responses completing after deletion', async () => {
-  const t = new Transport(); t.legacy_read_available = true; const { controller } = setup(t); await controller.trigger('initial');
-  const incomplete = new CloudUsageDataSource(controller, async<T>() => response({}) as T);
-  await assert.rejects(incomplete.query('local/overview'), /未确认完整性/);
-  const changedUser = new CloudUsageDataSource(controller, async<T>() => ({ data: {}, meta: { warnings: [], legacyView: { complete: true, user_id: 'other' } } }) as T);
-  await assert.rejects(changedUser.query('local/summary'), /user changed/);
-  await assert.rejects(incomplete.query('local/overview', {}, undefined, { ...incomplete.capture(), namespace: namespaceOf({ ...identity, userId: 'other' }) }), /切换读取版本/);
-  let finish!: (value: unknown) => void;
-  const source = new CloudUsageDataSource(controller, async<T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T);
-  const pending = source.query('local/overview'); await new Promise(resolve => setImmediate(resolve));
-  await controller.invalidateForDeletion(); finish({ data: {}, meta: { warnings: [], legacyView: { complete: true } } });
-  await assert.rejects(pending, /切换读取版本/); assert.equal(controller.state().activeLease, null);
-});
-
-test('migration handoff retries status and existing fixed cuts never fall back to legacy', async () => {
-  const t = new Transport(); t.legacy_read_available = true; const { controller } = setup(t); await controller.trigger('initial');
-  const source = new CloudUsageDataSource(controller, async<T>() => { t.legacy_read_available = false; throw new SyncError('handoff', 'LEGACY_VIEW_EXPIRED', 409); });
-  await assert.rejects(source.query('local/overview'), /切换读取版本/); assert.equal(controller.state().phase, 'full_ready');
-  t.legacy_read_available = true; await controller.trigger('automatic'); assert.equal(controller.legacyViewAvailable(), false);
-  assert.ok(controller.state().activeLease);
-});
-
-test('another tab deletion rejects a late legacy response without restoring history', async () => {
-  const t = new Transport(); t.legacy_read_available = true; const { controller, cache } = setup(t); await controller.trigger('initial');
-  let finish!: (value: unknown) => void;
-  const source = new CloudUsageDataSource(controller, async<T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T);
-  const pending = source.query('local/summary'); await new Promise(resolve => setImmediate(resolve));
-  const other = setup(t, cache).controller; await other.invalidateForDeletion();
-  finish({ data: {}, meta: { warnings: [], legacyView: { complete: true } } });
-  await assert.rejects(pending, /another tab/); assert.equal((await cache.state(controller.namespace))?.activeLease, null);
-});
-
-test('a reopened legacy checkpoint requires a fresh server confirmation before any legacy read', async () => {
-  const t = new Transport(); t.legacy_read_available = true; const { controller, cache } = setup(t); await controller.trigger('initial'); controller.dispose();
-  const restarted = setup(t, cache).controller; await restarted.initialize();
-  assert.equal(restarted.legacyViewAvailable(), false); assert.equal(restarted.state().phase, 'empty');
-  const source = new CloudUsageDataSource(restarted, async<T>() => { throw new Error('unexpected network'); }, () => false);
-  await assert.rejects(source.query('local/overview'), OfflineCacheMiss);
-});
 
 test('minute or focus settings reads follow the browser zone without advancing the cut or the shared account cache',async()=>{
   const t=new Transport();t.settings={localInterval:0,accountInterval:0,timezoneMode:'system',timezone:'UTC'};const {controller}=setup(t);await controller.trigger('initial');const reads=t.reads.length;let zone='America/Los_Angeles',accounts=0;const urls:string[]=[];

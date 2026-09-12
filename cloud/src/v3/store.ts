@@ -6,7 +6,7 @@ export type Domain = {
   user_id:string; active_epoch:string; write_version:number; commit_seq:number;
   organization_version:number; deletion_version:number; config_version:number;
   mode:'ready'|'rebuilding'|'deleting'; changes_floor:number; updated_at:number;
-  rebuild_job:string|null;legacy_baseline_pending:number;
+  rebuild_job:string|null;
 };
 export type WriteDevice = {id:string;user_id:string;token_hash:string;auth_version:number;paused:number;revoked_at:number|null;history_deleted_at:number|null};
 export type Receipt = {
@@ -14,7 +14,6 @@ export type Receipt = {
   lane:string;lane_seq:number;wire_hash:string;records_hash:string;
   status:'received'|'applied'|'cancelled'|'failed';received_at:number;
   applied_epoch:string|null;applied_commit_seq:number|null;error_code:string|null;
-  handoff_results?:string|null;
 };
 export type EntityMutation = {kind:EntityKind;id:string;revision:number;value:unknown|null;at?:string|null;thread_id?:string|null;origin_device_id?:string|null};
 export type JobLease = {job_id:string;lease_token:string};
@@ -53,7 +52,7 @@ export async function acknowledge(db:D1Database,h:Domain,row:Receipt):Promise<Up
 }
 function acknowledgement(h:Pick<Domain,'active_epoch'|'config_version'>,row:Receipt,p:{received_seq:number;applied_seq:number}|null):UploadAck {
   if(row.status==='cancelled'||row.status==='failed')return fail(409,row.error_code||'BATCH_CANCELLED','批次未应用，请根据错误恢复对应来源。');
-  return {batch_id:row.batch_id,wire_hash:row.wire_hash,records_hash:row.records_hash,status:row.status,received_at:new Date(row.received_at).toISOString(),dataset_epoch:row.applied_epoch||h.active_epoch,applied_commit_seq:row.applied_commit_seq,contiguous_received_seq:p?.received_seq||0,contiguous_applied_seq:p?.applied_seq||0,retry_after_ms:row.status==='received'?1000:0,current_config_version:h.config_version,...row.handoff_results?{handoff_results:JSON.parse(row.handoff_results)}:{}};
+  return {batch_id:row.batch_id,wire_hash:row.wire_hash,records_hash:row.records_hash,status:row.status,received_at:new Date(row.received_at).toISOString(),dataset_epoch:row.applied_epoch||h.active_epoch,applied_commit_seq:row.applied_commit_seq,contiguous_received_seq:p?.received_seq||0,contiguous_applied_seq:p?.applied_seq||0,retry_after_ms:row.status==='received'?1000:0,current_config_version:h.config_version};
 }
 export async function readAcknowledgement(db:D1Database,user:string,id:string,device:string):Promise<UploadAck> {
   const row=await db.prepare(`SELECT r.*,h.active_epoch,h.config_version,p.received_seq,p.applied_seq FROM v3_receipts r JOIN v3_sync_domains h ON h.user_id=r.user_id LEFT JOIN v3_producer_progress p ON (p.user_id,p.collector_id,p.producer_epoch,p.lane)=(r.user_id,r.collector_id,r.producer_epoch,r.lane) WHERE r.user_id=? AND r.batch_id=? AND r.device_id=?`).bind(user,id,device).first<Receipt&Pick<Domain,'active_epoch'|'config_version'>&{received_seq:number;applied_seq:number}>();

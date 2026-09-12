@@ -39,7 +39,6 @@ const subscriptionCatalog: ModelPrice[] = officialSubscriptionPrices.map(p => ({
   ...p, cacheWrite: null, longContextThreshold: null,
   longInput: null, longCachedInput: null, longCacheWrite: null, longOutput: null,
 }));
-const officialApiFast = new Map(officialPrices.map(p => [p.model, p.fastMultiplier]));
 
 /** Existing custom modelPrices always remain API prices, even while subscription mode is selected. */
 export function pricingCatalog(settings: Settings): ModelPrice[] {
@@ -95,8 +94,7 @@ export function estimateCost(rows: Record<string, any>[], settings: Settings): E
     }
     const p = prices.get(row.model);
     if (!p) { notes.add(`未配置价格：${row.model || "未知模型"}`); continue; }
-    // Older saved API presets predate this field; only verified model IDs have a fallback.
-    const fast = p.fastMultiplier === undefined && api ? officialApiFast.get(p.model) : p.fastMultiplier;
+    const fast = p.fastMultiplier;
     if (tier === "fast" && fast == null) { notes.add(`${row.model}：Fast 费率未配置，未计入其估算值`); continue; }
     const multiplier = tier === "fast" ? rate(fast!) : 1_000_000n;
     const long = api && Number(row.long_context) === 1;

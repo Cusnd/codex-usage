@@ -5,7 +5,6 @@ import { DateTime } from "luxon";
 import type { Settings } from "../shared/contracts.js";
 import { json } from "./util.js";
 import { officialPrices } from "./pricing.js";
-import { invalidTokenStorageSql } from '../shared/exact-query-engine.js';
 import { tokenFields } from '../shared/query-values.js';
 
 export class Store {
@@ -17,19 +16,25 @@ export class Store {
     if (filename !== ":memory:")
       mkdirSync(path.dirname(filename), { recursive: true });
     this.db = new DatabaseSync(filename);
+    const schema=this.db.prepare('PRAGMA user_version').get()!.user_version;
+    if(schema!==3&&this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").get()) {
+      this.db.close();
+      throw Object.assign(new Error('本地数据库版本不匹配。请使用空的数据目录，并从 Codex 原始日志重新采集。'), {code:'LOCAL_SCHEMA_MISMATCH'});
+    }
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS source_files (
         path TEXT PRIMARY KEY, identity TEXT NOT NULL, size INTEGER NOT NULL, mtime REAL NOT NULL,
         offset INTEGER NOT NULL, fingerprint TEXT NOT NULL, state TEXT NOT NULL, issues INTEGER NOT NULL, updated_at TEXT NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project TEXT, source TEXT, parent_id TEXT);
+      CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, project TEXT, source TEXT, parent_id TEXT, subagent_parent_id TEXT, forked_from_id TEXT, title TEXT, title_updated_at TEXT);
       CREATE TABLE IF NOT EXISTS usage_events (
         file TEXT NOT NULL, event_key TEXT NOT NULL, thread_id TEXT NOT NULL, turn_id TEXT, response_id TEXT,
         at TEXT NOT NULL, project TEXT, model TEXT, effort TEXT, kind TEXT NOT NULL, signature TEXT,
         input_tokens TEXT, cached_input_tokens TEXT, cache_write_input_tokens TEXT,
         output_tokens TEXT, reasoning_output_tokens TEXT, total_tokens TEXT,
         incomplete INTEGER NOT NULL DEFAULT 0, excluded INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 0,
+        service_tier TEXT, service_tier_source TEXT,
         PRIMARY KEY(file,event_key)
       );
       CREATE INDEX IF NOT EXISTS events_identity ON usage_events(event_key);
@@ -40,42 +45,17 @@ export class Store {
       CREATE INDEX IF NOT EXISTS events_project_time ON usage_events(project,at);
       CREATE TABLE IF NOT EXISTS account_snapshots (
         id INTEGER PRIMARY KEY, account_id TEXT NOT NULL, kind TEXT NOT NULL,
-        at TEXT NOT NULL, data TEXT NOT NULL
+        at TEXT NOT NULL, data TEXT NOT NULL, identity_key TEXT, provider TEXT, fallback_reason TEXT
       );
       CREATE INDEX IF NOT EXISTS snapshots_latest ON account_snapshots(account_id,kind,id DESC);
     `);
-    const threadColumns = this.db.prepare("PRAGMA table_info(threads)").all();
-    for (const column of ["subagent_parent_id", "forked_from_id"])
-      if (!threadColumns.some((c) => c.name === column))
-        this.db.exec(`ALTER TABLE threads ADD COLUMN ${column} TEXT`);
-    this.db.exec("CREATE INDEX IF NOT EXISTS threads_subagent_parent ON threads(subagent_parent_id)");
-    const snapshotColumns = this.db.prepare("PRAGMA table_info(account_snapshots)").all();
-    for (const column of ["identity_key", "provider", "fallback_reason"])
-      if (!snapshotColumns.some((c) => c.name === column))
-        this.db.exec(`ALTER TABLE account_snapshots ADD COLUMN ${column} TEXT`);
-    this.db.exec("CREATE INDEX IF NOT EXISTS snapshots_identity ON account_snapshots(identity_key,kind,id DESC)");
-    if (!threadColumns.some((c) => c.name === "title"))
-      this.db.exec(
-        "ALTER TABLE threads ADD COLUMN title TEXT; ALTER TABLE threads ADD COLUMN title_updated_at TEXT;",
-      );
-    const columns = this.db.prepare("PRAGMA table_info(usage_events)").all();
-    const migrate = !columns.some((c) => c.name === "active");
-    if (migrate)
-      this.db.exec(
-        "ALTER TABLE usage_events ADD COLUMN active INTEGER NOT NULL DEFAULT 0",
-      );
-    if (tokenFields.some(field => String(columns.find(column => column.name === field)?.type).toUpperCase() !== 'TEXT')) this.migrateTokenText();
-    // Add metadata after the exact-token migration so old INTEGER schemas keep
-    // their existing validation and no token value is rewritten by this upgrade.
-    for (const column of ['service_tier', 'service_tier_source'])
-      if (!columns.some(c => c.name === column))
-        this.db.exec(`ALTER TABLE usage_events ADD COLUMN ${column} TEXT`);
-    this.db.exec(`DROP VIEW IF EXISTS effective_events;
-      CREATE VIEW effective_events AS SELECT * FROM usage_events WHERE active=1;
+    this.db.exec(`PRAGMA user_version=3;
+      CREATE INDEX IF NOT EXISTS threads_subagent_parent ON threads(subagent_parent_id);
+      CREATE INDEX IF NOT EXISTS snapshots_identity ON account_snapshots(identity_key,kind,id DESC);
+      CREATE VIEW IF NOT EXISTS effective_events AS SELECT * FROM usage_events WHERE active=1;
       CREATE INDEX IF NOT EXISTS active_time ON usage_events(at) WHERE active=1;
       CREATE INDEX IF NOT EXISTS active_thread ON usage_events(thread_id,at) WHERE active=1;
     `);
-    if (migrate) this.reconcile();
     this.db.prepare("INSERT OR IGNORE INTO settings VALUES(1,?)").run(
       json({
         localInterval: 60,
@@ -133,34 +113,6 @@ export class Store {
     try { const value = fn(); this.db.exec('COMMIT'); return value; }
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
     finally { this.transactionDepth--; }
-  }
-  private migrateTokenText(): void {
-    const invalid = this.one(`SELECT 1 invalid FROM usage_events WHERE ${invalidTokenStorageSql} LIMIT 1`);
-    if (invalid) {
-      this.db.close();
-      throw Object.assign(new Error('Existing token storage contains REAL or noncanonical values. Reimport the affected source; rounded values cannot be migrated as exact integers.'), { code: 'TOKEN_TEXT_MIGRATION_REQUIRED' });
-    }
-    const names = ['file','event_key','thread_id','turn_id','response_id','at','project','model','effort','kind','signature',...tokenFields,'incomplete','excluded','active'];
-    const existing = this.all('PRAGMA table_info(usage_events)').map(column => column.name);
-    if (existing.length !== names.length || existing.some(name => !names.includes(name))) throw new Error('Unsupported usage_events schema for token migration');
-    this.transaction(() => {
-      this.db.exec(`CREATE TABLE usage_events_exact (
-        file TEXT NOT NULL,event_key TEXT NOT NULL,thread_id TEXT NOT NULL,turn_id TEXT,response_id TEXT,
-        at TEXT NOT NULL,project TEXT,model TEXT,effort TEXT,kind TEXT NOT NULL,signature TEXT,
-        ${tokenFields.map(k => `${k} TEXT`).join(',')},
-        incomplete INTEGER NOT NULL DEFAULT 0,excluded INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY(file,event_key));
-        INSERT INTO usage_events_exact(${names.join(',')}) SELECT ${names.map(name => (tokenFields as readonly string[]).includes(name) ? `CAST(${name} AS TEXT)` : name).join(',')} FROM usage_events;
-        DROP VIEW IF EXISTS effective_events;
-        DROP TABLE usage_events;
-        ALTER TABLE usage_events_exact RENAME TO usage_events;
-        CREATE INDEX events_identity ON usage_events(event_key);
-        CREATE INDEX events_turn ON usage_events(thread_id,turn_id,kind);
-        CREATE INDEX events_time ON usage_events(at);
-        CREATE INDEX events_thread_time ON usage_events(thread_id,at);
-        CREATE INDEX events_model_time ON usage_events(model,at);
-        CREATE INDEX events_project_time ON usage_events(project,at);`);
-    });
   }
   settings(): Settings {
     const stored = JSON.parse(

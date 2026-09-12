@@ -1,6 +1,6 @@
 import { sessionUser } from '../auth';
 import { deviceAuth } from '../devices';
-import { accountViews } from '../usage-query';
+import { accountRoute, accountViews } from '../accounts';
 import { fail, HttpError, json, readJson, requireJson, requireSameOrigin } from '../http';
 import { type EntityKind } from '../../../shared/sync-v3';
 import { acknowledge, assertWritableDevice, currentDevice, cutOf, domain, endGuard, guard, readAcknowledgement, receive, receipt } from './store';
@@ -10,13 +10,10 @@ import { changes, createRead, entities, getRead, manifest } from './snapshots';
 import { queryUsage } from './queries';
 import { deviceViews } from './devices';
 import { projectRoute } from './projects';
-import { usageSyncRoute } from '../usage-sync';
 import { updateSettings } from './settings';
 import { SyncTiming } from './timing';
 import { resolveReadSettings } from './timezone';
 import { originRoute } from './origins';
-import {prepareLegacySources,validLegacyPreparation} from './legacy-staging';
-import { legacyReadAvailable } from './legacy-read';
 
 const ownKeys=(v:unknown,allowed:string[],required:string[]=[])=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(k=>allowed.includes(k))&&required.every(k=>Object.hasOwn(v,k));
 export async function syncStatus(db:D1Database,user:string) {
@@ -27,18 +24,12 @@ export async function syncStatus(db:D1Database,user:string) {
     db.prepare("SELECT job_id,kind,state,error_code,attempts,updated_at,json_extract(checkpoint,'$.phase') phase FROM v3_jobs WHERE user_id=? AND state IN('pending','running','failed') ORDER BY created_at LIMIT 100").bind(user),
   ])]);
   const [sources,pending,jobs]=loaded.map(r=>r.results);
-  return {user_id:user,cut:cutOf(h),mode:h.mode,baseline_ready:h.mode==='ready'&&!h.legacy_baseline_pending,legacy_read_available:!!h.legacy_baseline_pending&&await legacyReadAvailable(db,user),devices,coverage:{sources,pending_batches:pending},jobs,updated_at:new Date(h.updated_at).toISOString()};
+  return {user_id:user,cut:cutOf(h),mode:h.mode,baseline_ready:h.mode==='ready',devices,coverage:{sources,pending_batches:pending},jobs,updated_at:new Date(h.updated_at).toISOString()};
 }
 export async function v3Route(request:Request,env:Env,path:string,ctx?:ExecutionContext):Promise<Response|null> {
   if(!path.startsWith('/api/v3/'))return null;
   const url=new URL(request.url);
-  if(path==='/api/v3/accounts/observations'&&request.method==='PUT')return usageSyncRoute(request,env,'/api/v2/sync/accounts');
-  if(path==='/api/v3/legacy/prepare'&&request.method==='POST'){
-    const device=assertWritableDevice(await deviceAuth(request,env));requireJson(request);const b=await readJson(request,65536);
-    if(!validLegacyPreparation(b))return fail(400,'INVALID_LEGACY_PREPARATION','迁移来源映射无效。');
-    const ready=await prepareLegacySources(env.DB,device,b);if(!ready)await advanceJobs(env.DB,{user:device.user_id,maxSteps:2,budgetMs:4000});
-    return json({status:ready?'ready':'pending'},ready?200:202);
-  }
+  const account=await accountRoute(request,env,path);if(account)return account;
   if(path==='/api/v3/sync/status'&&request.method==='PUT'){
     const auth=await deviceAuth(request,env),device=await currentDevice(env.DB,auth.user_id,auth.id);requireJson(request);const b=await readJson(request,2048) as Record<string,any>;
     if(!ownKeys(b,['collectedAt','totalThreads','initialComplete','error'],['collectedAt','totalThreads','initialComplete','error'])||!(b.collectedAt===null||typeof b.collectedAt==='string'&&Number.isFinite(Date.parse(b.collectedAt)))||!Number.isSafeInteger(b.totalThreads)||b.totalThreads<0||typeof b.initialComplete!=='boolean'||![null,'COLLECTION_FAILED','SYNC_FAILED'].includes(b.error))fail(400,'INVALID_INPUT','同步状态无效。');

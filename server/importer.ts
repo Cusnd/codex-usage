@@ -10,7 +10,6 @@ import { tokenFields } from "../shared/query-values.js";
 export { tokenFields } from "../shared/query-values.js";
 type Tokens = Record<(typeof tokenFields)[number], bigint | null>;
 type State = {
-  metadataVersion?: number;
   thread: string;
   turn: string | null;
   project: string | null;
@@ -33,7 +32,6 @@ type ThreadMetadata = {
   subagentParent: string | null;
   forkedFrom: string | null;
 };
-const metadataVersion = 2; // Re-read cached records using source-platform project path semantics.
 type Event = Tokens & {
   event_key: string;
   thread_id: string;
@@ -189,15 +187,12 @@ export class Importer {
     ]);
     const identity = `${info.dev}:${info.ino}:${info.birthtimeMs}`;
     const savedState = saved ? (JSON.parse(saved.state) as State) : null;
-    // Re-read old files once to recover typed edges and source-platform project paths.
-    const needsMetadata = savedState?.metadataVersion !== metadataVersion;
     const retryParent =
       !!savedState?.deferred &&
       !!savedState.parent &&
       !!this.store.one("SELECT 1 FROM threads WHERE id=?", [savedState.parent]);
     if (
       !retryParent &&
-      !needsMetadata &&
       saved &&
       saved.identity === identity &&
       Number(saved.size) === info.size &&
@@ -218,7 +213,6 @@ export class Importer {
     }
     let append =
       !retryParent &&
-      !needsMetadata &&
       !!saved &&
       saved.identity === identity &&
       info.size > Number(saved.size) &&
@@ -226,7 +220,6 @@ export class Importer {
     let state: State = append
       ? JSON.parse(saved!.state)
       : {
-          metadataVersion,
           thread:
             path
               .basename(file)

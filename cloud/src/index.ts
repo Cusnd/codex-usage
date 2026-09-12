@@ -8,12 +8,11 @@ import {
   SESSION_COOKIE,
   setCookie,
 } from "./http";
-import { snapshotRoute } from "./snapshots";
-import { usageSyncRoute, cleanupUsage } from './usage-sync';
-import { usageQueryRoute } from './usage-query';
 import { v3Route } from './v3/routes';
 import { advanceJobs } from './v3/jobs';
 import { cleanupVersions } from './v3/snapshots';
+import { versionGate } from './version-gate';
+import { BUILD_VERSION, PACKAGE_VERSION, SYNC_VERSION } from '../../shared/cloud-version';
 
 export async function cleanup(env: Env, now = Date.now()) {
   await env.DB.batch([
@@ -32,15 +31,19 @@ export default {
       if (pathname === "/api/health" && request.method === "GET") {
         await env.DB.prepare("SELECT 1 FROM users LIMIT 1").first();
         await env.DB.prepare('SELECT resumed_device_id FROM device_authorizations LIMIT 0').all();
+        await env.DB.prepare('SELECT sync_version FROM device_sync_versions LIMIT 0').all();
         // Prepare the current storage shape without reading any private rows.
-        await env.DB.prepare(`SELECT r.applied_at,d.rebuild_job,d.legacy_baseline_pending
-          FROM v3_receipts r,v3_sync_domains d,v3_rebuild_candidates b,v3_legacy_heads l,
+        await env.DB.prepare(`SELECT r.applied_at,d.rebuild_job
+          FROM v3_receipts r,v3_sync_domains d,v3_rebuild_candidates b,
           v3_project_sources p,v3_project_rules g,v3_entity_versions e,v3_read_leases q,
           v3_aggregate_members m,v3_operations o,v3_origin_operations u,v3_origin_operation_events a LIMIT 0`).all();
         return json({
           ok: true,
-          schemaVersion: 2,
+          schemaVersion: 3,
           usageProtocol: 3,
+          syncVersion: SYNC_VERSION,
+          buildVersion: BUILD_VERSION,
+          packageVersion: PACKAGE_VERSION,
           loginConfigured: !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
         });
       }
@@ -50,22 +53,14 @@ export default {
         url.origin !== env.APP_ORIGIN
       )
         return fail(403, "INVALID_ORIGIN", "请使用已配置的云端地址。");
-      const response =
-        (await authRoute(request, env, pathname)) ||
-        (await v3Route(request, env, pathname,ctx)) ||
-        (await usageSyncRoute(request, env, pathname)) ||
-        (await usageQueryRoute(request, env, pathname)) ||
-        (await deviceRoute(request, env, pathname)) ||
-        (await snapshotRoute(request, env, pathname));
-      if (response) return response;
-      if (pathname === "/api/v1/me" && request.method === "GET") {
+      if (pathname === "/api/v3/me" && request.method === "GET") {
         const user = await sessionUser(request, env);
         return json({ user: { id: user.id, login: user.login } });
       }
-      if (pathname === "/api/v1/me" && request.method === "DELETE") {
+      if (pathname === "/api/v3/me" && request.method === "DELETE") {
         requireSameOrigin(request, env);
         const user = await sessionUser(request, env);
-        // Foreign keys cascade through devices, snapshots, sessions and approved requests.
+        // Foreign keys cascade through devices, observations, sessions and approved requests.
         await env.DB.prepare("DELETE FROM users WHERE id=?")
           .bind(user.id)
           .run();
@@ -73,6 +68,12 @@ export default {
           "Set-Cookie": setCookie(SESSION_COOKIE, "", 0),
         });
       }
+      const response =
+        (await versionGate(request, env, pathname)) ||
+        (await authRoute(request, env, pathname)) ||
+        (await deviceRoute(request, env, pathname)) ||
+        (await v3Route(request, env, pathname,ctx));
+      if (response) return response;
       if (pathname.startsWith("/api/") || pathname.startsWith("/auth/"))
         return fail(404, "NOT_FOUND", "接口不存在。");
       return env.ASSETS.fetch(request);
@@ -113,7 +114,6 @@ export default {
   },
   async scheduled(_event, env) {
     await cleanup(env);
-    for(let i=0;i<4;i++)await cleanupUsage(env);
     // Cleanup consumes at most 323 statements across the 100-domain page. Leave
     // headroom under D1's 1,000-query invocation limit, counting batch SQL too.
     await advanceJobs(env.DB,{maxSteps:200,maxQueries:600,budgetMs:20000});

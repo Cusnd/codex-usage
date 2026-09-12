@@ -3,12 +3,10 @@ import {TOKEN_FIELDS,type Candidate,type LegacyState,type Observation,type Threa
 import {consumeProjected,initialLegacyState} from '../shared/usage-domain/normalize.js';
 import {canonicalize,reconcileTurns} from '../shared/usage-domain/canonical.js';
 import {stableJson,type UploadBatch} from '../shared/sync-v3.js';
-import {captureLegacyReplacementMap} from './sync-v3/migration.js';
 
 /** Called inside the collector consumer transaction; no filesystem or network reads. */
 export class LocalMaterializer {
   constructor(private store:Store) {
-    captureLegacyReplacementMap(store);
     store.db.exec(`
       CREATE TABLE IF NOT EXISTS local_v3_sources(collector_id TEXT NOT NULL,source_id TEXT NOT NULL,generation INTEGER NOT NULL,thread_id TEXT NOT NULL,cursor INTEGER NOT NULL,state TEXT NOT NULL,complete INTEGER NOT NULL,active INTEGER NOT NULL,PRIMARY KEY(collector_id,source_id,generation));
       CREATE TABLE IF NOT EXISTS local_v3_candidates(observation_id TEXT PRIMARY KEY,collector_id TEXT NOT NULL,source_id TEXT NOT NULL,generation INTEGER NOT NULL,event_id TEXT NOT NULL,thread_id TEXT NOT NULL,data TEXT NOT NULL);
@@ -50,9 +48,7 @@ export class LocalMaterializer {
       if(previous&&Number(previous.cursor)!==source.from_cursor)throw Error('LOCAL_CURSOR_CONFLICT');
       if(!previous&&source.from_cursor!==0)throw Error('LOCAL_SOURCE_GAP');
       const oldActive=this.store.one('SELECT generation FROM local_v3_sources WHERE collector_id=? AND source_id=? AND active=1',[batch.collector_id,source.source_id]);
-      const sourcePath=this.store.one('SELECT path FROM collector_sources WHERE id=?',[source.source_id])?.path;
-      const legacyMirror=sourcePath&&this.store.one('SELECT 1 FROM usage_events WHERE file=? LIMIT 1',[sourcePath]);
-      const active=oldActive?Number(oldActive.generation)===source.generation:!legacyMirror;
+      const active=oldActive?Number(oldActive.generation)===source.generation:true;
       let state:LegacyState=previous?JSON.parse(previous.state):initialLegacyState(source.context.thread_id);
       const observations=batch.records.filter(o=>o.source_id===source.source_id&&o.generation===source.generation);
       for(const o of observations) {
@@ -74,7 +70,6 @@ export class LocalMaterializer {
         this.store.run('DELETE FROM local_v3_dependencies WHERE collector_id=? AND source_id=? AND generation<>?',key);
         this.store.run('DELETE FROM local_v3_threads WHERE collector_id=? AND source_id=? AND generation<>?',key);
         if(!active)for(const row of this.store.all('SELECT data FROM local_v3_threads WHERE collector_id=? AND source_id=? AND generation=? ORDER BY locator',key))this.thread(JSON.parse(row.data) as ThreadChange);
-        if(sourcePath)this.store.run('DELETE FROM usage_events WHERE file=?',[sourcePath]);
       }
     }
     // Parent arrival changes the interpretation of the child's prefix, including complete sources.

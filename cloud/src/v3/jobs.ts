@@ -7,8 +7,6 @@ import { decodeWire } from './codec';
 import { advanceHead, chunks, domain, endGuard, entityStatements, guard, isCasFailure, type EntityMutation } from './store';
 import { prepareProjectDeletion } from './projects';
 import { rebuildCleanup,rebuildStep } from './rebuild';
-import { legacyStep } from './legacy';
-import { cancelLegacyStage,legacyStageStep } from './legacy-staging';
 import { measured,type SyncTiming } from './timing';
 import { originFailureStatements,originStep,withdrawDeletedTarget } from './origins';
 import {queryBudget,QueryBudgetExhausted} from './query-budget';
@@ -16,7 +14,7 @@ import {queryBudget,QueryBudgetExhausted} from './query-budget';
 export type Job={user_id:string;job_id:string;kind:string;device_id:string|null;state:string;payload:string;checkpoint:string;lease_token:string;lease_until:number;attempts:number;next_attempt_at:number};
 export async function claimJob(db:D1Database,user?:string,id?:string):Promise<Job|null> {
   const now=Date.now(),lease=crypto.randomUUID();
-  return db.prepare(`UPDATE v3_jobs SET state='running',lease_token=?,lease_until=?,attempts=attempts+1,updated_at=? WHERE rowid=(SELECT rowid FROM v3_jobs WHERE state IN('pending','running') AND next_attempt_at<=? AND lease_until<=? AND (? IS NULL OR user_id=?) AND (? IS NULL OR job_id=?) ORDER BY CASE WHEN kind='delete_device' THEN 0 WHEN job_id=(SELECT rebuild_job FROM v3_sync_domains h WHERE h.user_id=v3_jobs.user_id) THEN 1 WHEN kind='legacy_migrate' THEN 2 ELSE 3 END,created_at,job_id LIMIT 1) RETURNING *`).bind(lease,now+30_000,now,now,now,user??null,user??null,id??null,id??null).first<Job>();
+  return db.prepare(`UPDATE v3_jobs SET state='running',lease_token=?,lease_until=?,attempts=attempts+1,updated_at=? WHERE rowid=(SELECT rowid FROM v3_jobs WHERE state IN('pending','running') AND next_attempt_at<=? AND lease_until<=? AND (? IS NULL OR user_id=?) AND (? IS NULL OR job_id=?) ORDER BY CASE WHEN kind='delete_device' THEN 0 WHEN job_id=(SELECT rebuild_job FROM v3_sync_domains h WHERE h.user_id=v3_jobs.user_id) THEN 1 ELSE 2 END,created_at,job_id LIMIT 1) RETURNING *`).bind(lease,now+30_000,now,now,now,user??null,user??null,id??null,id??null).first<Job>();
 }
 async function release(db:D1Database,job:Job,delay=1000,code:string|null=null) {
   await db.prepare("UPDATE v3_jobs SET state='pending',lease_token=NULL,lease_until=0,next_attempt_at=?,error_code=?,updated_at=? WHERE user_id=? AND job_id=? AND lease_token=?").bind(Date.now()+delay,code,Date.now(),job.user_id,job.job_id,job.lease_token).run();
@@ -76,8 +74,7 @@ async function deleteDeviceStep(db:D1Database,job:Job):Promise<boolean> {
     db.prepare("UPDATE v3_receipts SET status='cancelled',error_code='DEVICE_REVOKED' WHERE user_id=? AND device_id=? AND status='received'").bind(user,id),
     db.prepare("UPDATE v3_jobs SET state='cancelled',lease_token=NULL,lease_until=0 WHERE user_id=? AND device_id=? AND kind='apply' AND state IN('pending','running')").bind(user,id),
     db.prepare('DELETE FROM v3_collectors WHERE user_id=? AND device_id=?').bind(user,id),
-    db.prepare('DELETE FROM cloud_accounts WHERE user_id=? AND device_id=?').bind(user,id),db.prepare('DELETE FROM quota_snapshots WHERE user_id=? AND device_id=?').bind(user,id),
-    db.prepare('DELETE FROM usage_heads WHERE user_id=? AND device_id=?').bind(user,id),
+    db.prepare('DELETE FROM cloud_accounts WHERE user_id=? AND device_id=?').bind(user,id),
     db.prepare("UPDATE v3_jobs SET state='complete',lease_token=NULL,lease_until=0,updated_at=? WHERE user_id=? AND job_id=?").bind(Date.now(),user,job.job_id),
     db.prepare("UPDATE v3_sync_domains SET mode=CASE WHEN EXISTS(SELECT 1 FROM v3_jobs WHERE user_id=? AND kind='delete_device' AND state IN('pending','running') AND job_id<>?) THEN 'deleting' ELSE 'ready' END,write_version=write_version+1,updated_at=? WHERE user_id=?").bind(user,job.job_id,Date.now(),user),endGuard(db,user,op),
   ]);return true;
@@ -86,7 +83,7 @@ async function deleteDeviceStep(db:D1Database,job:Job):Promise<boolean> {
 async function dependencyStep(db:D1Database,job:Job):Promise<boolean> {
   const h=await domain(db,job.user_id);if(h.mode!=='ready')return false;
   const p=JSON.parse(job.payload) as {collector_id:string;source_id:string;generation:number},args=[job.user_id,p.collector_id,p.source_id,p.generation];
-  const source=await db.prepare('SELECT active,legacy_state FROM v3_sources WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(...args).first<{active:number;legacy_state:string|null}>();
+  const source=await db.prepare('SELECT active,parser_state FROM v3_sources WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(...args).first<{active:number;parser_state:string|null}>();
   if(!source?.active){await failJob(db,job,'SOURCE_REPLACED',true);return true;}
   const parentRows=(await db.prepare('SELECT parent_thread_id,initial_state FROM v3_dependencies WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(...args).all<{parent_thread_id:string;initial_state:string|null}>()).results,parents=parentRows.map(r=>r.parent_thread_id);
   const complete=(await db.prepare('SELECT DISTINCT t.thread_id FROM v3_source_threads t JOIN v3_sources s USING(user_id,collector_id,source_id,generation) WHERE t.user_id=? AND s.active=1 AND s.complete=1 AND t.thread_id IN(SELECT value FROM json_each(?))').bind(job.user_id,stableJson(parents)).all<{thread_id:string}>()).results;
@@ -102,7 +99,7 @@ async function dependencyStep(db:D1Database,job:Job):Promise<boolean> {
   for(const group of chunks([...mutations.values()].filter((c):c is CandidateRow=>!!c)))statements.push(db.prepare(`UPDATE v3_candidates SET candidate=(SELECT json_extract(value,'$.candidate') FROM json_each(?) WHERE observation_id=json_extract(value,'$.observation_id')) WHERE user_id=? AND observation_id IN(SELECT json_extract(value,'$.observation_id') FROM json_each(?))`).bind(stableJson(group),job.user_id,stableJson(group)));
   const removed=[...mutations].filter(([,c])=>!c).map(([id])=>id);if(removed.length)statements.push(db.prepare('DELETE FROM v3_candidates WHERE user_id=? AND observation_id IN(SELECT value FROM json_each(?))').bind(job.user_id,stableJson(removed)));
   statements.push(...prepared.statements,...await entityStatements(db,h,prepared.changes),advanceHead(db,h,prepared.changes.length>0));
-  if(!more){const current:LegacyState=source.legacy_state?JSON.parse(source.legacy_state):state;statements.push(db.prepare('UPDATE v3_sources SET legacy_state=? WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(stableJson({...current,inherited:current.inherited&&state.inherited,deferred:false}),...args),db.prepare('DELETE FROM v3_deferred_records WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(...args),db.prepare('DELETE FROM v3_dependencies WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(...args));}
+  if(!more){const current:LegacyState=source.parser_state?JSON.parse(source.parser_state):state;statements.push(db.prepare('UPDATE v3_sources SET parser_state=? WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(stableJson({...current,inherited:current.inherited&&state.inherited,deferred:false}),...args),db.prepare('DELETE FROM v3_deferred_records WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(...args),db.prepare('DELETE FROM v3_dependencies WHERE user_id=? AND collector_id=? AND source_id=? AND generation=?').bind(...args));}
   statements.push(db.prepare('UPDATE v3_jobs SET state=?,checkpoint=?,lease_token=NULL,lease_until=0,next_attempt_at=0,updated_at=? WHERE user_id=? AND job_id=?').bind(more?'pending':'complete',stableJson({parent_hash:parentHash,last_locator:records.at(-1)!.locator,state}),Date.now(),job.user_id,job.job_id),endGuard(db,job.user_id,op));
   await db.batch(statements);return !more;
 }
@@ -122,14 +119,12 @@ export async function advanceJobs(db:D1Database,options:{user?:string;job_id?:st
       else if(job.kind==='delete_device')done=await deleteDeviceStep(db,job);
       else if(job.kind==='dependency')done=await dependencyStep(db,job);
       else if(job.kind==='rebuild')done=await rebuildStep(db,job);
-      else if(job.kind==='legacy_migrate')done=await legacyStep(db,job);
-      else if(job.kind==='legacy_stage')done=await legacyStageStep(db,job);
       else if(job.kind==='origin_assignment')done=await originStep(db,job);
       else {await failJob(db,job,'UNKNOWN_JOB');continue;}
       if(!done)await release(db,job,job.kind==='dependency'?30_000:500);
     }catch(error){
       if(error instanceof QueryBudgetExhausted)throw error;
-      if(error instanceof HttpError){if(job.kind==='legacy_stage'&&['DEVICE_PAUSED','DEVICE_REVOKED','REBUILD_SUPERSEDED'].includes(error.code))await cancelLegacyStage(recoveryDb,job);else if(error.code==='DEVICE_PAUSED'){if(job.kind==='rebuild')await restartRebuild(recoveryDb,job);else await release(releaseDb,job,30_000,error.code);}else if(error.code==='REBUILD_SUPERSEDED'&&job.kind==='rebuild')await recoverSupersededRebuild(recoveryDb,job);else await failJob(recoveryDb,job,error.code,error.code==='DEVICE_REVOKED');}
+      if(error instanceof HttpError){if(error.code==='DEVICE_PAUSED'){if(job.kind==='rebuild')await restartRebuild(recoveryDb,job);else await release(releaseDb,job,30_000,error.code);}else if(error.code==='REBUILD_SUPERSEDED'&&job.kind==='rebuild')await recoverSupersededRebuild(recoveryDb,job);else await failJob(recoveryDb,job,error.code,error.code==='DEVICE_REVOKED');}
       else if(isCasFailure(error))await release(releaseDb,job,250,'WRITE_CONFLICT');
       else {await release(releaseDb,job,Math.min(60_000,1000*2**Math.min(job.attempts,6)),'APPLY_FAILED');throw error;}
     }

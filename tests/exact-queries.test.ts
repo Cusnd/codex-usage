@@ -162,29 +162,14 @@ test('forced BigInt fallback agrees with SQL across DST, costs, searches, turns,
   } finally { store.close(); }
 });
 
-async function migrationFixture(run:(file:string)=>Promise<void>) {
-  const root=await mkdtemp(path.join(os.tmpdir(),'codex-exact-migrate-'));
+async function oldStorageFixture(run:(file:string)=>Promise<void>) {
+  const root=await mkdtemp(path.join(os.tmpdir(),'codex-old-storage-'));
   try { await run(path.join(root,'usage.sqlite')); }
-  finally { const resolved=path.resolve(root);assert.equal(path.dirname(resolved),path.resolve(os.tmpdir()));assert.ok(path.basename(resolved).startsWith('codex-exact-migrate-'));await rm(resolved,{recursive:true,force:true}); }
+  finally { const resolved=path.resolve(root);assert.equal(path.dirname(resolved),path.resolve(os.tmpdir()));assert.ok(path.basename(resolved).startsWith('codex-old-storage-'));await rm(resolved,{recursive:true,force:true}); }
 }
-function oldDatabase(file:string,tokenSql:string) {
-  const db=new DatabaseSync(file);
-  db.exec(`CREATE TABLE usage_events(file TEXT NOT NULL,event_key TEXT NOT NULL,thread_id TEXT NOT NULL,turn_id TEXT,response_id TEXT,
-    at TEXT NOT NULL,project TEXT,model TEXT,effort TEXT,kind TEXT NOT NULL,signature TEXT,
-    ${tokenFields.map(k=>k+' INTEGER').join(',')},incomplete INTEGER NOT NULL DEFAULT 0,excluded INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(file,event_key));
-    INSERT INTO usage_events(file,event_key,thread_id,at,kind,total_tokens,active) VALUES('old','event','thread','${at}','record',${tokenSql},1);`);
-  db.close();
-}
-test('INTEGER-to-TEXT migration preserves full int64 digits, identity, activity and indexes across restart',()=>migrationFixture(async file=>{
-  oldDatabase(file,'9223372036854775807'); let store=new Store(file);
-  try {
-    assert.equal(store.one('SELECT typeof(total_tokens) t FROM usage_events')!.t,'text');assert.equal(new Queries(store).summary().totalTokens,'9223372036854775807');
-    assert.equal(store.one("SELECT COUNT(*) n FROM sqlite_master WHERE type='index' AND tbl_name='usage_events'")!.n,9n);
-    store.close();store=new Store(file);assert.equal(new Queries(store).summary().eventCount,1);
-    add(store,'new',{total_tokens:String(2n**127n)});assert.equal(new Queries(store).summary().totalTokens,String(2n**127n+9223372036854775807n));
-  } finally {store.close();}
-}));
-test('migration refuses rounded REAL and preserves the old row for source-based recovery',()=>migrationFixture(async file=>{
-  oldDatabase(file,'1e30');assert.throws(()=>new Store(file),{code:'TOKEN_TEXT_MIGRATION_REQUIRED'});
-  const db=new DatabaseSync(file,{readOnly:true});try{assert.equal(db.prepare('SELECT typeof(total_tokens) t FROM usage_events').get()!.t,'real');assert.equal(db.prepare('SELECT COUNT(*) n FROM usage_events').get()!.n,1);}finally{db.close();}
+
+test('old local storage is refused without migrating or deleting its rows',()=>oldStorageFixture(async file=>{
+  const db=new DatabaseSync(file);db.exec("CREATE TABLE previous_data(value TEXT); INSERT INTO previous_data VALUES('retained')");db.close();
+  assert.throws(()=>new Store(file),{code:'LOCAL_SCHEMA_MISMATCH'});
+  const original=new DatabaseSync(file,{readOnly:true});try{assert.equal(original.prepare('SELECT value FROM previous_data').get()!.value,'retained');}finally{original.close();}
 }));

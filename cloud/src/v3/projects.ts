@@ -123,19 +123,6 @@ export async function prepareProjectDeletion(db:D1Database,h:Domain,deviceId:str
   return prepareEntities(db,h,current,[db.prepare('DELETE FROM v3_project_sessions WHERE user_id=? AND source_project_id IN(SELECT source_project_id FROM v3_project_sources WHERE user_id=? AND device_id=?)').bind(h.user_id,h.user_id,deviceId),db.prepare('DELETE FROM v3_project_sources WHERE user_id=? AND device_id=?').bind(h.user_id,deviceId)]);
 }
 
-/** A legacy baseline has many collectors. Compute its project organization once. */
-export async function prepareLegacyProjects(db:D1Database,h:Domain,sources:{collector_id:string;device_id:string;project_id:string|null;project_name:string|null}[]):Promise<ProjectPreparation>{
-  const current=await loadCurrent(db,h.user_id),rows=new Map(current.sources.map(row=>[row.source_project_id,row])),touched=new Map<string,SourceRow>();
-  for(const source of sources){if(!source.project_id)continue;const id=await cloudSourceProjectId(source.collector_id,source.project_id),row:SourceRow={source_project_id:id,collector_id:source.collector_id,local_source_id:source.project_id,device_id:source.device_id,metadata:stableJson({kind:'unresolved',name:source.project_name,root:source.project_name,reason:'legacy-path'})};
-    const prior=rows.get(id);if(prior&&(prior.collector_id!==row.collector_id||prior.local_source_id!==row.local_source_id))fail(409,'PROJECT_ID_COLLISION','项目来源身份冲突。');
-    if(!prior||stableJson(prior)!==stableJson(row))touched.set(id,row);rows.set(id,row);
-  }
-  if(!touched.size)return {statements:[],changes:[],organizationChanged:false};
-  current.sources=[...rows.values()];
-  const statements=chunks([...touched.values()]).map(group=>db.prepare(`INSERT INTO v3_project_sources(user_id,source_project_id,collector_id,local_source_id,device_id,metadata) SELECT ?,json_extract(value,'$.source_project_id'),json_extract(value,'$.collector_id'),json_extract(value,'$.local_source_id'),json_extract(value,'$.device_id'),json_extract(value,'$.metadata') FROM json_each(?) WHERE true ON CONFLICT(user_id,source_project_id) DO UPDATE SET metadata=excluded.metadata`).bind(h.user_id,stableJson(group)));
-  return prepareEntities(db,h,current,statements);
-}
-
 export async function projectView(db:D1Database,user:string,leaseId?:string){
   const lease=await getRead(db,user,leaseId||(await createRead(db,user,'full',[])).lease_id);
   const rows=(await db.prepare(`SELECT entity_id,revision,payload FROM v3_entity_versions WHERE user_id=? AND epoch=? AND kind='project' AND valid_from<=? AND (valid_to IS NULL OR ?<valid_to) AND payload IS NOT NULL ORDER BY entity_id`).bind(user,lease.epoch,lease.cut,lease.cut).all<EntityRow>()).results;

@@ -14,7 +14,7 @@ import {
   token,
 } from "./http";
 
-export type User = { id: string; login: string; next_upload_at: number };
+export type User = { id: string; login: string };
 type GithubToken = { access_token?: unknown };
 type GithubUser = { id?: unknown; login?: unknown };
 const SESSION_SECONDS = 30 * 24 * 60 * 60;
@@ -24,7 +24,7 @@ export async function sessionUser(request: Request, env: Env): Promise<User> {
   if (!value || !/^[A-Za-z0-9_-]{43}$/.test(value))
     return fail(401, "LOGIN_REQUIRED", "请先登录。");
   const user = await env.DB.prepare(
-    "SELECT u.id,u.login,u.next_upload_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
+    "SELECT u.id,u.login FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
   )
     .bind(await sha256(value), Date.now())
     .first<User>();

@@ -1,4 +1,5 @@
 import { Value } from '@sinclair/typebox/value';
+import { FormatRegistry } from '@sinclair/typebox';
 import { DateTime } from 'luxon';
 import { FilterSchema, SettingsSchema, type Filter, type Settings } from '../../../shared/contracts';
 import { QueryEngine, queryStore, type Statement, type QueryFilter } from '../../../shared/query-engine';
@@ -10,8 +11,9 @@ import { defaultSettings } from './defaults';
 import { resolveReadSettings } from './timezone';
 
 export { defaultSettings } from './defaults';
+FormatRegistry.Set('date-time', value => /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value)));
 export async function loadSettings(db:D1Database,user:string):Promise<Settings> {
-  const row=await db.prepare('SELECT COALESCE((SELECT payload FROM v3_settings WHERE user_id=u.id),u.settings) payload FROM users u WHERE u.id=?').bind(user).first<{payload:string|null}>();
+  const row=await db.prepare('SELECT payload FROM v3_settings WHERE user_id=?').bind(user).first<{payload:string|null}>();
   const value={...defaultSettings,...(row?.payload?JSON.parse(row.payload):{})};return value;
 }
 export function queryScope():string {

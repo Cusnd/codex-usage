@@ -1,6 +1,5 @@
 // Public cloud protocol. Keep this module independent of local storage and login data.
 export const CLOUD_ORIGIN = "https://quota.esoren.com";
-export const CLOUD_SYNC_MIN_MS = 60_000;
 export const CLOUD_MAX_BODY_BYTES = 65_536;
 export type CloudWindow = {
   usedPercent: number | null;
@@ -35,7 +34,7 @@ export const cloudErrorCodes = [
 ] as const;
 export type CloudErrorCode = (typeof cloudErrorCodes)[number];
 export type CloudSnapshot = {
-  schemaVersion: 1;
+  schemaVersion: 3;
   deviceId: string;
   sequence: number;
   accountRef: string | null;
@@ -53,8 +52,7 @@ export type CloudBinding = {
   expiresAt: string;
 };
 export type CloudStatus = {
-  fullUsage?: boolean;
-  usage?: {enabled:boolean;error:string|null;totalThreads:number;pendingThreads:number;lastScanAt:string|null;totalSources?:number;pendingSources?:number;pendingBatches?:number;receivedBatches?:number;received?:{live:number;backfill:number};applied?:{live:number;backfill:number};migrationPending?:number} | null;
+  usage?: {enabled:boolean;error:string|null;totalThreads:number;pendingThreads:number;lastScanAt:string|null;totalSources?:number;pendingSources?:number;pendingBatches?:number;receivedBatches?:number;received?:{live:number;backfill:number};applied?:{live:number;backfill:number}} | null;
   origin: string;
   connected: boolean;
   enabled: boolean;
@@ -70,12 +68,6 @@ export type CloudStatus = {
   running: boolean;
   error: string | null;
 };
-export type CloudDevice = { id: string; name: string; boundAt: string };
-export type CloudQuota = {
-  snapshot: CloudSnapshot | null;
-  receivedAt: string | null;
-};
-
 const object = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v);
 function keys(v: Record<string, unknown>, expected: string[]) {
@@ -136,7 +128,7 @@ export function isCloudSnapshot(v: unknown): v is CloudSnapshot {
   )
     return false;
   if (
-    v.schemaVersion !== 1 ||
+    v.schemaVersion !== 3 ||
     !text(v.deviceId, 64) ||
     !Number.isSafeInteger(v.sequence) ||
     Number(v.sequence) < 1 ||

@@ -1,5 +1,5 @@
 // Runs the real local service with a synthetic account and isolated data for CUA acceptance.
-import { mkdirSync,readFileSync } from "node:fs";
+import { mkdirSync,readFileSync,writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "../dist/server/app.js";
@@ -71,15 +71,20 @@ const reader = {
     },
   }),
 };
-const { app,store } = await createApp({
+const { app,collector } = await createApp({
   database: path.join(root, "usage.sqlite"),
   codexHome: root,
   cloudOrigin: "http://127.0.0.1:18787",
   accountReader: reader,
 });
 const data=JSON.parse(readFileSync(new URL('../cloud/.generated/parity.json',import.meta.url),'utf8')).devices[process.argv[2]||'A'];
-for(const t of data.threads)store.run('INSERT OR REPLACE INTO threads(id,title,project,source,parent_id,subagent_parent_id,forked_from_id) VALUES(?,?,?,?,?,?,?)',[t.id,t.title,t.project,t.source,t.parentId,t.subagentParentId,t.forkedFromId]);
-for(const e of data.events){e.at=new Date(Date.now()-3600000).toISOString();const cols=Object.keys(e);store.run(`INSERT OR REPLACE INTO usage_events(file,active,${cols.join(',')}) VALUES(?,1,${cols.map(()=>'?').join(',')})`,['synthetic.jsonl',...cols.map(k=>k.endsWith('_tokens')&&e[k]!==null?BigInt(e[k]):e[k])]);}
+mkdirSync(path.join(root,'sessions'),{recursive:true});
+for(const t of data.threads){
+  const rows=[{type:'session_meta',timestamp:new Date().toISOString(),payload:{id:t.id,cwd:t.project,source:t.source}}];
+  for(const e of data.events.filter(e=>e.thread_id===t.id&&e.kind==='record'))rows.push({type:'token_usage_record',timestamp:new Date(Date.now()-3600000).toISOString(),payload:{thread_id:e.thread_id,turn_id:e.turn_id,response_id:e.response_id,model:e.model,usage:Object.fromEntries(Object.entries(e).filter(([key])=>key.endsWith('_tokens')))}});
+  writeFileSync(path.join(root,'sessions',t.id+'.jsonl'),rows.map(row=>JSON.stringify(row)).join('\n')+'\n');
+}
+await collector.scan();
 const port=Number(process.argv[3]||8767);await app.listen({port,host:'127.0.0.1'});
 console.log('Synthetic local collector ready: http://127.0.0.1:'+port+'/settings');
 for (const signal of ["SIGINT", "SIGTERM"])

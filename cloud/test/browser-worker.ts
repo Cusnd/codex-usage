@@ -2,54 +2,47 @@
 import worker from "../src/index";
 import { SESSION_COOKIE, setCookie, sha256, token } from "../src/http";
 import { sessionUser } from '../src/auth';
-import { domain } from '../src/v3/store';
-import { advanceJobs } from '../src/v3/jobs';
-import { stableJson } from '../../shared/sync-v3';
+import {initialContext,normalizeTokens} from '../../shared/usage-domain/normalize';
+import { stableJson,EXTRACTOR_VERSION,V3_CONTENT_TYPE } from '../../shared/sync-v3';
+import { SYNC_HEADER, SYNC_VERSION } from '../../shared/cloud-version';
 
-async function legacyFixture(request: Request, env: Env): Promise<Response | null> {
-  const url = new URL(request.url);
-  if (!url.pathname.startsWith('/api/test/legacy')) return null;
-  if (url.pathname === '/api/test/legacy' && request.method === 'GET') return new Response(`<!doctype html><meta charset="utf-8"><title>Local legacy migration fixture</title>
-    <h1>本地完整历史迁移验收</h1><p>每次准备创建新的隔离合成用户：3 个会话、60 条记录、72,000 Tokens；迁移任务暂时暂停。</p>
-    <button id="start">准备完整旧版历史</button> <button id="finish">完成后台迁移</button> <a href="/" target="_blank">打开统计页面</a>
-    <pre id="result"></pre><script>for(const action of ['start','finish'])document.getElementById(action).onclick=async()=>{const result=document.getElementById('result');result.textContent='处理中…';try{const response=await fetch('/api/test/legacy/'+action,{method:'POST'});result.textContent=JSON.stringify(await response.json(),null,2);}catch(e){result.textContent=String(e);}};</script>`, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
-  if (request.method !== 'POST' || request.headers.get('Origin') !== url.origin) return new Response('Local same-origin POST required', { status: 403 });
-  if (url.pathname === '/api/test/legacy/start') {
-    const user = 'legacy-browser-fixture-' + crypto.randomUUID(), device = crypto.randomUUID(), at = new Date(Date.now() - 3600_000).toISOString();
+async function versionFixture(request:Request,env:Env):Promise<Response|null> {
+  const url=new URL(request.url),base='/api/test/version';
+  if(!url.pathname.startsWith(base))return null;
+  if(url.pathname===base&&request.method==='GET')return new Response(`<!doctype html><meta charset="utf-8"><title>V3 version test</title>
+    <h1>当前 v3 版本验收</h1><p>使用空数据库和合成日志，通过真实 v3 接口同步 72,000 Tokens。</p>
+    <button id="start">创建未上报设备</button><button id="match">匹配版本并同步</button><button id="old">上报旧版本</button><a href="/" target="_blank">打开统计页面</a>
+    <pre id="result"></pre><script>for(const action of ['start','match','old'])document.getElementById(action).onclick=async()=>{try{const response=await fetch('/api/test/version/'+action,{method:'POST'});document.getElementById('result').textContent=JSON.stringify(await response.json(),null,2);}catch(e){document.getElementById('result').textContent=String(e);}};</script>`,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+  if(request.method!=='POST'||request.headers.get('Origin')!==url.origin)return new Response('Same-origin POST required',{status:403});
+  if(url.pathname===base+'/start'){
+    const id='v3-browser-'+crypto.randomUUID(),session=token();
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO users(id,github_id,login,created_at,settings) VALUES(?,?,?,?,?)').bind(user,user,'legacy-browser-fixture',Date.now(),stableJson({ localInterval: 0, accountInterval: 0, timezoneMode: 'manual', timezone: 'UTC' })),
-      env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at,protocol,collected_at,received_at,total_threads,initial_complete) VALUES(?,?,?,?,?,2,?,?,3,1)').bind(device,user,'Synthetic legacy device',await sha256(token()),Date.now(),at,Date.now()),
+      env.DB.prepare('INSERT INTO users(id,github_id,login,created_at) VALUES(?,?,?,?)').bind(id,id,'v3-fixture',Date.now()),
+      env.DB.prepare('INSERT INTO devices(id,user_id,name,token_hash,bound_at) VALUES(?,?,?,?,?)').bind(id,id,'合成 v3 采集设备',await sha256(token()),Date.now()),
+      env.DB.prepare('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await sha256(session),id,Date.now()+86400000),
     ]);
-    for (let i = 0; i < 3; i++) {
-      const thread = { id: 'legacy-session-' + i, title: '完整历史演示 ' + (i + 1), titleUpdatedAt: null, project: '/fixture/legacy-project', source: 'cli', parentId: null, subagentParentId: null, forkedFromId: null };
-      const manifest = { schemaVersion: 2, datasetId: 'fixture-dataset', thread, revision: 1, parserVersion: 1, collectedAt: at, eventCount: 20, chunkCount: 1, contentHash: '0'.repeat(64) };
-      await env.DB.batch([
-        env.DB.prepare("INSERT INTO usage_revisions(user_id,device_id,dataset_id,thread_id,revision,parser_version,collected_at,manifest,received_at,committed) VALUES(?,?,'fixture-dataset',?,1,1,?,?,?,1)").bind(user,device,thread.id,at,stableJson(manifest),Date.now()),
-        env.DB.prepare("INSERT INTO usage_records(user_id,device_id,dataset_id,thread_id,revision,event_key,turn_id,response_id,at,project,model,kind,incomplete,input_tokens,output_tokens,total_tokens) SELECT ?,?,'fixture-dataset',?,1,value,'turn-'||value,?||'-'||value,?,?,'gpt-5','record',0,1000,200,1200 FROM json_each(?)").bind(user,device,thread.id,thread.id,at,thread.project,stableJson(Array.from({ length: 20 }, (_, j) => thread.id + '-event-' + j))),
-        env.DB.prepare("INSERT INTO usage_heads(user_id,device_id,dataset_id,thread_id,revision) VALUES(?,?,'fixture-dataset',?,1)").bind(user,device,thread.id),
-      ]);
-    }
-    await domain(env.DB,user);
-    await env.DB.prepare("UPDATE v3_jobs SET next_attempt_at=? WHERE user_id=? AND job_id='legacy-migrate'").bind(Date.now()+86400000,user).run();
-    const session = token(); await env.DB.prepare('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await sha256(session),user,Date.now()+86400000).run();
-    return Response.json({ fixture: true, user, expected: { threads: 3, events: 60, totalTokens: '72000' }, migration: 'paused', stats: '/' }, { headers: { 'Set-Cookie': setCookie(SESSION_COOKIE,session,86400) } });
+    return Response.json({created:true},{headers:{'Set-Cookie':setCookie(SESSION_COOKIE,session,86400)}});
   }
-  if (url.pathname === '/api/test/legacy/finish') {
-    const user = await sessionUser(request,env); if (!user.id.startsWith('legacy-browser-fixture-')) return new Response('Start this fixture first', { status: 409 });
-    await env.DB.prepare("UPDATE v3_jobs SET next_attempt_at=0 WHERE user_id=? AND job_id='legacy-migrate'").bind(user.id).run();
-    await advanceJobs(env.DB,{ user: user.id, maxSteps: 40, budgetMs: 8000 });
-    const state = await domain(env.DB,user.id);
-    const events = await env.DB.prepare("SELECT COUNT(*) count,CAST(SUM(json_extract(payload,'$.total_tokens')) AS TEXT) total FROM v3_events WHERE user_id=? AND epoch=?").bind(user.id,state.active_epoch).first();
-    return Response.json({ fixture: true, complete: state.mode==='ready'&&!state.legacy_baseline_pending, state, events });
+  const user=await sessionUser(request,env);if(!user.id.startsWith('v3-browser-'))return new Response('Synthetic user required',{status:403});
+  const credential='v'.repeat(43);await env.DB.prepare('UPDATE devices SET token_hash=? WHERE id=?').bind(await sha256(credential),user.id).run();
+  const headers={Authorization:'Bearer '+credential,[SYNC_HEADER]:url.pathname===base+'/old'?'3.1.1':SYNC_VERSION};
+  const handshake=await worker.fetch(new Request(url.origin+'/api/v3/collector/handshake',{method:'POST',headers}),env);
+  if(url.pathname===base+'/old'||!handshake.ok)return handshake;
+  const context={...initialContext('test-thread'),turn_id:'test-turn',model:'gpt-6-astra'},record={type:'token_usage_record',timestamp:new Date().toISOString(),payload:{thread_id:'test-thread',turn_id:'test-turn',response_id:'test-response',usage:normalizeTokens({input_tokens:'70000',output_tokens:'2000',total_tokens:'72000'})}};
+  if(!await env.DB.prepare('SELECT 1 FROM v3_receipts WHERE user_id=? LIMIT 1').bind(user.id).first()){
+    const records=[{observation_id:await sha256(stableJson([user.id,'source',1,0])),record_revision:1,source_id:'source',generation:1,locator:0,byte_end:100,prefix_hash:await sha256(stableJson(record)),session_trusted:true,origin:{kind:'execution' as const,device_id:user.id},context,record}];
+    const batch={protocol:3,schema_version:1,extractor_version:EXTRACTOR_VERSION,collector_id:user.id,producer_epoch:'test-epoch',lane:'live',lane_seq:1,batch_id:crypto.randomUUID(),records_hash:await sha256(stableJson(records)),records,metadata:[],sources:[{source_id:'source',generation:1,kind:'session',from_cursor:0,to_cursor:100,snapshot_eof:100,context_hash:await sha256(stableJson(context)),context,replace_start:true,replace_end:true,generation_complete:true,available:true,trailing_bytes:0}]};
+    const wire=await new Response(new Blob([stableJson(batch)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+    return worker.fetch(new Request(url.origin+'/api/v3/ingest',{method:'POST',headers:{...headers,'Content-Type':V3_CONTENT_TYPE},body:wire}),env);
   }
-  return new Response('Not found', { status: 404 });
+  return handshake;
 }
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (!["127.0.0.1", "localhost"].includes(url.hostname))
       return new Response("Local fixture only", { status: 403 });
-    const fixture = await legacyFixture(request,env); if (fixture) return fixture;
+    const fixture = await versionFixture(request,env); if (fixture) return fixture;
     if (url.pathname === "/auth/github") {
       const id = "browser-fixture-user";
       await env.DB.prepare(
