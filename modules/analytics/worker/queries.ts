@@ -5,7 +5,7 @@ import { QueryEngine, queryStore, type Statement, type QueryFilter } from "../qu
 import { pricingInfo } from "../../settings/pricing.js";
 import { stableJson } from "../../contracts/sync.js";
 import { fail } from "../../platform/worker/http.js";
-import { createRead, getRead, type ReadLease } from "../../sync/reads/snapshots.js";
+import { createRead, getRead } from "../../sync/reads/snapshots.js";
 import { resolveReadSettings } from "../../settings/read-settings.js";
 import { executeV3Query } from "./executor.js";
 
@@ -15,7 +15,7 @@ FormatRegistry.Set('date-time', value => /^\d{4}-\d\d-\d\dT/.test(value) && Numb
 
 export async function queryUsage(db:D1Database,user:string,url:URL,route:string) {
   let leaseId=url.searchParams.get('lease_id');if(!leaseId)leaseId=(await createRead(db,user,'full',[...new Set(url.searchParams.getAll('deviceIds'))])).lease_id;
-  const lease:ReadLease=await getRead(db,user,leaseId),settings=resolveReadSettings(lease.settings,url),p=Object.fromEntries(url.searchParams),f:QueryFilter={};
+  const lease=await getRead(db,user,leaseId,'settings'),settings=resolveReadSettings(lease.settings,url),p=Object.fromEntries(url.searchParams),f:QueryFilter={};
   for(const key of ['from','to','project','model','effort','threadId','unknown'] as const)if(p[key]!==undefined)(f as Record<string,unknown>)[key]=p[key];
   if(url.searchParams.has('unknowns'))f.unknowns=url.searchParams.getAll('unknowns') as Filter['unknowns'];
   if(!Value.Check(FilterSchema,f)||[f.from,f.to].some(v=>v&&!Number.isFinite(Date.parse(v)))||f.from&&f.to&&Date.parse(f.from)>=Date.parse(f.to)||[...(f.unknown?[f.unknown]:[]),...(f.unknowns||[])].some(k=>(f as any)[k]!==undefined))fail(400,'INVALID_FILTER','筛选范围无效。');

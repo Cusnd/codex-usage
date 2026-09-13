@@ -20,9 +20,10 @@ export function LocalTrend() {
   const r = useRange();
   const bucket = r.bucket;
   const q = useData<TrendRow[]>("local/trend", { ...r.filters, bucket });
-  const [displayed, setDisplayed] = useState<{ rows: TrendRow[]; bucket: typeof bucket }>();
-  if (q.data && !q.isPlaceholderData && (displayed?.rows !== q.data.data || displayed.bucket !== bucket))
+  const [localDisplayed, setDisplayed] = useState<{ rows: TrendRow[]; bucket: typeof bucket }>();
+  if (!deviceScope && q.data && !q.isPlaceholderData && (localDisplayed?.rows !== q.data.data || localDisplayed.bucket !== bucket))
     setDisplayed({ rows: q.data.data, bucket });
+  const displayed = deviceScope ? (q.data ? { rows: q.data.data, bucket } : undefined) : localDisplayed;
   return (
     <section className="panel overview-trend">
       <div className="panel-heading">

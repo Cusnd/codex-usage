@@ -6,6 +6,8 @@ const iso=(value:number|null|undefined)=>value==null?null:new Date(value).toISOS
  * active cloud history even while a source is unavailable or its replacement is incomplete.
  * totalThreads is only the latest collector report, not a denominator for either count. */
 export async function deviceViews(db:D1Database,user:string):Promise<(CloudSource&{historyDeleting:boolean;deletionStatus:'retained'|'deleting'|'deleted'|'failed';appliedAt:string|null;sourceCounts:{known:number;complete:number;unavailable:number;pendingBatches:number}})[]> {
+  // The active coverage index resolves each MIN/MAX at one ordered boundary,
+  // without scanning candidate payloads or aggregating a device's full history.
   const rows=(await db.prepare(`SELECT d.*,
     (SELECT MAX(r.received_at) FROM v3_receipts r WHERE r.user_id=d.user_id AND r.device_id=d.id) v3_received,
     (SELECT MAX(r.applied_at) FROM v3_receipts r WHERE r.user_id=d.user_id AND r.device_id=d.id AND r.status='applied') v3_applied,

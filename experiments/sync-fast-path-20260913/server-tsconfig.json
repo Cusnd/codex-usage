@@ -1,0 +1,5 @@
+{
+  "extends":"../../cloud/tsconfig.deploy.json",
+  "compilerOptions":{"types":["node"],"typeRoots":["../../node_modules/@types"]},
+  "include":["server-worker.ts","../../cloud/worker-configuration.d.ts","../../apps/cloud/**/*.d.ts"]
+}

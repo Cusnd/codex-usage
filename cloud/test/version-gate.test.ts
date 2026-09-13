@@ -86,6 +86,33 @@ it('does not disclose device versions without a session or let an invalid creden
   expect(await env.DB.prepare('SELECT COUNT(*) n FROM device_sync_versions WHERE device_id=?').bind(f.device).first('n')).toBe(0);
 });
 
+it('bootstraps compatibility with the authenticated identity while preserving version and user isolation',async()=>{
+  const a=await fixture(),b=await fixture();
+  await a.handshake();
+  const read=async(actor:typeof a,version:string|null=SYNC_VERSION)=>{
+    const response=await actor.call('/api/v3/me?bootstrap=1',{version});
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    return response.json<{user:{id:string};compatibility:{compatible:boolean;browserVersion:string|null;devices:{id:string}[]}}>();
+  };
+  const first=await read(a),second=await read(b);
+  expect(first.user.id).toBe(a.user);
+  expect(first.compatibility.compatible).toBe(true);
+  expect(first.compatibility.devices.map(d=>d.id)).toEqual([a.device]);
+  expect(second.user.id).toBe(b.user);
+  expect(second.compatibility.compatible).toBe(false);
+  expect(second.compatibility.devices.map(d=>d.id)).toEqual([b.device]);
+  for(const version of [null,'3.1.1']) {
+    const stale=await read(a,version);
+    expect(stale.compatibility.compatible).toBe(false);
+    expect(stale.compatibility.browserVersion).toBe(version);
+  }
+  expect(await (await a.call('/api/v3/me')).json()).toEqual({user:{id:a.user,login:'version-test'}});
+  const anonymous=await worker.fetch(new Request(origin+'/api/v3/me?bootstrap=1'),env);
+  expect(anonymous.status).toBe(401);
+  expect(await anonymous.json()).not.toHaveProperty('compatibility');
+});
+
 it('requires a new version handshake after a device credential is replaced',async()=>{
   const f=await fixture();await f.handshake();
   await env.DB.prepare('UPDATE devices SET token_hash=? WHERE id=?').bind(await sha256(token()),f.device).run();

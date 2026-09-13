@@ -1,0 +1,5 @@
+{
+  "extends": "../../cloud/tsconfig.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["worker.ts", "telemetry.ts", "env.d.ts", "../../cloud/worker-configuration.d.ts"]
+}

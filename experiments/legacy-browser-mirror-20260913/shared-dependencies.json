@@ -1,0 +1,46 @@
+[
+  {
+    "path": "modules/contracts/sync.ts",
+    "sha256": "4bcbc2e9e190e3ea70d4399172e6926593b6a55e981cd301d6a00f9846880205"
+  },
+  {
+    "path": "modules/contracts/cloud-version.ts",
+    "sha256": "582079eebadd10b02b315f85addbe3ec948c72fdf36e0bc1680e9e6f2fe8e016"
+  },
+  {
+    "path": "modules/contracts/sync-version.ts",
+    "sha256": "2e2f5c68a03aa9891c3512ac28aeaa9da12ff068b78549ec0875974cbc546b56"
+  },
+  {
+    "path": "modules/contracts/responses.ts",
+    "sha256": "9140fd6a68f51b3f691b1874f31b038016d4444d3d274418e494c56b9138c8ad"
+  },
+  {
+    "path": "modules/contracts/settings.ts",
+    "sha256": "8c8130b49c199e1a74e457f61a6b2c0df5dd189e379be2ca651a05ff9a801351"
+  },
+  {
+    "path": "modules/contracts/primitives.ts",
+    "sha256": "f0deea77494b581c6849f5e44c4323ebd4776994ddc2a1b63dd366e3207061df"
+  },
+  {
+    "path": "modules/foundation/stable-json.ts",
+    "sha256": "96049ae2a89f07520b1054d02175aa51bab0a181d82260af2082daa9789a6bec"
+  },
+  {
+    "path": "modules/foundation/query-parameters.ts",
+    "sha256": "a9308d4d1bb3bcd18f2cdff0c2230a61faf35320d51a4ecf393be97470e15ab5"
+  },
+  {
+    "path": "modules/analytics/revision.ts",
+    "sha256": "fa9ce6f9e8b233fc40f0b9ba56496be17e1bbc4913fe81d781947acda242d119"
+  },
+  {
+    "path": "tooling/generated/build-version.ts",
+    "sha256": "db160ccb7ebf4091fd6054a6aa1f9ccb74227f5fc1d174376990c51a1150bf55"
+  },
+  {
+    "path": "package-lock.json",
+    "sha256": "a35a04e2ce3aa6f5445193f6408dbab9f195d768bb4c4f2365ab14c95904a6a8"
+  }
+]

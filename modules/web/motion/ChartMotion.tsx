@@ -1,12 +1,12 @@
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { Area, Bar, usePlotArea, useXAxisScale, useYAxisScale } from "recharts";
+import { Area, usePlotArea, useXAxisScale, useYAxisScale } from "recharts";
 import { animateMotion, cancelMotion, motion, useReducedMotion } from "./motion.js";
 import { chartTransition, settlePlot, type ChartSnapshot, type PlotSnapshot, type ResultMotion } from "./motion-state.js";
 import { createCurveInterpolator, curveEase, preserveCurvePoints } from "./curve-interpolation.js";
 
-type PlotMotion = { change: ResultMotion; series: string; points: readonly { time: string; value: number }[] };
+export type PlotMotion = { change: ResultMotion; series: string; points: readonly { time: string; value: number }[] };
 
-function usePlotMotion({ change, series, points }: PlotMotion, continuous = false) {
+export function usePlotMotion({ change, series, points }: PlotMotion, continuous = false) {
   const layer = `motion-plot-${useId().replace(/[^a-z0-9]/gi, "")}`;
   const reduced = useReducedMotion();
   const x = useXAxisScale(), y = useYAxisScale(), area = usePlotArea();
@@ -48,14 +48,6 @@ function usePlotMotion({ change, series, points }: PlotMotion, continuous = fals
     ref, kind, active, layer,
     start, end,
   };
-}
-
-export function MotionBar({ change, series, points, ...props }: Omit<ComponentProps<typeof Bar>, keyof PlotMotion> & PlotMotion) {
-  const plot = usePlotMotion({ change, series, points });
-  return <g ref={plot.ref} data-chart-transition={plot.kind}>
-    <Bar {...props} className={`${props.className || ""} ${plot.layer}`} isAnimationActive={plot.active} animationDuration={motion.chart} animationEasing="ease-out"
-      onAnimationStart={plot.start} onAnimationEnd={plot.end} />
-  </g>;
 }
 
 export function MotionArea({ change, series, points, ...props }: Omit<ComponentProps<typeof Area>, keyof PlotMotion> & PlotMotion) {

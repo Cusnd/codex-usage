@@ -11,8 +11,8 @@ import {
 import { v3Route } from './routes.js';
 import { advanceJobs } from '../../modules/sync/jobs/jobs.js';
 import { cleanupVersions } from '../../modules/sync/reads/snapshots.js';
-import { versionGate } from './version-gate.js';
-import { BUILD_VERSION, PACKAGE_VERSION, SYNC_VERSION } from '../../modules/contracts/cloud-version.js';
+import { compatibility, versionGate } from './version-gate.js';
+import { BUILD_VERSION, PACKAGE_VERSION, SYNC_HEADER, SYNC_VERSION } from '../../modules/contracts/cloud-version.js';
 
 export async function cleanup(env: Env, now = Date.now()) {
   await env.DB.batch([
@@ -55,7 +55,13 @@ export default {
         return fail(403, "INVALID_ORIGIN", "请使用已配置的云端地址。");
       if (pathname === "/api/v3/me" && request.method === "GET") {
         const user = await sessionUser(request, env);
-        return json({ user: { id: user.id, login: user.login } });
+        // Bootstrap binds identity and compatibility to the same authenticated
+        // request, removing a browser round trip without trusting a cached user.
+        return json({ user: { id: user.id, login: user.login },
+          ...(url.searchParams.get('bootstrap') === '1'
+            ? { compatibility: await compatibility(env, user.id, request.headers.get(SYNC_HEADER)) }
+            : {}),
+        });
       }
       if (pathname === "/api/v3/me" && request.method === "DELETE") {
         requireSameOrigin(request, env);

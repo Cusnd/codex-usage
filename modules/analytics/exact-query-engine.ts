@@ -7,10 +7,14 @@ import type { QueryStore, SQLInputValue, Statement } from './plan.js';
 export const EXACT_EVENT_PAGE_SIZE = 512;
 const I64_MAX = 9223372036854775807n;
 export type SqlWhere = { sql: string; params: SQLInputValue[] };
-export type BucketPlan = { expression: string; join: string; params: SQLInputValue[] };
+export type BucketPlan = { expression: string; params: SQLInputValue[] };
 export type AggregateRow = Record<string, any>;
 const metadata = ['event_key', 'thread_id', 'turn_id', 'at', 'project', 'model', 'effort', 'kind', 'incomplete', 'service_tier', 'service_tier_source'];
 export const numericEvents = `(SELECT ${metadata.join(',')},${tokenFields.map(k => `CAST(${k} AS INTEGER) ${k}`).join(',')} FROM effective_events)`;
+/** Keep buckets outside the indexed event lookup, including when a date filter is present. */
+export function bucketedEvents(source: string, bucket?: BucketPlan): string {
+  return bucket ? `json_each(?) usage_bucket CROSS JOIN ${source} ON at>=json_extract(usage_bucket.value,'$.s') AND at<json_extract(usage_bucket.value,'$.e')` : source;
+}
 const exactText = (value: unknown): string => {
   if (typeof value === 'bigint') return value.toString();
   if (typeof value === 'number') {
@@ -65,7 +69,7 @@ export function* timeBucketPlan(store: QueryStore, where: SqlWhere, unit: 'hour'
       if (buckets.length > 20000) throw Object.assign(new Error('Please narrow the hourly trend range or use daily buckets.'), { code: 'RANGE_TOO_WIDE' });
     }
   }
-  return { expression: "json_extract(usage_bucket.value,'$.label')", join: "JOIN json_each(?) usage_bucket ON at>=json_extract(usage_bucket.value,'$.s') AND at<json_extract(usage_bucket.value,'$.e')", params: [JSON.stringify(buckets)] };
+  return { expression: "json_extract(usage_bucket.value,'$.label')", params: [JSON.stringify(buckets)] };
 }
 
 type Accumulator = {
@@ -145,7 +149,7 @@ export function* scanAggregates(store: QueryStore, where: SqlWhere, expressions:
     }
     const sqlWhere = where.sql + (conditions.length ? `${where.sql ? ' AND' : 'WHERE'} (${conditions.join(' OR ')})` : '');
     const rows = yield* store.all(`SELECT ${metadata.join(',')},${tokenFields.map(k => `CAST(${k} AS TEXT) ${k}`).join(',')}${expressions.map((e, i) => `,${e} __g${i}`).join('')}${order.map((e, i) => `,${e} __cursor${i}`).join('')}
-      FROM effective_events ${bucket?.join ?? ''} ${sqlWhere} ORDER BY ${order.join(',')} LIMIT ?`, [...(bucket?.params ?? []), ...where.params, ...cursorParams, EXACT_EVENT_PAGE_SIZE]);
+      FROM ${bucketedEvents('effective_events', bucket)} ${sqlWhere} ORDER BY ${order.join(',')} LIMIT ?`, [...(bucket?.params ?? []), ...where.params, ...cursorParams, EXACT_EVENT_PAGE_SIZE]);
     if (!rows.length) break;
     for (const row of rows) {
       const key = JSON.stringify(expressions.map((_, i) => row['__g' + i] ?? null));

@@ -7,7 +7,7 @@ import { type EntityKind } from '../../modules/contracts/sync.js';
 import { acknowledge, assertWritableDevice, currentDevice, cutOf, domain, endGuard, guard, readAcknowledgement, receive, receipt } from '../../modules/sync/publication/store.js';
 import { readUpload } from '../../modules/sync/apply/codec.js';
 import { advanceJobs } from '../../modules/sync/jobs/jobs.js';
-import { changes, createRead, entities, getRead, manifest } from '../../modules/sync/reads/snapshots.js';
+import { changes, createRead, createPageRead, renewPageRead, entities, getRead, manifest } from '../../modules/sync/reads/snapshots.js';
 import { queryUsage } from '../../modules/analytics/worker/queries.js';
 import { deviceViews } from '../../modules/accounts/worker/devices.js';
 import { projectRoute } from '../../modules/organization/worker/projects.js';
@@ -49,6 +49,28 @@ export async function v3Route(request:Request,env:Env,path:string,ctx?:Execution
   const user=await sessionUser(request,env);
   const project=await projectRoute(request,env,path,user.id);if(project)return project;
   const origin=await originRoute(request,env,path,user.id);if(origin)return origin;
+  if(path==='/api/v3/view'){
+    if(request.method!=='POST')throw new HttpError(405,'METHOD_NOT_ALLOWED','此页面读取操作需要 POST。',{Allow:'POST'});
+    requireSameOrigin(request,env);requireJson(request);const body=await readJson(request,16384);
+    if(!ownKeys(body,['device_ids'])||(body as {device_ids?:unknown}).device_ids!==undefined&&!Array.isArray((body as {device_ids?:unknown}).device_ids))fail(400,'INVALID_SCOPE','设备范围无效。');
+    return json(await createPageRead(env.DB,user.id,(body as {device_ids?:string[]}).device_ids),201);
+  }
+  const viewRenew=/^\/api\/v3\/view\/([^/]+)\/renew$/.exec(path);
+  if(viewRenew){
+    if(request.method!=='POST')throw new HttpError(405,'METHOD_NOT_ALLOWED','此页面读取操作需要 POST。',{Allow:'POST'});
+    requireSameOrigin(request,env);
+    // Network POSTs can expose an empty stream even without a payload. Treat
+    // only actual bytes as a JSON body, while retaining the bounded reader.
+    let hasBytes=false;
+    const body=request.body?.pipeThrough(new TransformStream<Uint8Array,Uint8Array>({
+      transform(chunk,controller){if(!hasBytes&&chunk.byteLength){requireJson(request);hasBytes=true;}controller.enqueue(chunk);},
+      flush(controller){if(!hasBytes)controller.enqueue(new TextEncoder().encode('{}'));},
+    }));
+    if(!ownKeys(await readJson(new Response(body??'{}',{headers:request.headers}),2048),[]))fail(400,'INVALID_INPUT','续期不接受新的读取范围。');
+    let id:string;try{id=decodeURIComponent(viewRenew[1]);}catch{return fail(400,'INVALID_INPUT','读取标识无效。');}
+    if(!id||id.length>256)fail(400,'INVALID_INPUT','读取标识无效。');
+    return json(await renewPageRead(env.DB,user.id,id));
+  }
   if(path==='/api/v3/sync/status'&&request.method==='GET'){
     if(ctx){const status=await syncStatus(env.DB,user.id);ctx.waitUntil(advanceJobs(env.DB,{user:user.id,maxSteps:200,maxQueries:800,budgetMs:20000}).catch(()=>{
       console.error(JSON.stringify({event:'v3_background_job_failed'}));
@@ -61,13 +83,13 @@ export async function v3Route(request:Request,env:Env,path:string,ctx?:Execution
   }
   const readMatch=/^\/api\/v3\/sync\/read\/([^/]+)\/(manifest|entities|renew)$/.exec(path);
   if(readMatch){const id=decodeURIComponent(readMatch[1]);if(readMatch[2]==='manifest'&&request.method==='GET')return json(await manifest(env.DB,user.id,id,url.searchParams.get('cursor'),Number(url.searchParams.get('limit')||200)));
-    if(request.method==='POST'){requireSameOrigin(request,env);if(readMatch[2]==='renew'){const r=await getRead(env.DB,user.id,id),expires=Math.min(r.max_expires_at,Date.now()+900000);await env.DB.prepare('UPDATE v3_read_leases SET expires_at=? WHERE user_id=? AND lease_id=?').bind(expires,user.id,id).run();return json({lease_id:id,expires_at:new Date(expires).toISOString()});}
-      requireJson(request);const b=await readJson(request,65536);if(!ownKeys(b,['entities'],['entities']))fail(400,'INVALID_ENTITIES','实体请求无效。');const result=await entities(env.DB,user.id,id,(b as {entities:{kind:EntityKind;id:string;revision?:number;hash?:string}[]}).entities),r=await getRead(env.DB,user.id,id),expires=Math.min(r.max_expires_at,Date.now()+900000);await env.DB.prepare('UPDATE v3_read_leases SET expires_at=? WHERE user_id=? AND lease_id=?').bind(expires,user.id,id).run();return json({...result,expires_at:new Date(expires).toISOString()});}
+    if(request.method==='POST'){requireSameOrigin(request,env);if(readMatch[2]==='renew'){const r=await getRead(env.DB,user.id,id,'metadata'),expires=Math.min(r.max_expires_at,Date.now()+900000);await env.DB.prepare('UPDATE v3_read_leases SET expires_at=? WHERE user_id=? AND lease_id=?').bind(expires,user.id,id).run();return json({lease_id:id,expires_at:new Date(expires).toISOString()});}
+      requireJson(request);const b=await readJson(request,65536);if(!ownKeys(b,['entities'],['entities']))fail(400,'INVALID_ENTITIES','实体请求无效。');const result=await entities(env.DB,user.id,id,(b as {entities:{kind:EntityKind;id:string;revision?:number;hash?:string}[]}).entities),r=await getRead(env.DB,user.id,id,'metadata'),expires=Math.min(r.max_expires_at,Date.now()+900000);await env.DB.prepare('UPDATE v3_read_leases SET expires_at=? WHERE user_id=? AND lease_id=?').bind(expires,user.id,id).run();return json({...result,expires_at:new Date(expires).toISOString()});}
   }
   if(path==='/api/v3/sync/changes'&&request.method==='GET')return json(await changes(env.DB,user.id,url.searchParams.get('dataset_epoch')||'',Number(url.searchParams.get('after')||0),Number(url.searchParams.get('limit')||20),url.searchParams.get('lease_id')||undefined));
   if(path.startsWith('/api/v3/usage/')&&request.method==='GET')return json(await queryUsage(env.DB,user.id,url,path.slice('/api/v3/usage/'.length)));
   if(path==='/api/v3/accounts'&&request.method==='GET')return json({user_id:user.id,accounts:await accountViews(env,user.id,[])});
-  if(path==='/api/v3/devices'&&request.method==='GET')return json({devices:(await syncStatus(env.DB,user.id)).devices});
+  if(path==='/api/v3/devices'&&request.method==='GET')return json({devices:await deviceViews(env.DB,user.id)});
   const deviceMatch=/^\/api\/v3\/devices\/([^/]+)(?:\/(history))?$/.exec(path);
   if(deviceMatch){
     const allowed=deviceMatch[2]?['DELETE']:['PATCH','DELETE'];
@@ -78,7 +100,7 @@ export async function v3Route(request:Request,env:Env,path:string,ctx?:Execution
     await env.DB.prepare('UPDATE devices SET revoked_at=COALESCE(revoked_at,?) WHERE user_id=? AND id=?').bind(Date.now(),user.id,id).run();return json({ok:true});
   }
   if(path==='/api/v3/settings'){
-    if(request.method==='GET'){const leaseId=url.searchParams.get('lease_id'),lease=leaseId?await getRead(env.DB,user.id,leaseId):await getRead(env.DB,user.id,(await createRead(env.DB,user.id,'full',[])).lease_id),settings=resolveReadSettings(lease.settings,url),cut={dataset_epoch:lease.epoch,commit_seq:lease.cut,deletion_version:lease.deletion_version,organization_version:lease.organization_version,config_version:lease.config_version};return json({data:settings,meta:{source:'cloud',updatedAt:null,timezone:settings.timezone,warnings:[],cut,lease_id:lease.lease_id},settings,config_version:lease.config_version});}
+    if(request.method==='GET'){const leaseId=url.searchParams.get('lease_id'),lease=leaseId?await getRead(env.DB,user.id,leaseId,'settings'):await getRead(env.DB,user.id,(await createRead(env.DB,user.id,'full',[])).lease_id,'settings'),settings=resolveReadSettings(lease.settings,url),cut={dataset_epoch:lease.epoch,commit_seq:lease.cut,deletion_version:lease.deletion_version,organization_version:lease.organization_version,config_version:lease.config_version};return json({data:settings,meta:{source:'cloud',updatedAt:null,timezone:settings.timezone,warnings:[],cut,lease_id:lease.lease_id},settings,config_version:lease.config_version});}
     if(request.method==='PATCH'){
       requireSameOrigin(request,env);requireJson(request);return json(await updateSettings(env.DB,user.id,await readJson(request,65536)));
     }

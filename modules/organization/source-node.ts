@@ -111,7 +111,7 @@ export class ProjectSourceResolver {
   private readonly resolved = new Map<string, ResolvedProjectSource>();
   private readonly previous = new Map<string, ResolvedProjectSource>();
   private readonly boundaries = new Map<string, string | null>();
-  private readonly repositories = new Map<string, { root: string; evidence: NonNullable<ResolvedProjectSource['git']> }>();
+  private readonly repositories = new Map<string, Promise<{ root: string; evidence: NonNullable<ResolvedProjectSource['git']> }>>();
   private readonly runGit: GitProjectRead;
   constructor(private readonly options: ProjectSourceOptions) {
     if (!options.collectorId) throw new Error('Project resolution needs a collector identity');
@@ -128,6 +128,30 @@ export class ProjectSourceResolver {
     this.map = await readCodexProjectMap(this.options.codexRoot); this.invalidate(); return this.map;
   }
   invalidate(): void { this.resolved.clear(); this.boundaries.clear(); this.repositories.clear(); }
+  /** Refresh independent source metadata with bounded Git work and stable output order. */
+  async resolveMany(inputs: { cwd?: string | null; threadId?: string | null }[]): Promise<ResolvedProjectSource[]> {
+    // Only prefetch repository reads concurrently. Resolve provenance in input
+    // order so an earlier source's historical evidence keeps its original meaning.
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(4, inputs.length) }, async () => {
+      for (;;) {
+        const index = next++; if (index >= inputs.length) return;
+        const cwd = projectPath(inputs[index].cwd); if (!cwd || !nativeAbsolute(cwd)) continue;
+        try {
+          if (!(await stat(cwd)).isDirectory()) continue;
+          const marker = await this.gitBoundary(cwd); if (marker) await this.repository(marker);
+        } catch { /* resolve() records failures using the same provenance rules. */ }
+      }
+    }));
+    const results: ResolvedProjectSource[] = [];
+    for (const input of inputs) results.push(await this.resolve(input));
+    return results;
+  }
+  private repository(marker: string) {
+    const key = projectPath(marker)!; let pending = this.repositories.get(key);
+    if (!pending) { pending = this.gitProject(marker); this.repositories.set(key, pending); }
+    return pending;
+  }
   private async gitBoundary(cwd: string): Promise<string | null> {
     let directory = path.resolve(cwd), marker: string | null = null; const visited: string[] = [];
     for (;;) {
@@ -181,8 +205,10 @@ export class ProjectSourceResolver {
         const marker = await this.gitBoundary(cwd);
         if (marker) {
           const markerKey = projectPath(marker)!;
-          let found = this.repositories.get(markerKey);
-          if (!found) { found = await this.gitProject(marker); this.repositories.set(markerKey, found); }
+          const pending = this.repository(marker);
+          let found: Awaited<typeof pending>;
+          try { found = await pending; }
+          catch (error) { if (this.repositories.get(markerKey) === pending) this.repositories.delete(markerKey); throw error; }
           const { root, evidence } = found;
           if (evidence.primary.status === 'ambiguous') conflicts.push(evidence.primary.reason);
           return finish({ ...base, sourceProjectId: sourceProjectId(this.options.collectorId, 'git', root), kind: 'git', root, name: directoryName(root), git: evidence,

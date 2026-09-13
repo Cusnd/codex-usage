@@ -1,7 +1,6 @@
 import { useApi, useWebRuntime, useCapabilities } from '../runtime/context.js';
 import { CloudDeviceFilter } from '../features/devices/DeviceSettings.js';
 import { CloudBind } from '../features/devices/CloudBind.js';
-import { CloudSyncStatus } from '../features/devices/CloudSyncStatus.js';
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -14,24 +13,32 @@ import {
   RefreshCw,
   Settings2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import type { Settings } from '../../contracts/settings.js';
 import type { Status } from '../../contracts/status.js';
 
-import { AtlasAnalysis, AtlasDetail, AtlasThreads } from "../features/analysis/Atlas.js";
 import { Choice } from "../ui/Choice.js";
 import { useActiveRule } from "../motion/motion.js";
 import { Overview } from "../features/overview/Overview.js";
-import { SettingsPage } from "../features/settings/SettingsPage.js";
 import { ErrorBox, Header, time } from "../widgets/ui.js";
 import { Workspace, defaultSettings } from "../data/workspace.js";
 
 import { beginRefreshMotion, cancelRefreshMotion } from "../motion/motion-state.js";
 
-export function App() {
+const idleSubscribe = () => () => {};
+
+export type AppPages = {
+  Analysis: ComponentType;
+  Threads: ComponentType;
+  Detail: ComponentType;
+  Settings: ComponentType;
+  preload?: (path: string) => void;
+};
+export function App({ pages }: { pages: AppPages }) {
+  const { Analysis: AtlasAnalysis, Threads: AtlasThreads, Detail: AtlasDetail, Settings: SettingsPage } = pages;
   const { api, mutate } = useApi();
-  const { clock: currentTime } = useWebRuntime();
+  const { clock: currentTime, source: dataSource } = useWebRuntime();
   const { deviceScope, demoPreview } = useCapabilities();
   const location = useLocation();
   const navMotion = useActiveRule<HTMLElement>(location.pathname);
@@ -74,13 +81,15 @@ export function App() {
         : 15000,
   });
   const status = statusQuery.data?.data;
-  const [now, setNow] = useState(currentTime());
+  const [localNow, setNow] = useState(currentTime());
+  const readNow = useSyncExternalStore(dataSource.subscribe ?? idleSubscribe, () => deviceScope ? currentTime() : 0, () => 0);
+  const now = deviceScope ? readNow : localNow;
   const [refreshError, setRefreshError] = useState("");
   const [refreshMessage, setRefreshMessage] = useState('');
   const [refreshRequested, setRefreshRequested] = useState(false);
   const previous = useRef<Record<string, string>>({});
   useEffect(() => {
-    if (!status) return;
+    if (!status || deviceScope) return;
     for (const key of ["local", "accountLimits", "accountHistory"] as const) {
       // Progress belongs in the status bar; refresh statistics after the scan settles.
       if (key === "local" && status.local.running) continue;
@@ -97,7 +106,7 @@ export function App() {
         if (key === "local") setNow(currentTime());
       }
     }
-  }, [status, client]);
+  }, [status, client, deviceScope]);
   const refresh = async (source: string) => {
     if (refreshRequested) return;
     setRefreshRequested(true);
@@ -135,7 +144,8 @@ export function App() {
               { to: "/threads", icon: ListTree, text: "任务明细" },
               { to: "/settings", icon: Settings2, text: "设置" },
             ].map(({ to, icon: Icon, text }) => (
-              <NavLink end={to === "/"} key={to} to={to + scopeSearch}>
+              <NavLink end={to === "/"} key={to} to={to + scopeSearch}
+                onPointerEnter={() => pages.preload?.(to)} onFocus={() => pages.preload?.(to)}>
                 <Icon size={20} strokeWidth={1.7} aria-hidden="true" />
                 <span>{text}</span>
               </NavLink>
@@ -214,7 +224,6 @@ export function App() {
             )}
             <ErrorBox error={settingsQuery.error || statusQuery.error} />
             {deviceScope && <CloudDeviceFilter />}
-            {deviceScope && <CloudSyncStatus />}
             <Routes>
               {deviceScope && <Route path="/bind" element={<CloudBind />} />}
               <Route path="/" element={<Overview />} />

@@ -3,7 +3,8 @@ import {useQuery,useQueryClient} from '@tanstack/react-query';
 import type { SyncCut } from '../../../contracts/sync.js';
 import { cloudRequest } from '../../adapters/cloud-http.js';
 import { useCloudDevices } from '../devices/queries.js';
-import {useCloudSync} from '../../data/cloud-provider.js';
+import {useCloud} from '../../data/cloud-provider.js';
+import type { PageRead } from '../../../contracts/read-lease.js';
 import {ErrorBox} from '../../widgets/ui.js';
 
 type Session={id:string;title:string|null;unknown_events:number;assigned_events:number;natural_known_events:number};
@@ -15,15 +16,16 @@ function readOperation(key:string):Preview|null{try{const value=JSON.parse(sessi
 
 /** An explicit operation uses the manager's own all-device lease, even while usage is filtered. */
 export function CloudOrigins(){
-  const sync=useCloudSync(),devices=useCloudDevices(),client=useQueryClient();
-  const identity=sync?.source.controller.identity,queryScope=[identity?.origin,identity?.userId],operationKey='codex-usage:origin-operation:v3:'+JSON.stringify(queryScope);
+  const sync=useCloud(),devices=useCloudDevices(),client=useQueryClient();
+  const identity=sync?.source.identity,queryScope=[identity?.origin,identity?.userId],operationKey='codex-usage:origin-operation:v3:'+JSON.stringify(queryScope);
   // Re-entering the manager starts a fresh preview; an old cached initial view must not pin its lease before refetch.
   const [visit]=useState(()=>crypto.randomUUID());
   const [page,setPage]=useState({lease:'',cursor:'',run:0}),[picked,setPicked]=useState<Record<string,Session>>(()=>Object.create(null)),[target,setTarget]=useState('');
   const [preview,setPreview]=useState<Preview|null>(null),[operation,setOperation]=useState<Preview|null>(()=>readOperation(operationKey)),[sending,setSending]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const completed=useRef(''),online=sync?.online!==false;
-  const query=useQuery({queryKey:['cloud-origins',...queryScope,visit,page.run,page.lease,page.cursor],queryFn:({signal})=>{
-    const params=new URLSearchParams({limit:'50'});if(page.lease)params.set('lease_id',page.lease);if(page.cursor)params.set('cursor',page.cursor);
+  const query=useQuery({queryKey:['cloud-origins',...queryScope,visit,page.run,page.cursor],queryFn:async({signal})=>{
+    const lease=page.lease||(await cloudRequest<PageRead>('/api/v3/view','POST',{device_ids:[]},signal)).lease_id;
+    const params=new URLSearchParams({limit:'50',lease_id:lease});if(page.cursor)params.set('cursor',page.cursor);
     return cloudRequest<View>('/api/v3/origins?'+params,'GET',undefined,signal);
   },enabled:online&&!!identity});
   const progress=useQuery({queryKey:['cloud-origin-operation',...queryScope,operation?.operation.operation_id],queryFn:({signal})=>cloudRequest<Result>('/api/v3/origins/operations/'+encodeURIComponent(operation!.operation.operation_id),'GET',undefined,signal),enabled:online&&!!operation&&!sending,refetchInterval:query=>['complete','failed'].includes(query.state.data?.status||'')?false:1500,retry:1});

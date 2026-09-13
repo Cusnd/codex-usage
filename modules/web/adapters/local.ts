@@ -1,5 +1,5 @@
 import type { ApiResponse } from '../../contracts/responses.js';
-import { jsonRequest } from "../../sync/browser/transport.js";
+import { jsonRequest } from './http.js';
 import { type UsageDataSource } from '../../contracts/data-source.js';
 import { queryParameters } from '../../foundation/query-parameters.js';
 
