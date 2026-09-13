@@ -74,6 +74,9 @@ export function App({ pages }: { pages: AppPages }) {
   const settings = settingsQuery.data?.data || defaultSettings;
   const statusQuery = useQuery({
     queryKey: ["status"],
+    // Cloud collector health belongs to device/account APIs. The legacy status
+    // DTO only synthesizes local placeholders after an unused full-history sum.
+    enabled: !deviceScope,
     queryFn: ({ signal }) => api<Status>("status", {}, signal),
     refetchInterval: (q) => deviceScope ? false :
       q.state.data?.data.local.running || q.state.data?.data.account.running
@@ -174,7 +177,7 @@ export function App({ pages }: { pages: AppPages }) {
                 {settings.timezoneMode === "system" ? " · 系统" : ""}
               </Link>
               <span className="sync-status">
-                {status?.local.running
+                {deviceScope ? '云端查看' : status?.local.running
                   ? `导入中 · ${status.local.filesScanned} 个文件`
                   : status?.account.running
                     ? "账户更新中"

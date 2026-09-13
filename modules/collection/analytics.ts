@@ -15,8 +15,8 @@ export function localAnalyticsStore(store: Store, filter: QueryFilter = {}, narr
     : filter.project.startsWith('session:')
       ? {sql:' AND (e.project=? OR e.thread_id=?)',params:[filter.project,filter.project.slice(8)]}
       : {sql:' AND e.project=?',params:[filter.project]};
-  // Composite overview/scope statements reuse the projection. Bound that shared
-  // input before SQLite materializes it; these operations never broaden the scope.
+  // Compact scope and candidate statements never broaden their input. Overview
+  // leaves time bounds to each statement so trend buckets retain their indexes.
   const scopeFilter=narrowScope?where({...filter,project:undefined,q:undefined,qProjects:undefined,
     unknown:filter.unknown==='project'?undefined:filter.unknown,unknowns:filter.unknowns?.filter(k=>k!=='project')}):{sql:'',params:[]};
   const constraints=projectFilter.sql+(scopeFilter.sql?' AND '+scopeFilter.sql.slice(6):'');
@@ -35,7 +35,7 @@ export function localAnalyticsStore(store: Store, filter: QueryFilter = {}, narr
   return {
     forQuery: (next: QueryFilter, operation: QueryOperation) => {
       const needsIdentity = next.project !== undefined || next.unknown === 'project' || next.unknowns?.includes('project') || !!next.q?.trim() || !!next.qProjects?.length;
-      return (operation === 'summary' || operation === 'trend') && !needsIdentity ? store : localAnalyticsStore(store,next,operation==='overview'||operation==='scopeSummary');
+      return (operation === 'summary' || operation === 'trend') && !needsIdentity ? store : localAnalyticsStore(store,next,operation==='scopeSummary');
     },
     settings: () => store.settings(),
     readSnapshot: <T>(read: () => T) => store.readSnapshot(read),
@@ -45,13 +45,14 @@ export function localAnalyticsStore(store: Store, filter: QueryFilter = {}, narr
 }
 
 /** Classification is based on source evidence, never on a session-looking path alone. */
-export function localProjectKinds() {
+export function localProjectKinds(filter:QueryFilter = {}) {
+  const w=where(filter);
   return {sql:`SELECT project,CASE MAX(priority) WHEN 2 THEN 'session' ELSE 'project' END kind FROM (
-    SELECT project,2 priority FROM effective_events WHERE project_kind='session' GROUP BY project
+    SELECT project,2 priority FROM effective_events ${w.sql||'WHERE 1=1'} AND project_kind='session' GROUP BY project
     UNION ALL SELECT paths.value project,1 priority FROM collector_projects p,
       json_each(json_array(json_extract(p.value,'$.root'),json_extract(p.value,'$.observedCwd'))) paths
       WHERE json_extract(p.value,'$.kind') IN('git','app') AND paths.value IS NOT NULL
-  ) GROUP BY project`,params:[]};
+  ) GROUP BY project`,params:w.params};
 }
 
 export function localProjectLabels(store: Store, ids: string[]): ProjectLabel[] {

@@ -51,6 +51,36 @@ it('project options search session titles, paginate on the backend and ignore th
   const outside=await queryUsage(env.DB,a.user,queryUrl(lease.lease_id,{offset:'1000'}),'local/project-options');expect((outside.data as any).total).toBe(52);expect((outside.data as any).items).toEqual([]);
 });
 
+it('project option search uses displayed session identity instead of container metadata or hidden child titles',async()=>{
+  const {a,h}=await fixture(1000);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE v3_entity_versions SET payload=json_set(payload,'$.root','/home/me/.codex/sessions','$.name','Codex session container') WHERE user_id=? AND kind='project' AND json_extract(payload,'$.kind')='session'").bind(a.user),
+    env.DB.prepare("UPDATE v3_entity_versions SET payload=json_set(payload,'$.root','/work/Codex-app') WHERE user_id=? AND entity_id='source:p1'").bind(a.user),
+    env.DB.prepare("UPDATE v3_entity_versions SET payload=json_set(payload,'$.title',CASE entity_id WHEN 't0' THEN 'Architecture notes' WHEN 't5' THEN 'Codex parent task' WHEN 't10' THEN '   ' ELSE 'Codex old task title' END) WHERE user_id=? AND kind='thread' AND entity_id IN('t0','t5','t10','t20')").bind(a.user),
+    env.DB.prepare("UPDATE v3_entity_versions SET payload=json_set(payload,'$.project.name','Manually renamed task') WHERE user_id=? AND entity_id='logical:l:s20'").bind(a.user),
+    env.DB.prepare("INSERT INTO v3_entity_versions(user_id,epoch,kind,entity_id,valid_from,revision,hash,thread_id,payload) VALUES(?,?,'thread','a-child',1,1,'fixture','a-child',?)").bind(a.user,h.active_epoch,JSON.stringify({id:'a-child',title:'Codex hidden child',source_project_id:'s0',subagent_parent_id:'t0'})),
+    env.DB.prepare("DELETE FROM v3_entity_versions WHERE user_id=? AND kind='thread' AND entity_id='t15'").bind(a.user),
+  ]);
+  const lease=await createPageRead(env.DB,a.user),m=instrumentD1(env.DB);
+  const search=await queryUsage(m.db,a.user,queryUrl(lease.lease_id,{q:'Codex',limit:'1'}),'local/project-options');
+  expect(search.data).toEqual({items:[{id:'l:p1',name:'Project p1',kind:'app'}],total:2,limit:1,offset:0});
+  expect(search.meta.projectLabels).toEqual((search.data as any).items);
+  const second=await queryUsage(env.DB,a.user,queryUrl(lease.lease_id,{q:'Codex',limit:'1',offset:'1'}),'local/project-options');
+  expect(second.data).toEqual({items:[{id:'l:s5',name:'Codex parent task',kind:'session'}],total:2,limit:1,offset:1});
+  const outside=await queryUsage(env.DB,a.user,queryUrl(lease.lease_id,{q:'Codex',offset:'2'}),'local/project-options');
+  expect(outside.data).toEqual({items:[],total:2,limit:50,offset:2});
+  // Parent selection and an explicit name both outrank matching historical child/thread titles.
+  for(const q of ['Codex hidden child','Codex old task title','Codex session container']){
+    const result=await queryUsage(env.DB,a.user,queryUrl(lease.lease_id,{q}),'local/project-options');expect((result.data as any).total).toBe(0);
+  }
+  for(const [q,id,name] of [['Architecture notes','l:s0','Architecture notes'],['Manually renamed task','l:s20','Manually renamed task'],['会话 t10','l:s10','会话 t10'],['会话 t15','l:s15','会话 t15'],['t0','l:s0','Architecture notes']]){
+    const result=await queryUsage(env.DB,a.user,queryUrl(lease.lease_id,{q}),'local/project-options');
+    expect((result.data as any).items).toContainEqual({id,name,kind:'session'});
+  }
+  const resolved=m.trace.find(row=>row.sql.includes("SELECT payload FROM versions WHERE kind='project' AND entity_id IN(SELECT 'logical:'"));
+  expect(resolved?.response_bytes).toBeGreaterThan(0);expect(resolved?.response_bytes).toBeLessThan(2000);
+});
+
 it('read query requires authenticated same-origin JSON and rejects oversize, unknown routes and ID arrays',async()=>{
   const a=await actor();
   const unauth=await worker.fetch(new MatchingRequest(origin+'/api/v3/usage/query?route=local/summary',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'}),env);expect(unauth.status).toBe(401);
