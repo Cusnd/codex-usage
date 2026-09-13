@@ -17,7 +17,7 @@ export type QueryFilter = Filter & {
     searchTurns?: boolean;
 };
 
-export function where(f: QueryFilter) {
+export function where(f: QueryFilter, options: { bucketed?: boolean } = {}) {
     const conditions: string[] = [];
     const params: SQLInputValue[] = [];
     if (f.threadIds !== undefined) {
@@ -33,7 +33,10 @@ export function where(f: QueryFilter) {
         ["thread_id =", f.threadId],
     ] as const) {
         if (value !== undefined) {
-            conditions.push(`${field} ?`);
+            // Bucket joins provide a narrower indexed time interval. Keep the
+            // caller's exact bounds as predicates without competing for that index.
+            const qualifier = options.bucketed && field.startsWith('at') ? '+' : '';
+            conditions.push(`${qualifier}${field} ?`);
             params.push(field.startsWith("at") ? new Date(value).toISOString() : value);
         }
     }

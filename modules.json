@@ -155,9 +155,12 @@
         "tests/exact-queries.test.ts",
         "tests/agents.test.ts",
         "tests/billing-queries.test.ts",
-        "tests/trend-granularity.test.ts"
+        "tests/trend-granularity.test.ts",
+        "tests/performance-analytics-current.test.ts"
       ],
-      "cloudTests": []
+      "cloudTests": [
+        "test/performance-analytics-current.test.ts"
+      ]
     },
     {
       "id": "analytics/worker",
@@ -333,7 +336,8 @@
         "modules/organization/source-node.ts"
       ],
       "tests": [
-        "tests/project-source.test.ts"
+        "tests/project-source.test.ts",
+        "tests/performance-collection.test.ts"
       ],
       "cloudTests": []
     },
@@ -483,7 +487,9 @@
       "tests": [],
       "cloudTests": [
         "test/v3.test.ts",
-        "test/v3-apply-performance.test.ts"
+        "test/v3-apply-performance.test.ts",
+        "test/v3-entity-publication.test.ts",
+        "test/v3-publication-performance.test.ts"
       ]
     },
     {
@@ -583,32 +589,10 @@
       "tests": [],
       "cloudTests": [
         "test/v3.test.ts",
-        "test/v3-query-scale.test.ts"
+        "test/v3-query-scale.test.ts",
+        "test/page-read.test.ts",
+        "test/v3-cleanup-epochs.test.ts"
       ]
-    },
-    {
-      "id": "sync/browser",
-      "runtime": "browser",
-      "paths": [
-        "modules/sync/browser/"
-      ],
-      "owner": "sync",
-      "dependencies": [
-        "contracts",
-        "foundation",
-        "analytics"
-      ],
-      "public": [
-        "modules/sync/browser/cache.ts",
-        "modules/sync/browser/controller.ts",
-        "modules/sync/browser/data-source.ts",
-        "modules/sync/browser/transport.ts"
-      ],
-      "tests": [
-        "tests/web-cloud-sync.test.ts",
-        "tests/web-cloud-prefetch.test.ts"
-      ],
-      "cloudTests": []
     },
     {
       "id": "web/adapters",
@@ -620,14 +604,18 @@
       "dependencies": [
         "contracts",
         "foundation",
-        "sync/browser"
+        "analytics"
       ],
       "public": [
         "modules/web/adapters/cloud-http.ts",
-        "modules/web/adapters/local.ts"
+        "modules/web/adapters/local.ts",
+        "modules/web/adapters/cloud.ts",
+        "modules/web/adapters/http.ts",
+        "modules/web/adapters/legacy-cache.ts"
       ],
       "tests": [
-        "tests/refresh-ui.test.ts"
+        "tests/refresh-ui.test.ts",
+        "tests/cloud-online.test.ts"
       ],
       "cloudTests": []
     },
@@ -663,6 +651,7 @@
       ],
       "public": [
         "modules/web/motion/ChartMotion.tsx",
+        "modules/web/motion/BarMotion.tsx",
         "modules/web/motion/MotionPrimitives.tsx",
         "modules/web/motion/TrendMotion.ts",
         "modules/web/motion/motion-data.ts",
@@ -685,7 +674,6 @@
         "contracts",
         "foundation",
         "analytics",
-        "sync/browser",
         "web/adapters",
         "web/runtime",
         "web/motion"
@@ -697,8 +685,8 @@
       ],
       "tests": [
         "tests/refresh-ui.test.ts",
-        "tests/web-cloud-prefetch.test.ts",
         "tests/cloud-navigation.test.ts",
+        "tests/cloud-online-view.test.ts",
         "tests/web-runtime.test.ts"
       ],
       "cloudTests": []
@@ -793,7 +781,6 @@
       ],
       "public": [
         "modules/web/features/devices/CloudBind.tsx",
-        "modules/web/features/devices/CloudSyncStatus.tsx",
         "modules/web/features/devices/DeviceSettings.tsx",
         "modules/web/features/devices/queries.ts"
       ],
@@ -934,11 +921,14 @@
       ],
       "public": [
         "modules/web/shell/cloud-gate.tsx",
-        "modules/web/shell/mount.tsx"
+        "modules/web/shell/mount.tsx",
+        "modules/web/shell/deferred-pages.tsx",
+        "modules/web/shell/eager-pages.ts"
       ],
       "tests": [
         "tests/cloud-navigation.test.ts",
-        "tests/cloud-display.test.ts"
+        "tests/cloud-display.test.ts",
+        "tests/cloud-gate.test.ts"
       ],
       "cloudTests": []
     },

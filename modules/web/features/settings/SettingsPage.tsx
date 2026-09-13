@@ -99,10 +99,10 @@ export function SettingsPage() {
             <div className="setting-row" key={key}>
               <div>
                 <label htmlFor={key + "Interval"}>
-                  {deviceScope?(key==='local'?'用量历史拉取':'账户快照拉取'):key === "local" ? "本地记录刷新" : "账户接口刷新"}
+                  {deviceScope?(key==='local'?'用量页面刷新':'账户快照刷新'):key === "local" ? "本地记录刷新" : "账户接口刷新"}
                 </label>
                 <p>
-                  {deviceScope?(key==='local'?'最少 10 秒；浏览器检查云端的新记录。':'最少 60 秒；浏览器检查最近账户快照。'):key === "local"
+                  {deviceScope?(key==='local'?'最少 10 秒；重新读取当前页面的云端统计。':'最少 60 秒；浏览器检查最近账户快照。'):key === "local"
                     ? "记录变化时增量采集，按此间隔复核来源；最少 10 秒。"
                     : "最少 60 秒；读取账户汇总和额度。"}
                   输入 0 关闭自动刷新。
@@ -191,7 +191,7 @@ export function SettingsPage() {
           <p className="footnote">
             当前生效：{settings.timezone}（UTC
             {DateTime.now().setZone(settings.timezone).toFormat("ZZ")}
-            ）。时区切换后会更新筛选、趋势与任务时间。{deviceScope ? "这些间隔控制浏览器拉取云端数据。各电脑的采集频率在本机设置，首次补齐历史和手动刷新不受自动间隔限制。" : "后台服务运行期间持续按设置采集，关闭网页不影响自动刷新。"}
+            ）。时区切换后会更新筛选、趋势与任务时间。{deviceScope ? "这些间隔控制当前页面和账户快照的在线刷新。各电脑的采集频率在本机设置，手动刷新不受自动间隔限制。" : "后台服务运行期间持续按设置采集，关闭网页不影响自动刷新。"}
           </p>
           <button className="primary-button save-button" disabled={saving} aria-busy={saving}>
             {saving ? "保存中…" : "保存设置"}

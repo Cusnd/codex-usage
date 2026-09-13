@@ -32,6 +32,11 @@
     "node": "^22.13.0 || ^24.0.0 || ^26.0.0"
   },
   "scripts": {
+    "perf:collection": "node --import tsx scripts/benchmark-collection.ts",
+    "perf:queries": "node --import tsx scripts/benchmark-analytics-current.ts",
+    "perf:cloud": "node cloud/test/run-publication-benchmark.mjs",
+    "perf:upload": "node --import tsx scripts/benchmark-uploader-current.ts",
+    "perf:browser:build": "node scripts/browser-performance-build.mjs",
     "showcase:build": "node scripts/build-showcase.mjs",
     "cloud:build": "vite build --mode cloud",
     "cloud:preview": "node cloud/scripts/deploy.mjs --preview",

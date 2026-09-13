@@ -1,0 +1,23 @@
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+import {createHash} from 'node:crypto';
+const root=fileURLToPath(new URL('../../',import.meta.url)),label=process.argv[2]||'current';
+if(!/^[a-z0-9-]+$/i.test(label))throw Error('Use a simple artifact label');
+const output=path.join(root,'artifacts/performance-cloud-experience/server');fs.mkdirSync(output,{recursive:true});
+const sources=['apps/cloud/routes.ts','modules/accounts/worker/devices.ts','modules/sync/reads/leases.ts','modules/sync/reads/baseline.ts','modules/sync/reads/scope.ts','modules/analytics/worker/executor.ts'];
+const source_hashes=Object.fromEntries(sources.map(p=>[p,createHash('sha256').update(fs.readFileSync(path.join(root,p))).digest('hex')]));
+const result=spawnSync(process.execPath,[path.join(root,'cloud/node_modules/vitest/vitest.mjs'),'run','test/v3-read-performance.test.ts','--no-color','--reporter=default','--reporter=./test/read-benchmark-reporter.mjs'],{cwd:path.join(root,'cloud'),encoding:'utf8',maxBuffer:16*1024*1024});
+const raw=result.stdout+'\n'+result.stderr;fs.writeFileSync(path.join(output,`${label}.log`),raw);
+process.stdout.write(raw.replace(/^CLOUD_READ_BENCHMARK .*\r?\n/gm,''));
+const benchmarks=[...raw.matchAll(/CLOUD_READ_BENCHMARK (\{[^\r\n]+\})/g)].map(m=>JSON.parse(m[1]));
+const median=values=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];
+const samples=benchmarks[0]?.samples||[],summary=[...new Set(samples.map(s=>s.name))].map(name=>{
+  const rows=samples.filter(s=>s.name===name&&!s.warmup),r=rows[0];return {name,median_ms:median(rows.map(r=>r.elapsed_ms)),calls:r.calls,statements:r.statements,response_bytes:r.response_bytes,rows_read:r.rows_read,rows_written:r.rows_written,result_hash:r.result_hash};
+});
+const git=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'});
+fs.writeFileSync(path.join(output,`${label}.json`),JSON.stringify({label,at:new Date().toISOString(),head:git.stdout.trim(),source_hashes,node:process.version,os:`${os.platform()} ${os.release()}`,cpu:os.cpus()[0]?.model,status:result.status,summary,benchmarks},null,2)+'\n');
+console.log(JSON.stringify({label,summary},null,2));
+if(result.status!==0||benchmarks.length!==1)process.exit(result.status||1);

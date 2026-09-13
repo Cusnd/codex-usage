@@ -4,6 +4,6 @@ export function useState(initial:any){const i=hooks.cursor++;if(!(i in hooks.sta
 export const useQuery=()=>({data:hooks.view});
 export const useQueryClient=()=>({invalidateQueries:async()=>{}});
 export const useCloudDevices=()=>({data:{devices:[{id:'d',name:'Device'}]}});
-export const useCloudSync=()=>hooks.sync;
-export const CloudSyncProvider=({children}:{children:unknown})=>children;
+export const useCloud=()=>hooks.sync;
+export const CloudProvider=({children}:{children:unknown})=>children;
 export const cloudRequest=async(...args:any[])=>{hooks.requests.push(args);return hooks.pendingRequest??{};};

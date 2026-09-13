@@ -1,0 +1,165 @@
+{
+  "experiment": "real current scan/reconcile vs isolated incremental prototypes",
+  "node": "v24.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "measured_at": "2026-09-11T07:16:36.349Z",
+  "warmup_rounds": 2,
+  "measured_rounds": 5,
+  "statistic": "median",
+  "limitations": [
+    "All sources and databases are synthetic and in memory; one large thread deliberately tests history growth inside a task.",
+    "Current scan and reconcile invoke repository implementations; prototypes live only in this design experiment.",
+    "Normalized source insertion is shared and outside timing. Incremental journal creation, payload construction, hashing and outbox transaction are timed.",
+    "Initial cache population, initial scan and simulated acknowledgement are outside timing. Append trials add 10 rows each without clearing history.",
+    "No raw-log parsing, compression, network, cloud, browser, persistent-disk fsync, crash recovery or end-to-end latency measurement.",
+    "Prototype payload is not a finalized protocol; timing magnitudes are stage observations, not production speedup guarantees.",
+    "Reconcile prototype covers known explicit event identities only; changes to legacy suppression require expansion to the affected turn.",
+    "Updated rows count SQLite UPDATE effects, not physical pages or bytes; materialized rows count SQL result rows, not all database index visits."
+  ],
+  "sync_results": [
+    {
+      "initial_history_events": 1000,
+      "scenario": "idle",
+      "current_scan_ms": 4.221,
+      "prototype_journal_ms": 0,
+      "prototype_seal_ms": 0.023,
+      "prototype_journal_plus_seal_ms": 0.023,
+      "current_events_materialized": 1000,
+      "current_queued_event_rows": 0,
+      "prototype_queued_event_rows": 0,
+      "current_queued_payload_bytes": 0,
+      "prototype_queued_payload_bytes": 0
+    },
+    {
+      "initial_history_events": 1000,
+      "scenario": "append-10",
+      "current_scan_ms": 8.441,
+      "prototype_journal_ms": 0.035,
+      "prototype_seal_ms": 0.186,
+      "prototype_journal_plus_seal_ms": 0.217,
+      "current_events_materialized": 1050,
+      "current_queued_event_rows": 1050,
+      "prototype_queued_event_rows": 10,
+      "current_queued_payload_bytes": 419250,
+      "prototype_queued_payload_bytes": 4516
+    },
+    {
+      "initial_history_events": 1000,
+      "scenario": "metadata-only",
+      "current_scan_ms": 9.33,
+      "prototype_journal_ms": 0.024,
+      "prototype_seal_ms": 0.084,
+      "prototype_journal_plus_seal_ms": 0.109,
+      "current_events_materialized": 1070,
+      "current_queued_event_rows": 1070,
+      "prototype_queued_event_rows": 0,
+      "current_queued_payload_bytes": 427313,
+      "prototype_queued_payload_bytes": 294
+    },
+    {
+      "initial_history_events": 10000,
+      "scenario": "idle",
+      "current_scan_ms": 39.551,
+      "prototype_journal_ms": 0,
+      "prototype_seal_ms": 0.025,
+      "prototype_journal_plus_seal_ms": 0.025,
+      "current_events_materialized": 10000,
+      "current_queued_event_rows": 0,
+      "prototype_queued_event_rows": 0,
+      "current_queued_payload_bytes": 0,
+      "prototype_queued_payload_bytes": 0
+    },
+    {
+      "initial_history_events": 10000,
+      "scenario": "append-10",
+      "current_scan_ms": 79.366,
+      "prototype_journal_ms": 0.04,
+      "prototype_seal_ms": 0.207,
+      "prototype_journal_plus_seal_ms": 0.244,
+      "current_events_materialized": 10050,
+      "current_queued_event_rows": 10050,
+      "prototype_queued_event_rows": 10,
+      "current_queued_payload_bytes": 4037492,
+      "prototype_queued_payload_bytes": 4556
+    },
+    {
+      "initial_history_events": 10000,
+      "scenario": "metadata-only",
+      "current_scan_ms": 78.629,
+      "prototype_journal_ms": 0.027,
+      "prototype_seal_ms": 0.131,
+      "prototype_journal_plus_seal_ms": 0.158,
+      "current_events_materialized": 10070,
+      "current_queued_event_rows": 10070,
+      "prototype_queued_event_rows": 0,
+      "current_queued_payload_bytes": 4045615,
+      "prototype_queued_payload_bytes": 294
+    },
+    {
+      "initial_history_events": 100000,
+      "scenario": "idle",
+      "current_scan_ms": 476.371,
+      "prototype_journal_ms": 0,
+      "prototype_seal_ms": 0.024,
+      "prototype_journal_plus_seal_ms": 0.024,
+      "current_events_materialized": 100000,
+      "current_queued_event_rows": 0,
+      "prototype_queued_event_rows": 0,
+      "current_queued_payload_bytes": 0,
+      "prototype_queued_payload_bytes": 0
+    },
+    {
+      "initial_history_events": 100000,
+      "scenario": "append-10",
+      "current_scan_ms": 856.199,
+      "prototype_journal_ms": 0.037,
+      "prototype_seal_ms": 0.216,
+      "prototype_journal_plus_seal_ms": 0.253,
+      "current_events_materialized": 100050,
+      "current_queued_event_rows": 100050,
+      "prototype_queued_event_rows": 10,
+      "current_queued_payload_bytes": 40488544,
+      "prototype_queued_payload_bytes": 4596
+    },
+    {
+      "initial_history_events": 100000,
+      "scenario": "metadata-only",
+      "current_scan_ms": 865.748,
+      "prototype_journal_ms": 0.029,
+      "prototype_seal_ms": 0.102,
+      "prototype_journal_plus_seal_ms": 0.13,
+      "current_events_materialized": 100070,
+      "current_queued_event_rows": 100070,
+      "prototype_queued_event_rows": 0,
+      "current_queued_payload_bytes": 40496727,
+      "prototype_queued_payload_bytes": 294
+    }
+  ],
+  "reconcile_results": [
+    {
+      "initial_history_events": 1000,
+      "affected_events": 10,
+      "current_reconcile_ms": 2.495,
+      "prototype_affected_keys_ms": 0.211,
+      "current_updated_rows": 2140,
+      "prototype_updated_rows": 20
+    },
+    {
+      "initial_history_events": 10000,
+      "affected_events": 10,
+      "current_reconcile_ms": 25.334,
+      "prototype_affected_keys_ms": 0.248,
+      "current_updated_rows": 20140,
+      "prototype_updated_rows": 20
+    },
+    {
+      "initial_history_events": 100000,
+      "affected_events": 10,
+      "current_reconcile_ms": 258.776,
+      "prototype_affected_keys_ms": 0.213,
+      "current_updated_rows": 200140,
+      "prototype_updated_rows": 20
+    }
+  ]
+}

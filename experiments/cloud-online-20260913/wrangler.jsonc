@@ -1,0 +1,11 @@
+{
+  "$schema": "../../cloud/node_modules/wrangler/config-schema.json",
+  "name": "codex-usage-cloud-online-local",
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "../../artifacts/cloud-online-20260913/build", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "codex-usage-cloud-online-local", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "../../cloud/migrations" }],
+  "vars": { "APP_ORIGIN": "http://127.0.0.1:18790", "GITHUB_CLIENT_ID": "synthetic-only", "GITHUB_CLIENT_SECRET": "synthetic-only" },
+  "ratelimits": [{ "name": "AUTH_LIMITER", "namespace_id": "18790", "simple": { "limit": 20, "period": 60 } }]
+}

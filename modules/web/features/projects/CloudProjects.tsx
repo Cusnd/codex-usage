@@ -4,7 +4,7 @@ import type { SyncCut } from '../../../contracts/sync.js';
 import type {LogicalProject,ProjectEdge} from '../../../organization/projects.js';
 import { cloudRequest } from '../../adapters/cloud-http.js';
 import { useCloudDevices } from '../devices/queries.js';
-import {useCloudSync} from '../../data/cloud-provider.js';
+import {useCloud} from '../../data/cloud-provider.js';
 import {ErrorBox} from '../../widgets/ui.js';
 
 type Source={id:string;device_id:string;name?:string;kind?:string;root?:string;repository?:string;confidence?:string;reason?:string;logical_project_id:string|null};
@@ -14,9 +14,9 @@ const reasonLabel:Record<string,string>={session:'同一会话', 'primary-remote
 function repositoryLabel(value:string){try{if(value.startsWith('repo1:')){const [host,port,repository]=JSON.parse(value.slice(6));if(typeof host==='string'&&typeof repository==='string')return host+(port?':'+port:'')+'/'+repository;}}catch{}return value;}
 
 export function CloudProjects(){
-  const client=useQueryClient(),sync=useCloudSync(),devices=useCloudDevices();
+  const client=useQueryClient(),sync=useCloud(),devices=useCloudDevices();
   const deviceNames=new Map(devices.data?.devices.map(d=>[d.id,d.name])||[]);
-  const query=useQuery({queryKey:['cloud-projects',sync?.state.activeLease?.cut.organization_version],queryFn:({signal})=>cloudRequest<View>('/api/v3/projects','GET',undefined,signal),enabled:sync?.online!==false});
+  const query=useQuery({queryKey:['cloud-projects',sync?.state.read?.cut],queryFn:({signal})=>cloudRequest<View>('/api/v3/projects?lease_id='+encodeURIComponent(sync!.state.read!.lease_id),'GET',undefined,signal),enabled:sync?.online!==false&&!!sync?.state.read});
   const [selected,setSelected]=useState<string[]>([]),[sourceSelection,setSourceSelection]=useState<Record<string,string[]>>({}),[names,setNames]=useState<Record<string,string>>({});
   const [pending,setPending]=useState<{operation:Operation;description:string;id:string;version:number}|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const view=query.data,sources=new Map(view?.sources.map(s=>[s.id,s])||[]),picked=selected.filter(id=>view?.projects.some(p=>p.id===id));

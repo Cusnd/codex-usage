@@ -1,0 +1,130 @@
+[
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\cache.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\cache.ts",
+    "originalSha256": "3cbb6f003dd46ff4e95afef1e1eab8ece28f32cadd43e02eb44b9efce3115758",
+    "archivedAfterImportRelocationSha256": "3cbb6f003dd46ff4e95afef1e1eab8ece28f32cadd43e02eb44b9efce3115758",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\cache-model.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\cache-model.ts",
+    "originalSha256": "e3eac6caedf329aa030dc5ca0721505258d4625d291858fb8c620404eb21c124",
+    "archivedAfterImportRelocationSha256": "1f55860b2e5b2ec846f97b1e3b16593c7c113ad7cb5d8c4302fc3af4caa6d8dd",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\cache-memory.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\cache-memory.ts",
+    "originalSha256": "3145e4a9fe3adf90c9c9b09e3fd646f152e786af68317daac60475da0ef318c1",
+    "archivedAfterImportRelocationSha256": "c683e3865383960ac8eb719a754d57f1ee4e83858423da5f1e208bea97b3d66a",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\cache-indexeddb.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\cache-indexeddb.ts",
+    "originalSha256": "21fc12e46fd233c188d92ac131e9f1a3dbd8b9c96836e98e4b85d365d073e593",
+    "archivedAfterImportRelocationSha256": "e5eff998e052d092b1e6b16e18e0a2319a0ac975db4d9ea3e347fbb37b2396d5",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\controller.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\controller.ts",
+    "originalSha256": "3f42dcd5c603971bc4cf2de3f09ff21ca4f28c44920f685234f1e91c0e520485",
+    "archivedAfterImportRelocationSha256": "efe72ab580fb25d9ef06368c075bc4ef02f5175c02f2fc628c7b906fba7502db",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\data-source.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\data-source.ts",
+    "originalSha256": "dc6ba26ab012cccc687e1f95445f7bf8d5fe1f9258aae36803993800dca3246c",
+    "archivedAfterImportRelocationSha256": "75d660d48557001b0bb3642d0b7ae86dfb72dcb5affcd14a92ccd18a0e5e56de",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\project-labels.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\project-labels.ts",
+    "originalSha256": "9168962eeabd7d0fe356a6ffabb1ca3cbd70c82370c714b1b74dc84a24371627",
+    "archivedAfterImportRelocationSha256": "1678cdcbdce5eae198e8d33a416936f3914da1e4edf61fc74c9c4b44525c61b7",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\transport.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\transport.ts",
+    "originalSha256": "c57ae6a500bf8b2b94dba628b9e6af26d53bf93ee49dc8f19b86fd867ce3d4ef",
+    "archivedAfterImportRelocationSha256": "aca02a1cb52a9bb06be17cccf760f506b51c17f5d22ffe083b50157242b6e281",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\modules\\sync\\browser\\verify.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\browser\\verify.ts",
+    "originalSha256": "1a943edcdd79c973a24b863c584bc454c7f42adebc277f09cc8df0e5f6b1db63",
+    "archivedAfterImportRelocationSha256": "5563104aa341609e7e9c25bb374f1762a51107accf6c406fc55a0a7a2c690cd9",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\tests\\web-cloud-sync.test.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\tests\\web-cloud-sync.test.ts",
+    "originalSha256": "33f5010edf870d1f40f3293a0e714635c03c297c35042fa52a6e12966c48ed67",
+    "archivedAfterImportRelocationSha256": "49cc3bc407bde15ff507dd4f565d645ed392cdea0e9f7ca57577ec77dbb0a38b",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\tests\\web-cloud-prefetch.test.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\tests\\web-cloud-prefetch.test.ts",
+    "originalSha256": "eb24a512fa410935953d102b47ff7506afad7abbf6a0decb16e6aa3d5e388eff",
+    "archivedAfterImportRelocationSha256": "2c7cbb7425a24b83907288c181c7fc0e1a9483a052cb322c0a518379652a7e34",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\tests\\cloud-experience-browser.test.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\tests\\cloud-experience-browser.test.ts",
+    "originalSha256": "055aaabbae4fc3e611fd7b6e0281d59faced71ece55fa0746b1bb18db7b217ee",
+    "archivedAfterImportRelocationSha256": "6da7b9d38a222ad3cd61c5a384349ac4182565a3257d72370df7dc0a406e50fa",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\tests\\web-cloud-cache.browser.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\tests\\web-cloud-cache.browser.ts",
+    "originalSha256": "1b4f140e92853ef4b027fe4cf98b64232f56eca95e0835d129efbeba9f759455",
+    "archivedAfterImportRelocationSha256": "7c788764c1b95b84001c740204f41f1a0e8ee674c17e458fcf36a7ce0f147b8f",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\scripts\\cloud-experience-browser.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\scripts\\cloud-experience-browser.ts",
+    "originalSha256": "703646431034bb7f26153192b125d0e65f65eb1573c09af68e623502caa2520e",
+    "archivedAfterImportRelocationSha256": "bf758da75b404c0b76fcecc374430be7b5d2bcba41b7a2693356a28a7f9b9ecf",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\scripts\\cloud-experience-browser-fixture.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\scripts\\cloud-experience-browser-fixture.ts",
+    "originalSha256": "412dbb131f45ba1e008acb08e7299551f7bd0b0b83bbfe89d37ae84b16ecd8bd",
+    "archivedAfterImportRelocationSha256": "68db4c50b136ae5bb542c707120db6fbbea5c90bb5b1ac876e808df394d7b669",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  },
+  {
+    "source": "D:\\Documents\\ChatGPT\\codex-usage\\scripts\\browser-cache-performance.ts",
+    "target": "D:\\Documents\\ChatGPT\\codex-usage\\experiments\\legacy-browser-mirror-20260913\\scripts\\browser-cache-performance.ts",
+    "originalSha256": "8f07b1b3483ed3f15f5d064b81b49f079e15277e7cb2ddcf7f0bce7786d351ab",
+    "archivedAfterImportRelocationSha256": "3d443076af819448fbcdfab50d36de4001930e33a5aac990eb01c86f7d7ab21e",
+    "sourceUnchanged": true,
+    "removedOriginal": true
+  }
+]

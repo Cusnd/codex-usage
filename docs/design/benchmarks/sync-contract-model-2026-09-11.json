@@ -1,0 +1,51 @@
+{
+  "experiment": "sync protocol state-transition model",
+  "node": "v24.16.0",
+  "measured_at": "2026-09-11T07:20:56.032Z",
+  "checks": [
+    {
+      "name": "ordered application despite arbitrary download order and duplicate delivery",
+      "passed": true,
+      "permutations": 24,
+      "restart_after_each_delivery": true
+    },
+    {
+      "name": "a missing commit prevents the full cursor from advancing",
+      "passed": true
+    },
+    {
+      "name": "tombstone and newer recent data survive a late baseline block",
+      "passed": true
+    },
+    {
+      "name": "identity consolidation is one atomic change group",
+      "passed": true
+    },
+    {
+      "name": "same commit or entity revision with different content is rejected",
+      "passed": true
+    },
+    {
+      "name": "record, pending change and parser cursor commit or abort together",
+      "passed": true
+    },
+    {
+      "name": "sealing an old revision does not erase a newer pending revision",
+      "passed": true
+    },
+    {
+      "name": "live and history acknowledgement frontiers are independent",
+      "passed": true
+    },
+    {
+      "name": "turn membership expansion handles explicit arrival and withdrawal",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "In-memory state model only; does not validate operating-system crashes, database durability or network transport.",
+    "Uses already assigned canonical identities and revisions; does not prove provenance discovery or fuzzy matching correctness.",
+    "Full feed modeled with dense per-dataset commit sequence; a sparse storage sequence needs explicit scanned-through and predecessor coverage.",
+    "Cloning maps models an atomic transaction and is not the proposed production data structure or performance algorithm."
+  ]
+}

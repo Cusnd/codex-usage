@@ -13,7 +13,7 @@ before(async()=>{
   const result=await build({entryPoints:[path.join(dir,'fixtures/cloud-display-components.tsx')],bundle:true,write:false,platform:'node',format:'cjs',packages:'external',loader:{'.css':'empty'},define:{'import.meta.env.MODE':'"cloud"'},logLevel:'silent',plugins:[{name:'component-boundaries',setup(api){
     api.onResolve({filter:/^(react|@tanstack\/react-query)$|\/(cloud-http|queries|cloud-provider)\.js$/},args=>{
       const name=path.basename(args.importer);
-      if(name==='CloudProjects.tsx'||['DeviceSettings.tsx','CloudSyncStatus.tsx','queries.ts'].includes(name)&&args.path.endsWith('/cloud-provider.js'))return {path:harness};
+      if(name==='CloudProjects.tsx'||['DeviceSettings.tsx','queries.ts'].includes(name)&&args.path.endsWith('/cloud-provider.js'))return {path:harness};
     });
   }}]});
   const module={exports:{}};new Function('require','module','exports',result.outputFiles[0].text)(createRequire(import.meta.url),module,module.exports);components=module.exports as Components;
@@ -49,11 +49,6 @@ test('device collection, receipt, application and coverage use the workspace tim
   const old=text(components.renderCloud('devices',[{...device,retainedThreads:undefined}]));assert.match(old,/云端保留会话数暂不可用/);assert.doesNotMatch(old,/云端已保留 0/);
 });
 
-test('browser sync completion follows the workspace timezone',()=>{
-  components.hooks.sync={online:true,state:{phase:'full_ready',baseline:null,lastSyncAt:'2026-09-12T11:59:00.000Z',receivedCommitSeq:1,appliedCommitSeq:1}};
-  assert.match(text(components.renderCloud('sync',[])),/最近完成 09-12 20:59:00/);
-  assert.match(text(components.renderCloud('sync',[],'UTC')),/最近完成 09-12 11:59:00/);components.hooks.sync=null;
-});
 
 
 const account:CloudAccountView={accountRef:'known',deviceId:'a',deviceName:'Quota A',receivedAt:'2026-09-12T11:59:50.000Z',stale:false,quota:{schemaVersion:3,deviceId:'a',sequence:1,accountRef:'known',collectedAt:'2026-09-12T11:59:00.000Z',attemptedAt:'2026-09-12T11:59:00.000Z',provider:'app-server',refreshInterval:60,status:'ok',errorCode:null,buckets:[]},history:{summary:{lifetimeTokens:'999',peakDailyTokens:'100',longestRunningTurnSec:'1',currentStreakDays:'1',longestStreakDays:'1'},dailyUsageBuckets:null},historyCollectedAt:'2026-09-12T11:58:00.000Z',historyMeta:{summarySource:{deviceId:'b',deviceName:'History B',collectedAt:'2026-09-12T11:58:00.000Z',receivedAt:'2026-09-12T11:58:50.000Z',stale:true},dailySources:[]}};

@@ -2,10 +2,19 @@ import type { Filter, Metrics, GroupRow, ThreadRow, Comparison, TurnRow, TrendRo
 import type { Page } from '../contracts/responses.js';
 import { label, ratio } from "../foundation/query-values.js";
 import { estimateCost, pricingCatalog } from "../settings/pricing.js";
-import { aggregatePage, bigintMetrics, canAggregateInSql, compareAggregate, exactInteger, numericEvents, scanAggregates, timeBucketPlan, type BucketPlan } from "./exact-query-engine.js";
+import { aggregatePage, bigintMetrics, bucketedEvents, canAggregateInSql, compareAggregate, exactInteger, numericEvents, scanAggregates, timeBucketPlan, type BucketPlan, type SqlWhere } from "./exact-query-engine.js";
 import { type QueryStore, type Statement } from './plan.js';
 import { type QueryFilter, where, fieldMap } from './filter.js';
 import { metricsSql, metrics } from './metrics.js';
+
+type SelectedTurn = { thread: string; turn: string | null };
+/** Materialize page keys once; JSON tuples distinguish nulls and arbitrary string IDs. */
+function selectedTurnsWhere(w: SqlWhere, turns: SelectedTurn[]): SqlWhere {
+    return {
+        sql: `${w.sql || 'WHERE 1=1'} AND thread_id IN (SELECT value FROM json_each(?)) AND json_array(thread_id,turn_id) IN (SELECT json_array(json_extract(value,'$.thread'),json_extract(value,'$.turn')) FROM json_each(?))`,
+        params: [...w.params, JSON.stringify([...new Set(turns.map(turn => turn.thread))]), JSON.stringify(turns)],
+    };
+}
 
 export class QueryEngine {
     private readonly sqlSafety = new Map<string, boolean>();
@@ -15,16 +24,13 @@ export class QueryEngine {
         if (!this.sqlSafety.has(key)) this.sqlSafety.set(key, yield* canAggregateInSql(this.store, w));
         return this.sqlSafety.get(key)!;
     }
-    private *costs(f: QueryFilter, expressions: string[] = [], bucket?: BucketPlan, selectedTurns?: { thread: string; turn: string | null }[]): Generator<Statement, Map<string, ReturnType<typeof estimateCost>>, any> {
+    private *costs(f: QueryFilter, expressions: string[] = [], bucket?: BucketPlan, selectedTurns?: SelectedTurn[]): Generator<Statement, Map<string, ReturnType<typeof estimateCost>>, any> {
         const settings = this.store.settings();
         const result = new Map<string, ReturnType<typeof estimateCost>>();
         if (!settings.costEnabled)
             return result;
-        const w = where(f);
-        if (selectedTurns) {
-            w.sql += `${w.sql ? ' AND' : 'WHERE'} EXISTS(SELECT 1 FROM json_each(?) selected_turn WHERE thread_id=json_extract(selected_turn.value,'$.thread') AND turn_id IS json_extract(selected_turn.value,'$.turn'))`;
-            w.params.push(JSON.stringify(selectedTurns));
-        }
+        const filters = where(f, { bucketed: !!bucket });
+        const w = selectedTurns ? selectedTurnsWhere(filters, selectedTurns) : filters;
         const thresholds = pricingCatalog(settings).filter((p) => p.longContextThreshold !== null);
         const longExpr = thresholds.length
             ? `CASE ${thresholds.map(() => "WHEN model=? AND input_tokens>? THEN 1").join(" ")} ELSE 0 END`
@@ -35,7 +41,7 @@ export class QueryEngine {
       SUM(CASE WHEN input_tokens IS NULL OR cached_input_tokens IS NULL OR output_tokens IS NULL THEN 1 ELSE 0 END) missing_usage,
       SUM(CASE WHEN input_tokens<cached_input_tokens+COALESCE(cache_write_input_tokens,0) THEN 1 ELSE 0 END) invalid_usage,
       SUM(CASE WHEN kind<>'record' THEN 1 ELSE 0 END) compat_events
-      FROM ${numericEvents} numeric_events ${bucket?.join ?? ''} ${w.sql} GROUP BY ${keys.length ? keys.map((_, i) => `k${i}`).join(",") + "," : ""}model,long_context,COALESCE(service_tier,'unknown'),COALESCE(service_tier_source,'unknown')`, [
+      FROM ${bucketedEvents(`${numericEvents} numeric_events`, bucket)} ${w.sql} GROUP BY ${keys.length ? keys.map((_, i) => `k${i}`).join(",") + "," : ""}model,long_context,COALESCE(service_tier,'unknown'),COALESCE(service_tier_source,'unknown')`, [
             ...thresholds.flatMap((p) => [p.model, p.longContextThreshold!]),
             ...(bucket?.params ?? []),
             ...w.params,
@@ -63,8 +69,8 @@ export class QueryEngine {
         return value;
     }
     *trend(f: Filter, bucket: "hour" | "day"): Generator<Statement, TrendRow[], any> {
-        const w = where(f);
-        const safe = yield* this.safe(f), plan = yield* timeBucketPlan(this.store, w, bucket);
+        const safe = yield* this.safe(f), plan = yield* timeBucketPlan(this.store, where(f), bucket);
+        const w = where(f, { bucketed: true });
         if (!safe) {
             const rows: TrendRow[] = [];
             yield* scanAggregates(this.store, w, [plan.expression], r => rows.push({time:r.k0,...metrics(r),cost:r.cost??null}), plan);
@@ -72,7 +78,7 @@ export class QueryEngine {
         }
         const costs = (yield* this.costs(f, [plan.expression], plan));
         return (yield* this.store
-            .all(`SELECT ${plan.expression} time,${metricsSql} FROM ${numericEvents} numeric_events ${plan.join} ${w.sql} GROUP BY time ORDER BY time`, [...plan.params, ...w.params])).map((r) => ({
+            .all(`SELECT ${plan.expression} time,${metricsSql} FROM ${bucketedEvents(`${numericEvents} numeric_events`, plan)} ${w.sql} GROUP BY time ORDER BY time`, [...plan.params, ...w.params])).map((r) => ({
             time: r.time,
             ...metrics(r),
             cost: costs.get(JSON.stringify([r.time])) ?? null,
@@ -114,16 +120,9 @@ export class QueryEngine {
             const titles = new Map((yield* this.store.all('SELECT id,title FROM threads WHERE id IN (SELECT value FROM json_each(?))',[JSON.stringify(page.rows.map(r=>r.k0))])).map(r=>[r.id,r.title]));
             return {items:page.rows.map(r=>({id:r.k0,title:titles.get(r.k0)??null,project:r.project,firstAt:r.first_at,lastAt:r.last_at,...metrics(r),cost:r.cost??null})),total:page.total,limit,offset};
         }
-        const having = cacheBelow === undefined
-            ? ""
-            : `HAVING paired_input > 0 AND CAST(paired_cached AS REAL)/paired_input < ?`;
-        const params = [
-            ...w.params,
-            ...(cacheBelow === undefined ? [] : [cacheBelow]),
-        ];
-        const base = `SELECT thread_id id,(SELECT title FROM threads WHERE id=thread_id) title,MIN(project) project,MIN(at) first_at,MAX(at) last_at,${metricsSql} FROM ${numericEvents} numeric_events ${w.sql} GROUP BY thread_id ${having}`;
-        const total = Number((yield* this.store.one(`SELECT COUNT(*) n FROM (${base})`, params))!.n);
-        const rows = (yield* this.store.all(`${base} ORDER BY ${sort === "recent" ? "last_at" : "SUM(total_tokens)"} DESC,id ASC LIMIT ? OFFSET ?`, [...params, limit, offset]));
+        const base = `SELECT thread_id id,(SELECT title FROM threads WHERE id=thread_id) title,MIN(project) project,MIN(at) first_at,MAX(at) last_at,${metricsSql} FROM ${numericEvents} numeric_events ${w.sql} GROUP BY thread_id`;
+        const total = Number((yield* this.store.one(`SELECT COUNT(*) n FROM (SELECT thread_id FROM effective_events ${w.sql} GROUP BY thread_id)`, w.params))!.n);
+        const rows = (yield* this.store.all(`${base} ORDER BY ${sort === "recent" ? "last_at" : "SUM(total_tokens)"} DESC,id ASC LIMIT ? OFFSET ?`, [...w.params, limit, offset]));
         // Ranking is token/time based. Compute costs only after selecting the page,
         // retaining the same event filters and restricting its thread keys.
         const costs = (yield* this.costs({ ...f, q, threadIds: rows.map(r => r.id) }, ["thread_id"]));
@@ -233,8 +232,8 @@ export class QueryEngine {
         if (!(yield* this.safe({...f,q,searchTurns:true}))) {
             const page = yield* aggregatePage(this.store,w,['thread_id','turn_id'],limit,offset,sort);
             const titles = new Map((yield* this.store.all('SELECT id,title FROM threads WHERE id IN (SELECT value FROM json_each(?))',[JSON.stringify(page.rows.map(r=>r.k0))])).map(r=>[r.id,r.title]));
-            const picked = JSON.stringify(page.rows.map(r=>({thread:r.k0,turn:r.k1}))), parts:Record<string,any>[]=[];
-            if (page.rows.length) yield* scanAggregates(this.store,{sql:`${w.sql||'WHERE 1=1'} AND EXISTS(SELECT 1 FROM json_each(?) p WHERE thread_id=json_extract(p.value,'$.thread') AND turn_id IS json_extract(p.value,'$.turn'))`,params:[...w.params,picked]},['thread_id','turn_id','model','effort'],r=>parts.push(r));
+            const picked = selectedTurnsWhere(w, page.rows.map(r => ({thread:r.k0,turn:r.k1}))), parts:Record<string,any>[]=[];
+            if (page.rows.length) yield* scanAggregates(this.store,picked,['thread_id','turn_id','model','effort'],r=>parts.push(r));
             parts.sort((a,b)=>compareAggregate(a,b,'tokens',['k2','k3']));
             return {items:page.rows.map(r=>({id:r.k1,threadId:r.k0,title:titles.get(r.k0)??null,project:r.project,firstAt:r.first_at,lastAt:r.last_at,...metrics(r),cost:r.cost??null,
                 composition:parts.filter(p=>p.k0===r.k0&&p.k1===r.k1).map(p=>({model:p.k2,effort:p.k3,...metrics(p)}))})),total:page.total,limit,offset};
@@ -242,8 +241,9 @@ export class QueryEngine {
         const total = Number((yield* this.store.one(`SELECT COUNT(*) n FROM (SELECT thread_id,turn_id FROM effective_events ${w.sql} GROUP BY thread_id,turn_id)`, w.params))!.n);
         const rows = (yield* this.store.all(`SELECT turn_id id,thread_id,(SELECT title FROM threads WHERE id=thread_id) title,MIN(project) project,MIN(at) first_at,MAX(at) last_at,${metricsSql} FROM ${numericEvents} numeric_events ${w.sql} GROUP BY thread_id,turn_id ORDER BY ${sort === "recent" ? "last_at DESC" : sort === "oldest" ? "first_at ASC" : "SUM(total_tokens) DESC"},thread_id,id LIMIT ? OFFSET ?`, [...w.params, limit, offset]));
         // One batched composition query for the current page, not one query per turn.
+        const picked = selectedTurnsWhere(w, rows.map(r => ({thread:r.thread_id,turn:r.id})));
         const parts = rows.length
-            ? (yield* this.store.all(`SELECT thread_id,turn_id,model,effort,${metricsSql} FROM ${numericEvents} numeric_events ${w.sql || "WHERE 1=1"} AND (EXISTS(SELECT 1 FROM json_each(?) p WHERE thread_id=json_extract(p.value,'$.thread') AND turn_id IS json_extract(p.value,'$.turn'))) GROUP BY thread_id,turn_id,model,effort ORDER BY SUM(total_tokens) DESC,model,effort`, [...w.params, JSON.stringify(rows.map(r => ({thread:r.thread_id,turn:r.id})))])) : [];
+            ? (yield* this.store.all(`SELECT thread_id,turn_id,model,effort,${metricsSql} FROM ${numericEvents} numeric_events ${picked.sql} GROUP BY thread_id,turn_id,model,effort ORDER BY SUM(total_tokens) DESC,model,effort`, picked.params)) : [];
         const costs = (yield* this.costs({ ...f, q, searchTurns: true, threadIds: [...new Set(rows.map(r => r.thread_id as string))] }, [
             "thread_id",
             "turn_id",

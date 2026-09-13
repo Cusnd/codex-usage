@@ -118,11 +118,16 @@ export async function receive(db:D1Database,device:WriteDevice,b:UploadBatch,wir
 export async function entityStatements(db:D1Database,h:Domain,changes:EntityMutation[]):Promise<D1PreparedStatement[]> {
   if(!changes.length)return [];
   const seen=new Set<string>();for(const c of changes){const key=stableJson([c.kind,c.id]);if(seen.has(key))throw Error('duplicate entity mutation');seen.add(key);}
-  const rows=await Promise.all(changes.map(async c=>({...c,payload:c.value===null?null:stableJson(c.value),hash:await sha256(stableJson(c.value))})));
+  // SQL consumes payload and indexed columns, never the original value object.
+  // Serialize once for both the stored payload and its hash; tombstones stay SQL NULL.
+  const rows=await Promise.all(changes.map(async({value,...columns})=>{
+    const payload=stableJson(value);return {...columns,payload:value===null?null:payload,hash:await sha256(payload)};
+  }));
   const seq=h.commit_seq+1,out:D1PreparedStatement[]=[db.prepare('INSERT INTO v3_commits(user_id,epoch,commit_seq,created_at,entity_count) VALUES(?,?,?,?,?)').bind(h.user_id,h.active_epoch,seq,Date.now(),rows.length)];
   for(const chunk of chunks(rows)){
     const raw=stableJson(chunk);
-    out.push(db.prepare(`UPDATE v3_entity_versions SET valid_to=? WHERE rowid IN(SELECT v.rowid FROM json_each(?) j CROSS JOIN v3_entity_versions v WHERE v.user_id=? AND v.epoch=? AND v.valid_to IS NULL AND v.kind=json_extract(j.value,'$.kind') AND v.entity_id=json_extract(j.value,'$.id'))`).bind(seq,raw,h.user_id,h.active_epoch));
+    const keys=stableJson(chunk.map(({kind,id})=>({kind,id})));
+    out.push(db.prepare(`UPDATE v3_entity_versions SET valid_to=? WHERE rowid IN(SELECT v.rowid FROM json_each(?) j CROSS JOIN v3_entity_versions v WHERE v.user_id=? AND v.epoch=? AND v.valid_to IS NULL AND v.kind=json_extract(j.value,'$.kind') AND v.entity_id=json_extract(j.value,'$.id'))`).bind(seq,keys,h.user_id,h.active_epoch));
     out.push(db.prepare(`INSERT INTO v3_entity_versions(user_id,epoch,kind,entity_id,valid_from,revision,hash,at,thread_id,origin_device_id,payload)
       SELECT ?,?,json_extract(value,'$.kind'),json_extract(value,'$.id'),?,json_extract(value,'$.revision'),json_extract(value,'$.hash'),json_extract(value,'$.at'),json_extract(value,'$.thread_id'),json_extract(value,'$.origin_device_id'),json_extract(value,'$.payload') FROM json_each(?)`).bind(h.user_id,h.active_epoch,seq,raw));
     out.push(db.prepare(`INSERT INTO v3_changes(user_id,epoch,commit_seq,kind,entity_id,revision,hash,payload) SELECT ?,?,?,json_extract(value,'$.kind'),json_extract(value,'$.id'),json_extract(value,'$.revision'),json_extract(value,'$.hash'),json_extract(value,'$.payload') FROM json_each(?)`).bind(h.user_id,h.active_epoch,seq,raw));

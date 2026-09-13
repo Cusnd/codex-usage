@@ -20,10 +20,10 @@ export function queryScope():string {
 
 export async function executeV3Query<T>(db:D1Database,user:string,lease:string,query:Generator<Statement,T,any>):Promise<T> {
   try {
-    await getRead(db,user,lease);let step=query.next();
+    await getRead(db,user,lease,'metadata');let step=query.next();
     while(!step.done){const {sql,params,one}=step.value,scope=queryScope(),combined=sql.startsWith('WITH RECURSIVE ')?scope.replace('WITH ','WITH RECURSIVE ')+','+sql.slice(15):sql.startsWith('WITH ')?scope+','+sql.slice(5):scope+' '+sql;
       const rows=await db.prepare(combined).bind(user,lease,Date.now(),...params.map(p=>typeof p==='bigint'?p.toString():p)).all<Record<string,unknown>>();step=query.next(one?rows.results[0]:rows.results);}
-    await getRead(db,user,lease);return step.value;
+    await getRead(db,user,lease,'metadata');return step.value;
   }catch(error){
     const code=error&&typeof error==='object'&&'code' in error?error.code:null;
     if(code==='INVALID_TOKEN_STORAGE')return fail(409,'INVALID_TOKEN_STORAGE','来源包含无法精确统计的历史数值，请重新采集对应来源。');

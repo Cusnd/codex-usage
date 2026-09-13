@@ -1,6 +1,8 @@
 # Cloud sync v3 性能改进记录
 
-更新：2026-09-12。状态：**用户已重新启动全链路性能优化。** 本次任务基于 preview `ce4f4ec`，在独立 `codex/v3-performance` 分支研究、对照并实施；[本次性能报告](../design/performance-optimization-2026-09-12.md)记录新证据。下文保留首次功能交付时的问题和失败基线，不把局部新成绩替代原场景的端到端验收，也不改写旧证据中的 `performanceAccepted:false`。
+最新进展：已完成[云端体验专项基线、实施与本地验收](../design/cloud-experience-2026-09-12.md)，覆盖线上过期读取恢复、冷缓存等待、bootstrap、请求合并、下行并发与设备覆盖索引；云端集成 103 项通过。改动尚未部署，真实线上复测仍待“更新预览”，不替代下面的 100k 和两设备端到端门槛。
+
+更新：2026-09-12。状态：**当前 develop 的新一轮性能优化已实施并完成本地复测。** 最新基线为 `f25aaf9`，任务分支为 `codex/performance-baseline-20260912`；[当前性能报告](../design/performance-current-2026-09-12.md)包含真实采集、共享查询、D1、上传器与浏览器证据。此前基于 preview `ce4f4ec` 的 `codex/v3-performance` 工作保留在[上一轮性能报告](../design/performance-optimization-2026-09-12.md)。下文保留首次功能交付时的问题和失败基线，不把局部新成绩替代原场景的端到端验收，也不改写旧证据中的 `performanceAccepted:false`。
 
 ## 已知问题与证据
 

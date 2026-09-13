@@ -6,12 +6,12 @@ import type { CloudSource } from "../../../contracts/cloud-accounts.js";
 import { Workspace } from "../../data/workspace.js";
 import { ErrorBox, time } from "../../widgets/ui.js";
 import './cloud-workspace.css';
-import { useCloudSync } from "../../data/cloud-provider.js";
+import { useCloud } from "../../data/cloud-provider.js";
 import { useCloudDevices, sourceState } from './queries.js';
 import { cloudRequest } from '../../adapters/cloud-http.js';
 
 export function CloudDeviceFilter(){
-  const q=useCloudDevices(),sync=useCloudSync(),[search]=useSearchParams(),navigate=useNavigate(),location=useLocation();
+  const q=useCloudDevices(),sync=useCloud(),[search]=useSearchParams(),navigate=useNavigate(),location=useLocation();
   const selected=search.getAll('deviceIds'),devices=q.data?.devices||[];
   function choose(ids:string[]){const next=new URLSearchParams(search);next.delete('deviceIds');ids.forEach(id=>next.append('deviceIds',id));
     for(const key of [...next.keys()])if(/offset$/i.test(key)||['expandedTurn','turnId','missingTurn','scope','returnTo','threadId'].includes(key))next.delete(key);
@@ -25,7 +25,7 @@ export function CloudDeviceFilter(){
 }
 
 export function CloudDeviceSettings(){
-  const q=useCloudDevices(),client=useQueryClient(),sync=useCloudSync(),{settings:{timezone}}=useContext(Workspace),[busy,setBusy]=useState(''),[error,setError]=useState(''),[deleting,setDeleting]=useState<string|null>(null);
+  const q=useCloudDevices(),client=useQueryClient(),sync=useCloud(),{settings:{timezone}}=useContext(Workspace),[busy,setBusy]=useState(''),[error,setError]=useState(''),[deleting,setDeleting]=useState<string|null>(null);
   async function action(d:CloudSource,kind:'pause'|'revoke'|'delete'){if(busy)return;setBusy(d.id);setError('');
     try{await cloudRequest('/api/v3/devices/'+encodeURIComponent(d.id)+(kind==='delete'?'/history':''),kind==='pause'?'PATCH':'DELETE',kind==='pause'?{paused:!d.paused}:undefined);
       if(kind==='delete')await sync?.invalidateHistory();await client.invalidateQueries();setDeleting(null);}catch(e){setError((e as Error).message);}finally{setBusy('');}}

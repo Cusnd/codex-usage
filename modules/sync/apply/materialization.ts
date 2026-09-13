@@ -49,7 +49,13 @@ export async function materializeCanonical(db:D1Database,h:Domain,canonical:Map<
   const deltas:EventDelta[]=[],changes:EntityMutation[]=[];
   for(const id of ids){const old=oldEvents.get(id),before:CanonicalEvent|null=old?.payload?JSON.parse(old.payload):null,after=canonical.get(id)!;if(stableJson(before)===stableJson(after))continue;deltas.push({event_id:id,before,after});changes.push({kind:'event',id,revision:(old?.revision||0)+1,value:after,at:after?.at||before?.at,thread_id:after?.thread_id||before?.thread_id,origin_device_id:effectiveOrigin(after)});}
   const statements:D1PreparedStatement[]=[];
-  for(const group of chunks(changes.filter(c=>c.value!==null).map(c=>({id:c.id,revision:c.revision,...c.value as CanonicalEvent,origin_device_id:c.origin_device_id,payload:stableJson(c.value)}))))statements.push(db.prepare(`INSERT INTO v3_events(user_id,epoch,event_id,revision,at,thread_id,turn_id,origin_device_id,source_project_id,project,model,effort,payload)
+  const eventRows=changes.filter(c=>c.value!==null).map(c=>{
+    const value=c.value as CanonicalEvent;
+    // Token strings and other canonical fields are already present in payload.
+    // Bind only the columns read by this INSERT instead of a second full event.
+    return {id:c.id,revision:c.revision,at:value.at,thread_id:value.thread_id,turn_id:value.turn_id,origin_device_id:c.origin_device_id,source_project_id:value.source_project_id,project:value.project,model:value.model,effort:value.effort,payload:stableJson(value)};
+  });
+  for(const group of chunks(eventRows))statements.push(db.prepare(`INSERT INTO v3_events(user_id,epoch,event_id,revision,at,thread_id,turn_id,origin_device_id,source_project_id,project,model,effort,payload)
     SELECT ?,?,json_extract(value,'$.id'),json_extract(value,'$.revision'),json_extract(value,'$.at'),json_extract(value,'$.thread_id'),json_extract(value,'$.turn_id'),json_extract(value,'$.origin_device_id'),json_extract(value,'$.source_project_id'),json_extract(value,'$.project'),json_extract(value,'$.model'),json_extract(value,'$.effort'),json_extract(value,'$.payload') FROM json_each(?) WHERE true
     ON CONFLICT(user_id,epoch,event_id) DO UPDATE SET revision=excluded.revision,at=excluded.at,thread_id=excluded.thread_id,turn_id=excluded.turn_id,origin_device_id=excluded.origin_device_id,source_project_id=excluded.source_project_id,project=excluded.project,model=excluded.model,effort=excluded.effort,payload=excluded.payload`).bind(h.user_id,h.active_epoch,stableJson(group)));
   const removed=changes.filter(c=>c.value===null).map(c=>c.id);if(removed.length)statements.push(db.prepare('DELETE FROM v3_events WHERE user_id=? AND epoch=? AND event_id IN(SELECT value FROM json_each(?))').bind(h.user_id,h.active_epoch,stableJson(removed)));

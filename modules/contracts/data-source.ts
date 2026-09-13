@@ -1,10 +1,10 @@
 import type { ApiResponse } from "./index.js";
 
-export type QueryView = { namespace: string; lease: import('./read-lease.js').ReadLease | null; rolling?: boolean; timezone?: string };
+export type QueryView = { namespace: string; lease: Pick<import('./read-lease.js').ReadLease, 'lease_id' | 'cut' | 'expires_at' | 'settings'> | null; generation?: number; rolling?: boolean; timezone?: string };
 
 export interface UsageDataSource {
   readonly mode: 'local' | 'cloud' | 'example';
-  revision(): string;
+  revision(route?: string): string;
   subscribe?(listener: () => void): () => void;
   clock?: () => number;
   projectName?(id: string): string | undefined;

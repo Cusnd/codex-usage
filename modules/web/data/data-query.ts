@@ -16,7 +16,7 @@ export function dataQuery<T>(
   const view = adapter.capture();
   const fixed = view !== undefined;
   return {
-    queryKey: [source, route, live ? { ...params, to: { live: true } } : params, timezone, ...(fixed ? [adapter.revision()] : [])],
+    queryKey: [source, route, live ? { ...params, to: { live: true } } : params, timezone, ...(fixed ? [adapter.revision(route)] : [])],
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       adapter.query<T>(route, live && !fixed ? { ...params, to: new Date(clock()).toISOString() } : params, signal, view ? { ...view, rolling: live } : undefined),
   };

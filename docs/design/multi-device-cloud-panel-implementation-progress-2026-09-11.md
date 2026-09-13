@@ -1,5 +1,7 @@
 # 多设备云端面板实施记录
 
+> 本文的浏览器 recent/full 与持久缓存条款已被 [2026-09-13 完全在线设计](cloud-browser-simplification-2026-09-13.md)替代；下文保留历史实现和当时测量结果。
+
 日期：2026-09-11；收尾更新：2026-09-12。用户已明确允许开始实施及使用子代理辅助。实施依据为[具体方案](multi-device-cloud-panel-implementation-plan-2026-09-11.md)与[批阅后需求](multi-device-cloud-panel-requirements-2026-09-11.md)。2026-09-12 用户要求先记录并暂缓性能问题，先完成功能；因此[性能改进记录](../todo/cloud-sync-v3-performance.md)单独维护未达目标及后续工作，不再为性能调优阻塞本轮功能收尾。未列为通过的验收仍不代表已经完成。
 
 **最新状态：用户选中的 F01–F05、S01–S04 共 9 项已修复并定向复验，S05 窄窗口菜单仍待修复。** 详见[修复报告](multi-device-cloud-panel-fixes-2026-09-12.md)及[本轮证据](../../artifacts/acceptance-fixes-20260912/README.md)。[原全面验收](multi-device-cloud-panel-acceptance-2026-09-12.md)保留修复前 10 项失败及当时判断。下文保留此前实现和局部验收记录；旧候选包不代表本轮修改后的代码已重新打包或发布。性能仍暂缓，100k 完整浏览器、外部平台／三台物理设备和 24 小时运行待验；生产尚未切换。此前候选证据见[原索引](../../artifacts/implementation-v3/README.md)。

@@ -30,7 +30,7 @@ export function useData<T>(
   enabled = true,
 ) {
   const runtime = useWebRuntime(), adapter = runtime.source;
-  useSyncExternalStore(adapter.subscribe ?? idleSubscribe, () => adapter.revision(), () => adapter.revision());
+  useSyncExternalStore(adapter.subscribe ?? idleSubscribe, () => adapter.revision(route), () => adapter.revision(route));
   const fixed = runtime.capabilities.deviceScope;
   const { settings } = useContext(Workspace);
   const [search] = useSearchParams();

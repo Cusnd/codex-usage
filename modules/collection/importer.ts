@@ -32,8 +32,10 @@ export class StreamingImporter implements LocalImporter {
     repository:project.git?.primary.identity?.key??null,common_dir:project.git?.commonDirectory??null,confidence:project.git?.primary.status??project.provenance.method,reason:project.provenance.reason}};}
   private async refreshMetadata(){
     const changes:SyncMetadata[]=[],updates:{id:string;value:string}[]=[];
-    for(const row of this.store.all('SELECT id,value FROM collector_projects')){
-      const old=JSON.parse(row.value) as ResolvedProjectSource,project=await this.projects.resolve({cwd:old.observedCwd,threadId:old.sessionId});
+    const projects=this.store.all<{id:string;value:string}>('SELECT id,value FROM collector_projects').map(row=>({...row,old:JSON.parse(row.value) as ResolvedProjectSource}));
+    const resolvedProjects=await this.projects.resolveMany(projects.map(({old})=>({cwd:old.observedCwd,threadId:old.sessionId})));
+    for(const [index,row] of projects.entries()){
+      const {old}=row,project=resolvedProjects[index];
       if(!project.sourceProjectId||'project:'+sha256(project.sourceProjectId)!==row.id)continue;
       const value=this.metadata(row.id,project);if(stableJson(value)===stableJson(this.metadata(row.id,old)))continue;
       updates.push({id:row.id,value:JSON.stringify(project)});changes.push(value);
@@ -41,9 +43,11 @@ export class StreamingImporter implements LocalImporter {
     this.collector.enqueueMetadata(changes);
     for(const row of updates)this.store.run('UPDATE collector_projects SET value=? WHERE id=?',[row.value,row.id]);
     // An App assignment can change source identity without appending a token record.
-    for(const row of this.store.all("SELECT id,path,state FROM collector_sources WHERE kind='session' AND available=1")){
-      const context=JSON.parse(row.state).context;if(!context)continue;
-      const resolved=await this.projects.resolve({cwd:context.cwd,threadId:context.thread_id}),id=resolved.sourceProjectId?'project:'+sha256(resolved.sourceProjectId):null;
+    const sources=this.store.all<{id:string;path:string;state:string}>("SELECT id,path,state FROM collector_sources WHERE kind='session' AND available=1")
+      .map(row=>({...row,context:JSON.parse(row.state).context})).filter(row=>row.context);
+    const resolvedSources=await this.projects.resolveMany(sources.map(({context})=>({cwd:context.cwd,threadId:context.thread_id})));
+    for(const [index,row] of sources.entries()){
+      const {context}=row,resolved=resolvedSources[index],id=resolved.sourceProjectId?'project:'+sha256(resolved.sourceProjectId):null;
       if(id!==context.source_project_id){this.store.run('UPDATE collector_sources SET reset_required=1,version=version+1 WHERE id=?',[row.id]);this.collector.notify(row.path,false);}
     }
   }

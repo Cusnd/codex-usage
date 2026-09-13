@@ -22,7 +22,7 @@ import { ErrorBox, Loading, time } from "../../widgets/ui.js";
 import { UsageBreakdown } from "../../widgets/Usage.js";
 import { useData, useRange } from "../../data/workspace.js";
 import { Segmented, Updating } from "../../motion/MotionPrimitives.js";
-import { MotionBar } from "../../motion/ChartMotion.js";
+import { MotionBar } from "../../motion/BarMotion.js";
 import { useTrendLayout } from "../../motion/TrendMotion.js";
 import { useReducedMotion } from "../../motion/motion.js";
 

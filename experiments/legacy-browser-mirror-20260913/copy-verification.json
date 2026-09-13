@@ -1,0 +1,114 @@
+[
+  {
+    "source": "modules/sync/browser/cache.ts",
+    "target": "browser/cache.ts",
+    "originalSha256": "3cbb6f003dd46ff4e95afef1e1eab8ece28f32cadd43e02eb44b9efce3115758",
+    "copiedSha256": "3cbb6f003dd46ff4e95afef1e1eab8ece28f32cadd43e02eb44b9efce3115758",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/cache-model.ts",
+    "target": "browser/cache-model.ts",
+    "originalSha256": "e3eac6caedf329aa030dc5ca0721505258d4625d291858fb8c620404eb21c124",
+    "copiedSha256": "e3eac6caedf329aa030dc5ca0721505258d4625d291858fb8c620404eb21c124",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/cache-memory.ts",
+    "target": "browser/cache-memory.ts",
+    "originalSha256": "3145e4a9fe3adf90c9c9b09e3fd646f152e786af68317daac60475da0ef318c1",
+    "copiedSha256": "3145e4a9fe3adf90c9c9b09e3fd646f152e786af68317daac60475da0ef318c1",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/cache-indexeddb.ts",
+    "target": "browser/cache-indexeddb.ts",
+    "originalSha256": "21fc12e46fd233c188d92ac131e9f1a3dbd8b9c96836e98e4b85d365d073e593",
+    "copiedSha256": "21fc12e46fd233c188d92ac131e9f1a3dbd8b9c96836e98e4b85d365d073e593",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/controller.ts",
+    "target": "browser/controller.ts",
+    "originalSha256": "3f42dcd5c603971bc4cf2de3f09ff21ca4f28c44920f685234f1e91c0e520485",
+    "copiedSha256": "3f42dcd5c603971bc4cf2de3f09ff21ca4f28c44920f685234f1e91c0e520485",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/data-source.ts",
+    "target": "browser/data-source.ts",
+    "originalSha256": "dc6ba26ab012cccc687e1f95445f7bf8d5fe1f9258aae36803993800dca3246c",
+    "copiedSha256": "dc6ba26ab012cccc687e1f95445f7bf8d5fe1f9258aae36803993800dca3246c",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/project-labels.ts",
+    "target": "browser/project-labels.ts",
+    "originalSha256": "9168962eeabd7d0fe356a6ffabb1ca3cbd70c82370c714b1b74dc84a24371627",
+    "copiedSha256": "9168962eeabd7d0fe356a6ffabb1ca3cbd70c82370c714b1b74dc84a24371627",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/transport.ts",
+    "target": "browser/transport.ts",
+    "originalSha256": "c57ae6a500bf8b2b94dba628b9e6af26d53bf93ee49dc8f19b86fd867ce3d4ef",
+    "copiedSha256": "c57ae6a500bf8b2b94dba628b9e6af26d53bf93ee49dc8f19b86fd867ce3d4ef",
+    "copiedExactly": true
+  },
+  {
+    "source": "modules/sync/browser/verify.ts",
+    "target": "browser/verify.ts",
+    "originalSha256": "1a943edcdd79c973a24b863c584bc454c7f42adebc277f09cc8df0e5f6b1db63",
+    "copiedSha256": "1a943edcdd79c973a24b863c584bc454c7f42adebc277f09cc8df0e5f6b1db63",
+    "copiedExactly": true
+  },
+  {
+    "source": "tests/web-cloud-sync.test.ts",
+    "target": "tests/web-cloud-sync.test.ts",
+    "originalSha256": "33f5010edf870d1f40f3293a0e714635c03c297c35042fa52a6e12966c48ed67",
+    "copiedSha256": "33f5010edf870d1f40f3293a0e714635c03c297c35042fa52a6e12966c48ed67",
+    "copiedExactly": true
+  },
+  {
+    "source": "tests/web-cloud-prefetch.test.ts",
+    "target": "tests/web-cloud-prefetch.test.ts",
+    "originalSha256": "eb24a512fa410935953d102b47ff7506afad7abbf6a0decb16e6aa3d5e388eff",
+    "copiedSha256": "eb24a512fa410935953d102b47ff7506afad7abbf6a0decb16e6aa3d5e388eff",
+    "copiedExactly": true
+  },
+  {
+    "source": "tests/cloud-experience-browser.test.ts",
+    "target": "tests/cloud-experience-browser.test.ts",
+    "originalSha256": "055aaabbae4fc3e611fd7b6e0281d59faced71ece55fa0746b1bb18db7b217ee",
+    "copiedSha256": "055aaabbae4fc3e611fd7b6e0281d59faced71ece55fa0746b1bb18db7b217ee",
+    "copiedExactly": true
+  },
+  {
+    "source": "tests/web-cloud-cache.browser.ts",
+    "target": "tests/web-cloud-cache.browser.ts",
+    "originalSha256": "1b4f140e92853ef4b027fe4cf98b64232f56eca95e0835d129efbeba9f759455",
+    "copiedSha256": "1b4f140e92853ef4b027fe4cf98b64232f56eca95e0835d129efbeba9f759455",
+    "copiedExactly": true
+  },
+  {
+    "source": "scripts/cloud-experience-browser.ts",
+    "target": "scripts/cloud-experience-browser.ts",
+    "originalSha256": "703646431034bb7f26153192b125d0e65f65eb1573c09af68e623502caa2520e",
+    "copiedSha256": "703646431034bb7f26153192b125d0e65f65eb1573c09af68e623502caa2520e",
+    "copiedExactly": true
+  },
+  {
+    "source": "scripts/cloud-experience-browser-fixture.ts",
+    "target": "scripts/cloud-experience-browser-fixture.ts",
+    "originalSha256": "412dbb131f45ba1e008acb08e7299551f7bd0b0b83bbfe89d37ae84b16ecd8bd",
+    "copiedSha256": "412dbb131f45ba1e008acb08e7299551f7bd0b0b83bbfe89d37ae84b16ecd8bd",
+    "copiedExactly": true
+  },
+  {
+    "source": "scripts/browser-cache-performance.ts",
+    "target": "scripts/browser-cache-performance.ts",
+    "originalSha256": "8f07b1b3483ed3f15f5d064b81b49f079e15277e7cb2ddcf7f0bce7786d351ab",
+    "copiedSha256": "8f07b1b3483ed3f15f5d064b81b49f079e15277e7cb2ddcf7f0bce7786d351ab",
+    "copiedExactly": true
+  }
+]
