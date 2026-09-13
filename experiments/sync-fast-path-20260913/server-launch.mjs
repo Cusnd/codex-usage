@@ -1,0 +1,13 @@
+import {spawn,spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+const root=process.cwd(),output=path.join(root,'artifacts/sync-fast-path-20260913/server');fs.mkdirSync(output,{recursive:true});
+const wrangler=path.join(root,'cloud/node_modules/wrangler/bin/wrangler.js'),config=path.join(root,'experiments/sync-fast-path-20260913/server-wrangler.jsonc'),persist=path.join(output,'d1');
+const migration=spawnSync(process.execPath,[wrangler,'d1','migrations','apply','DB','--local','--config',config,'--persist-to',persist],{cwd:root,encoding:'utf8',windowsHide:true,env:{...process.env,CI:'true'}});
+fs.writeFileSync(path.join(output,'migrations.log'),migration.stdout+'\n'+migration.stderr);if(migration.status!==0)throw Error('Local migrations failed; inspect migrations.log');
+const log=fs.openSync(path.join(output,'worker.log'),'a');
+const child=spawn(process.execPath,[wrangler,'dev','--local','--config',config,'--persist-to',persist,'--port','18913','--inspector-port','19913'],{cwd:root,stdio:['ignore',log,log],windowsHide:true,env:{...process.env,CI:'true'}});
+fs.closeSync(log);
+fs.writeFileSync(path.join(output,'launch.json'),JSON.stringify({pid:child.pid,config,origin:'http://127.0.0.1:18913',at:new Date().toISOString()},null,2));
+console.log(JSON.stringify({pid:child.pid,origin:'http://127.0.0.1:18913'}));
+await new Promise(resolve=>child.on('exit',resolve));

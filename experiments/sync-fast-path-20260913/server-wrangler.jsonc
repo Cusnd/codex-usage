@@ -1,0 +1,9 @@
+{
+  "name": "sync-fast-path-local-experiment",
+  "main": "server-worker.ts",
+  "compatibility_date": "2026-09-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "d1_databases": [{"binding":"DB","database_name":"sync-fast-path-experiment","database_id":"00000000-0000-0000-0000-000000000913","migrations_dir":"../../cloud/migrations"}],
+  "vars": {"APP_ORIGIN":"http://127.0.0.1:18913"}
+}
