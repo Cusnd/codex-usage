@@ -1,4 +1,5 @@
 import { useProjectLabels } from '../../runtime/context.js';
+import { ProjectIcon, ProjectIdentity } from '../../widgets/ProjectIdentity.js';
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useContext } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -38,7 +39,7 @@ export function SessionList({
   onSelect: (id: string) => void;
   directory?: boolean;
 }) {
-  const { projectName, projectDescription } = useProjectLabels();
+  const { projectName, projectDescription, projectKind } = useProjectLabels();
   const [search] = useSearchParams();
   const patch = useUrlPatch();
   const { settings } = useContext(Workspace);
@@ -105,9 +106,9 @@ export function SessionList({
                 )}
               </span>
               <span className="directory-copy">
-                <b>{sessionTitle(row, projectName)}</b>
+                <b className="project-identity"><ProjectIcon id={row.project} />{sessionTitle(row, projectName)}</b>
                 <small title={projectDescription(row.project)}>
-                  {projectName(row.project)} · {shortId(row.id)}
+                  {projectKind(row.project) !== "session" && <><ProjectIdentity id={row.project} /> · </>}{shortId(row.id)}
                 </small>
                 <small>
                   非缓存 {compact(row.uncachedInputTokens)} · 缓存{" "}
@@ -150,10 +151,10 @@ export function SessionList({
                       title={sessionTitle(row, projectName)}
                       onClick={() => onSelect(row.id)}
                     >
-                      {sessionTitle(row, projectName)}
+                      <ProjectIcon id={row.project} />{sessionTitle(row, projectName)}
                     </button>
                     <small className="block">
-                      {projectName(row.project)} · {shortId(row.id)}
+                      {projectKind(row.project) !== "session" && <><ProjectIdentity id={row.project} /> · </>}{shortId(row.id)}
                     </small>
                   </td>
                   <td className="detail-column">
@@ -186,7 +187,7 @@ export function SessionList({
 }
 
 export function GroupWorkspace({ view }: { view: Group }) {
-  const { projectName } = useProjectLabels();
+  const { projectName, projectKind } = useProjectLabels();
   const r = useRange();
   const patch = useUrlPatch();
   const selected = r.search.get("groupKey");
@@ -233,7 +234,8 @@ export function GroupWorkspace({ view }: { view: Group }) {
   const session = r.search.get("session") || undefined;
   const detailMotion = useHierarchyMotion<HTMLDivElement>(`${selected}/${session || ""}`, key === undefined ? 0 : session ? 2 : 1, key === undefined || !summary.isPending);
   const directoryMotion = useReveal<HTMLElement>(selected || "", { direction: -1, ready: key === undefined });
-  const label = dimensions.find(([id]) => id === view)![1];
+  const label = view === "project" ? "项目与独立会话" : dimensions.find(([id]) => id === view)![1];
+  const selectedLabel = view === "project" ? projectKind(key ?? null) === "session" ? "独立会话" : "项目" : label;
   return (
     <div
       className={
@@ -277,7 +279,7 @@ export function GroupWorkspace({ view }: { view: Group }) {
                 )}
               </span>
               <span className="directory-copy">
-                <b title={view === 'project' ? row.label : row.key || '未知'}>{row.label}</b>
+                <b title={view === "project" ? projectName(row.key) : row.label}>{view === "project" ? <ProjectIdentity id={row.key} /> : row.label}</b>
                 <small>
                   {row.threadCount} Sessions · {percent(row.share)}
                 </small>
@@ -304,7 +306,7 @@ export function GroupWorkspace({ view }: { view: Group }) {
       <div className="atlas-detail" ref={detailMotion}>
         {key === undefined ? (
           <div className="atlas-empty">
-            <span>从一个{label}开始</span>
+            <span>从{label}开始</span>
             <h2>选择{label}查看任务</h2>
             <p>查看所选{label}的用量细分，再进入任务查看每一轮。</p>
           </div>
@@ -339,13 +341,13 @@ export function GroupWorkspace({ view }: { view: Group }) {
               <ArrowLeft size={15} />
               返回{label}目录
             </button>
-            <div className="detail-breadcrumb">选中{label} · 当前时间范围</div>
+            <div className="detail-breadcrumb">选中{selectedLabel} · 当前时间范围</div>
             <div className="atlas-detail-heading">
-              <h2 title={key || "未知"}>
+              <h2 title={view === "project" ? projectName(key ?? null) : key || "未知"}>
                 {key === null
                   ? "未知"
                   : view === "project"
-                    ? projectName(key)
+                    ? <ProjectIdentity id={key} />
                     : key}
               </h2>
               <div className="detail-total">
@@ -357,7 +359,7 @@ export function GroupWorkspace({ view }: { view: Group }) {
             <UsageBreakdown data={summary.data?.data} />
             {summary.data?.data.eventCount === 0 ? (
               <div className="atlas-empty">
-                选中{label}不再匹配当前筛选。
+                选中{selectedLabel}不再匹配当前筛选。
                 <button
                   className="text-button"
                   onClick={() => patch({ groupKey: undefined })}

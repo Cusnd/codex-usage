@@ -13,7 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Metrics, TrendRow } from '../../../contracts/query.js';
-import { bucketRange, bucketTimes } from "../../../foundation/time-range.js";
+import { bucketRange, bucketTimes, trendBucketLabels } from "../../../foundation/time-range.js";
 import { compact, exact } from '../../ui/format.js';
 import { useUrlPatch } from "./AtlasShared.js";
 import { Choice } from "../../ui/Choice.js";
@@ -37,14 +37,14 @@ export function TrendWorkspace() {
   const parent = readTrendParent(r.search.get("parentRange"));
   // Keep the brush's complete domain while the page queries the selected window.
   const domain = {
-    from: parent?.from || r.filters.from!,
-    to: parent?.to || r.filters.to!,
+    from: parent?.from || r.from,
+    to: parent?.to || r.to,
   };
   const trendFilters = { ...r.filters, ...domain };
   const trend = useData<TrendRow[]>(
     "local/trend",
-    { ...trendFilters, bucket },
-    !collapsed,
+    { ...trendFilters, from: parent ? domain.from : r.filters.from, bucket },
+    !collapsed && (r.range !== "all" || !!r.coverage.data),
   );
   const summary = useData<Metrics>("local/summary", r.filters);
   const brush = useRef<{ startIndex?: number; endIndex?: number } | null>(null);
@@ -77,16 +77,16 @@ export function TrendWorkspace() {
     points.map((p) => p.time),
     bucket,
     r.timezone,
-    r.filters.from!,
-    r.filters.to!,
+    r.from,
+    r.to,
   );
   const selectRange = (from: string, to: string, hourly: boolean) => {
     const savedParent =
       (parent ? JSON.stringify(parent) : null) ||
       JSON.stringify({
         range: r.range,
-        from: r.filters.from,
-        to: r.filters.to,
+        from: r.from,
+        to: r.to,
         bucket,
       });
     r.update({
@@ -103,8 +103,8 @@ export function TrendWorkspace() {
       at,
       "day",
       r.timezone,
-      r.filters.from!,
-      r.filters.to!,
+      r.from,
+      r.to,
     );
     if (next) selectRange(next.from, next.to, true);
   };
@@ -151,9 +151,7 @@ export function TrendWorkspace() {
         <h2>
           {collapsed
             ? "范围内统计"
-            : bucket === "day"
-              ? "每日消耗"
-              : "每小时消耗"}
+            : `每${trendBucketLabels[bucket]}消耗`}
         </h2>
         <div className="actions">
           {r.search.has("parentRange") && (
@@ -195,14 +193,14 @@ export function TrendWorkspace() {
                 <small>单位：百万 Token · {r.timezone}</small>
               )}
               <Segmented value={bucket} label="趋势粒度" small>
-                {(["day", "hour"] as const).map((value) => (
+                {(["hour", "day", "week", "month"] as const).map((value) => (
                   <button
                     key={value}
                     aria-pressed={bucket === value}
                     className={bucket === value ? "selected" : ""}
                     onClick={() => patch({ bucket: value })}
                   >
-                    {value === "day" ? "按日" : "按小时"}
+                    {"按" + trendBucketLabels[value]}
                   </button>
                 ))}
               </Segmented>
@@ -236,7 +234,7 @@ export function TrendWorkspace() {
                       minTickGap={24}
                       tickFormatter={(at) =>
                         DateTime.fromISO(at, { zone: r.timezone }).toFormat(
-                          bucket === "day" ? "MM.dd" : "HH:mm",
+                          bucket === "hour" ? "HH:mm" : bucket === "month" ? "yyyy.MM" : "MM.dd",
                         )
                       }
                     />
@@ -319,7 +317,7 @@ export function TrendWorkspace() {
                         tickFormatter={(at) =>
                           DateTime.fromISO(String(at), {
                             zone: r.timezone,
-                          }).toFormat(bucket === "day" ? "MM.dd" : "HH:mm")
+                          }).toFormat(bucket === "hour" ? "HH:mm" : bucket === "month" ? "yyyy.MM" : "MM.dd")
                         }
                         onChange={(range) => {
                           brush.current = range;

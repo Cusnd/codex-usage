@@ -1,6 +1,27 @@
 /** Project identity and organization. This module has no filesystem, database or clock dependency. */
 export type SourceProjectKind = 'git' | 'app' | 'session';
 
+export type ProjectDisplay = { name: string; kind: SourceProjectKind | 'project' | 'unknown' };
+/** Display identity is separate from saved names and grouping rules. */
+export function projectDisplay(
+  project: { id: string; name: string | null; members: string[] },
+  sources: { id: string; kind?: string; name?: string | null; root?: string | null }[],
+  threads: { id: string; title: string | null; sourceProjectId: string | null; parentId?: string | null }[] = [],
+): ProjectDisplay {
+  const members = new Set(project.members), evidence = sources.filter(source => members.has(source.id));
+  const sessions = evidence.length > 0 && evidence.every(source => source.kind === 'session');
+  if (sessions) {
+    const candidates = threads.filter(thread => thread.sourceProjectId && members.has(thread.sourceProjectId))
+      .sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId) || a.id.localeCompare(b.id));
+    const session = candidates.find(thread => !thread.parentId && thread.title?.trim()) ?? candidates[0];
+    return { kind: 'session', name: project.name?.trim() || session?.title?.trim() || (session ? `会话 ${session.id.slice(0, 8)}` : '独立会话') };
+  }
+  const kind = evidence.some(source => source.kind === 'git') ? 'git'
+    : evidence.some(source => source.kind === 'app') ? 'app' : evidence.length ? 'unknown' : 'project';
+  const named = evidence.find(source => source.name?.trim());
+  return { kind, name: project.name?.trim() || named?.name?.trim() || (kind === 'unknown' ? '归属待识别' : '未命名项目') };
+}
+
 /** An injective tuple encoding, rather than a lossy hash of a path or display name. */
 export function sourceProjectId(collectorId: string, kind: SourceProjectKind, normalizedRoot: string | null, originalId: string | null = null): string {
   if (!collectorId || (!normalizedRoot && !originalId)) throw new Error('A project needs a collector and a root or original identity');

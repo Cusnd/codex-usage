@@ -111,7 +111,7 @@ export function AtlasAnalysis() {
       ) : (
         <GroupWorkspace key={view} view={view} />
       )}
-      <MotionDetails
+      {r.range !== "all" && <MotionDetails
         className="atlas-comparison"
         open={compare} onOpenChange={setCompare} duration={260}
         summary={<>
@@ -119,7 +119,7 @@ export function AtlasAnalysis() {
         </>}
       >
         <ComparisonSection />
-      </MotionDetails>
+      </MotionDetails>}
     </div>
   );
 }

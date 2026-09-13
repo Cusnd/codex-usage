@@ -3,6 +3,7 @@ import { stableJson, type UploadBatch } from '../../contracts/sync.js';
 import { fail, json, readJson, requireJson, requireSameOrigin, sha256 } from '../../platform/worker/http.js';
 import { advanceHead, chunks, cutOf, domain, endGuard, entityStatements, guard, isCasFailure, type Domain, type EntityMutation } from '../../sync/publication/store.js';
 import { createRead, getRead } from '../../sync/reads/snapshots.js';
+import { projectDisplays } from './project-identities.js';
 
 /** Collector ownership is part of identity even for old/third-party local project IDs. */
 export async function cloudSourceProjectId(collectorId:string, localId:string):Promise<string> {
@@ -127,8 +128,18 @@ export async function projectView(db:D1Database,user:string,leaseId?:string){
   const lease=await getRead(db,user,leaseId||(await createRead(db,user,'full',[])).lease_id);
   const rows=(await db.prepare(`SELECT entity_id,revision,payload FROM v3_entity_versions WHERE user_id=? AND epoch=? AND kind='project' AND valid_from<=? AND (valid_to IS NULL OR ?<valid_to) AND payload IS NOT NULL ORDER BY entity_id`).bind(user,lease.epoch,lease.cut,lease.cut).all<EntityRow>()).results;
   const organization=organizationOf(rows),sources=rows.flatMap(r=>{const v=JSON.parse(r.payload!);return v.subtype==='source'?[v]:[];});
+  const threads=(await db.prepare(`SELECT entity_id id,json_extract(payload,'$.title') title,json_extract(payload,'$.source_project_id') sourceProjectId,json_extract(payload,'$.subagent_parent_id') parentId
+    FROM v3_entity_versions WHERE user_id=? AND epoch=? AND kind='thread' AND valid_from<=? AND (valid_to IS NULL OR ?<valid_to) AND payload IS NOT NULL ORDER BY entity_id`).bind(user,lease.epoch,lease.cut,lease.cut)
+    .all<{id:string;title:string|null;sourceProjectId:string|null;parentId:string|null}>()).results;
+  const threadSources=new Set(threads.map(thread=>thread.sourceProjectId));
+  const missing=sources.filter(source=>source.kind==='session'&&!threadSources.has(source.id)).map(source=>source.id);
+  if(missing.length)threads.push(...(await db.prepare(`SELECT DISTINCT thread_id id,NULL title,json_extract(payload,'$.source_project_id') sourceProjectId,NULL parentId
+    FROM v3_entity_versions WHERE user_id=? AND epoch=? AND kind='event' AND valid_from<=? AND (valid_to IS NULL OR ?<valid_to) AND payload IS NOT NULL
+      AND json_extract(payload,'$.source_project_id') IN (SELECT value FROM json_each(?)) ORDER BY thread_id`).bind(user,lease.epoch,lease.cut,lease.cut,stableJson(missing))
+      .all<{id:string;title:null;sourceProjectId:string;parentId:null}>()).results);
+  const projects=projectDisplays(organization.projects,sources,threads);
   await getRead(db,user,lease.lease_id);
-  return {cut:{dataset_epoch:lease.epoch,commit_seq:lease.cut,deletion_version:lease.deletion_version,organization_version:lease.organization_version,config_version:lease.config_version},lease_id:lease.lease_id,projects:organization.projects,sources,aliases:organization.aliases,blocked_edges:organization.blockedEdges};
+  return {cut:{dataset_epoch:lease.epoch,commit_seq:lease.cut,deletion_version:lease.deletion_version,organization_version:lease.organization_version,config_version:lease.config_version},lease_id:lease.lease_id,projects,sources,aliases:organization.aliases,blocked_edges:organization.blockedEdges};
 }
 type ProjectOperation={operation_id:string;base_organization_version?:number;action:'merge'|'split'|'reset'|'rename';project_ids?:string[];project_id?:string;groups?:{source_ids:string[];name?:string}[];name?:string|null};
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);

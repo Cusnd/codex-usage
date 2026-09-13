@@ -148,7 +148,8 @@
         "modules/analytics/plan.ts",
         "modules/analytics/query-engine.ts",
         "modules/analytics/revision.ts",
-        "modules/analytics/sqlite.ts"
+        "modules/analytics/sqlite.ts",
+        "modules/analytics/filter.ts"
       ],
       "tests": [
         "tests/core.test.ts",
@@ -156,7 +157,8 @@
         "tests/agents.test.ts",
         "tests/billing-queries.test.ts",
         "tests/trend-granularity.test.ts",
-        "tests/performance-analytics-current.test.ts"
+        "tests/performance-analytics-current.test.ts",
+        "tests/overview-queries.test.ts"
       ],
       "cloudTests": [
         "test/performance-analytics-current.test.ts"
@@ -176,15 +178,18 @@
         "settings",
         "settings/worker",
         "platform/worker",
-        "sync/reads"
+        "sync/reads",
+        "organization/worker"
       ],
       "public": [
-        "modules/analytics/worker/queries.ts"
+        "modules/analytics/worker/queries.ts",
+        "modules/analytics/worker/query-input.ts"
       ],
       "tests": [],
       "cloudTests": [
         "test/v3-query-scale.test.ts",
-        "test/v3-billing.test.ts"
+        "test/v3-billing.test.ts",
+        "test/read-api.test.ts"
       ]
     },
     {
@@ -377,11 +382,13 @@
         "platform/worker",
         "sync/publication",
         "sync/reads",
-        "sync/jobs-types"
+        "sync/jobs-types",
+        "analytics"
       ],
       "public": [
         "modules/organization/worker/origins.ts",
-        "modules/organization/worker/projects.ts"
+        "modules/organization/worker/projects.ts",
+        "modules/organization/worker/project-identities.ts"
       ],
       "tests": [],
       "cloudTests": [
@@ -401,19 +408,23 @@
         "contracts",
         "usage",
         "organization/node",
-        "storage"
+        "storage",
+        "analytics"
       ],
       "public": [
         "modules/collection/collector.ts",
         "modules/collection/importer.ts",
-        "modules/collection/projection.ts"
+        "modules/collection/projection.ts",
+        "modules/collection/analytics.ts"
       ],
       "tests": [
         "tests/collector-v3.test.ts",
         "tests/collector-origins.test.ts",
         "tests/collector-projection.test.ts",
         "tests/core.test.ts",
-        "tests/agents.test.ts"
+        "tests/agents.test.ts",
+        "tests/all-time-projectless.test.ts",
+        "tests/local-page-query.test.ts"
       ],
       "cloudTests": []
     },
@@ -722,12 +733,14 @@
         "web/runtime",
         "web/data",
         "web/ui",
-        "web/motion"
+        "web/motion",
+        "foundation"
       ],
       "public": [
         "modules/web/widgets/Chart.tsx",
         "modules/web/widgets/Usage.tsx",
-        "modules/web/widgets/ui.tsx"
+        "modules/web/widgets/ui.tsx",
+        "modules/web/widgets/ProjectIdentity.tsx"
       ],
       "tests": [
         "tests/pricing-settings.test.ts",

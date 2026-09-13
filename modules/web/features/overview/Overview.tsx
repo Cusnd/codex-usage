@@ -7,45 +7,34 @@ import { ArrowUpRight } from "lucide-react";
 import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import type { AccountLimits, AccountUsage } from '../../../contracts/accounts.js';
-import type { Metrics, TrendRow } from '../../../contracts/query.js';
+import type { UsageOverview, TrendRow } from '../../../contracts/query.js';
 import { compact, exact } from '../../ui/format.js';
 import { ErrorBox, FilterBar, Header, Loading, MetricsCards, Notes, SourceBadge, time } from "../../widgets/ui.js";
-import { Workspace, useData, useRange } from "../../data/workspace.js";
+import { Workspace, RangeCoverage, useData, useRange } from "../../data/workspace.js";
 import { MotionDetails, ResultRegion, Segmented, Updating } from "../../motion/MotionPrimitives.js";
 import { QuotaProgress } from "../../motion/ChartMotion.js";
+import { trendBucketLabels } from '../../../foundation/time-range.js';
 import { Chart } from '../../widgets/Chart.js';
 
-export function LocalTrend() {
+function LocalTrend({ q }: { q: ReturnType<typeof useData<UsageOverview>> }) {
   const { deviceScope } = useCapabilities();
   const r = useRange();
-  const bucket = r.bucket;
-  const q = useData<TrendRow[]>("local/trend", { ...r.filters, bucket });
+  const bucket = q.data?.data.bucket ?? r.bucket;
   const [localDisplayed, setDisplayed] = useState<{ rows: TrendRow[]; bucket: typeof bucket }>();
-  if (!deviceScope && q.data && !q.isPlaceholderData && (localDisplayed?.rows !== q.data.data || localDisplayed.bucket !== bucket))
-    setDisplayed({ rows: q.data.data, bucket });
-  const displayed = deviceScope ? (q.data ? { rows: q.data.data, bucket } : undefined) : localDisplayed;
+  if (!deviceScope && q.data && !q.isPlaceholderData && (localDisplayed?.rows !== q.data.data.trend || localDisplayed.bucket !== bucket))
+    setDisplayed({ rows: q.data.data.trend, bucket });
+  const displayed = deviceScope ? (q.data ? { rows: q.data.data.trend, bucket } : undefined) : localDisplayed;
   return (
     <section className="panel overview-trend">
       <div className="panel-heading">
         <div>
           <h2>消耗趋势</h2>
-          <p>按{(displayed?.bucket ?? bucket) === "day" ? "日" : "小时"}观察{deviceScope ? "所选设备记录" : "本机记录"}</p>
+          <p>按{trendBucketLabels[displayed?.bucket ?? bucket]}观察{deviceScope ? "所选设备记录" : "本机记录"}</p>
         </div>
         <Segmented value={bucket} label="趋势粒度" small>
-          <button
-            aria-pressed={bucket === "day"}
-            className={bucket === "day" ? "selected" : ""}
-            onClick={() => r.update({ bucket: "day" })}
-          >
-            按日
-          </button>
-          <button
-            aria-pressed={bucket === "hour"}
-            className={bucket === "hour" ? "selected" : ""}
-            onClick={() => r.update({ bucket: "hour" })}
-          >
-            按小时
-          </button>
+          {(["hour", "day", "week", "month"] as const).map(value => <button key={value}
+            aria-pressed={bucket === value} className={bucket === value ? 'selected' : ''}
+            onClick={() => r.update({ bucket: value })}>{'按' + trendBucketLabels[value]}</button>)}
         </Segmented>
       </div>
       <ErrorBox error={q.error} />
@@ -60,13 +49,13 @@ export function LocalTrend() {
 
 export function Overview() {
   const { deviceScope } = useCapabilities();
-  const r = useRange();
+  const r = useRange(false);
   const account = useData<AccountUsage>("account/usage", {}, !deviceScope);
   const limits = useData<AccountLimits>("account/limits", {}, !deviceScope);
-  const summary = useData<Metrics>("local/summary", r.filters);
+  const summary = useData<UsageOverview>("local/overview", { ...r.filters, bucket: r.range === 'all' && !r.search.get('bucket') ? 'auto' : r.bucket });
   const { status } = useContext(Workspace);
   return (
-    <>
+    <RangeCoverage.Provider value={{data: summary.data ? {data:summary.data.data.scope, meta:summary.data.meta} : undefined, error:summary.error}}>
       <Header
         title="用量总览"
         description={deviceScope ? "按当前时区汇总所选设备的用量，并查看账户额度。" : "按当前时区重新统计本机用量，并查看账户额度。"}
@@ -86,9 +75,9 @@ export function Overview() {
               分析消耗来源 <ArrowUpRight size={15} />
             </Link>
           </div>
-          <ResultRegion change={summary.motion} pending={summary.motion.pending} animate={false}><MetricsCards data={summary.data?.data} /></ResultRegion>
+          <ResultRegion change={summary.motion} pending={summary.motion.pending} animate={false}><MetricsCards data={summary.data?.data.metrics} /></ResultRegion>
           <ErrorBox error={summary.error} />
-          <LocalTrend />
+          <LocalTrend q={summary} />
           <Notes response={summary.data} />
         </div>
         <aside className="overview-account" aria-label="账户额度">
@@ -169,6 +158,6 @@ export function Overview() {
           </span>
         </div>
       </MotionDetails>}
-    </>
+    </RangeCoverage.Provider>
   );
 }

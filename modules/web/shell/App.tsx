@@ -68,14 +68,14 @@ export function App({ pages }: { pages: AppPages }) {
   const settingsQuery = useQuery({
     queryKey: ["settings"],
     queryFn: ({ signal }) => api<Settings>("settings", {}, signal),
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: "always",
+    refetchInterval: deviceScope ? false : 60_000,
+    refetchOnWindowFocus: deviceScope ? false : "always",
   });
   const settings = settingsQuery.data?.data || defaultSettings;
   const statusQuery = useQuery({
     queryKey: ["status"],
     queryFn: ({ signal }) => api<Status>("status", {}, signal),
-    refetchInterval: (q) =>
+    refetchInterval: (q) => deviceScope ? false :
       q.state.data?.data.local.running || q.state.data?.data.account.running
         ? 2000
         : 15000,
@@ -115,8 +115,7 @@ export function App({ pages }: { pages: AppPages }) {
     setRefreshMessage('');
     try {
       await mutate("refresh", { source, force: true });
-      if (deviceScope) await client.invalidateQueries();
-      await client.invalidateQueries({ queryKey: ["status"] });
+      if (!deviceScope) await client.invalidateQueries({ queryKey: ["status"] });
       if (demoPreview) setRefreshMessage('示例数据已刷新。');
     } catch (e) {
       cancelRefreshMotion(ticket);

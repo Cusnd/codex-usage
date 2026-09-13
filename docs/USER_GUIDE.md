@@ -61,7 +61,11 @@ Choose a time range, then select a day in Analysis to inspect hourly activity. U
 
 Open a project or task to continue into its turns. The global Turn view lets you compare individual turns across tasks. Remove a filter chip to broaden the view. Shared filters persist between pages; returning from a detail view preserves the originating list's sorting and pagination.
 
-Custom dates are interpreted in the selected timezone. Click **应用时间范围** to apply the range. Today defaults to hours; seven- and thirty-day ranges default to days. You can change the granularity within the current range.
+Custom dates are interpreted in the selected timezone. Click **应用时间范围** to apply the range. Today defaults to hours; seven- and thirty-day ranges default to days. You can switch between hourly, daily, weekly, and monthly granularity within the current range.
+
+Choose **全部** (All time) to include all retained records within the selected device, project, model, and other filters. The page shows the actual start of coverage. Cumulative tokens include projectless chats; projects are counted by logical identity across cloud devices, while projectless chats are counted separately. Totals reflect the data collected or synchronized so far. All-time trends automatically use days, weeks, or months according to the span, and omit previous-period comparisons. After drilling into a smaller window, you can return to the original all-time scope.
+
+Projectless chats display their session title, falling back to “会话” plus a short session ID. The adjacent speech-bubble icon shows **Projectless chat** on hover. Git projects, App projects, and unresolved records have distinct type indicators; projectless chats are no longer labeled as unnamed projects.
 
 ### Read an agent team
 

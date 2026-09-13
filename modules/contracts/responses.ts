@@ -1,12 +1,23 @@
 import { Type, type Static, type TSchema } from "@sinclair/typebox";
 import { NullableString } from './primitives.js';
 
+export const ProjectLabelSchema = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  kind: Type.Union([
+    Type.Literal('git'), Type.Literal('app'), Type.Literal('session'),
+    Type.Literal('project'), Type.Literal('unknown'),
+  ]),
+});
+export type ProjectLabel = Static<typeof ProjectLabelSchema>;
+
 export const MetaSchema = Type.Object({
   exampleData: Type.Optional(Type.Boolean()),
   source: Type.String(),
   updatedAt: NullableString,
   timezone: Type.String(),
   warnings: Type.Array(Type.String()),
+  projectLabels: Type.Optional(Type.Array(ProjectLabelSchema)),
   devices: Type.Optional(Type.Array(Type.Object({id:Type.String(),name:Type.String(),coverageFrom:NullableString,coverageTo:NullableString}))),
   conflictCount: Type.Optional(Type.Integer()),
   provider: Type.Optional(Type.Union([Type.Literal("app-server"), Type.Literal("http"), Type.Null()])),

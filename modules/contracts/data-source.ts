@@ -8,6 +8,7 @@ export interface UsageDataSource {
   subscribe?(listener: () => void): () => void;
   clock?: () => number;
   projectName?(id: string): string | undefined;
+  projectKind?(id: string): 'git' | 'app' | 'session' | 'project' | 'unknown' | undefined;
   capture(): QueryView | undefined;
   query<T>(route: string, params?: Record<string, unknown>, signal?: AbortSignal, view?: QueryView): Promise<ApiResponse<T>>;
   mutate<T>(route: string, body: unknown, method?: string): Promise<ApiResponse<T>>;

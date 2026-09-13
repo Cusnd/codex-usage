@@ -6,6 +6,7 @@ import type { Settings } from '../../contracts/settings.js';
 import { CloudDataSource, cloudNamespace, type CloudPageState } from '../adapters/cloud.js';
 import { createWebRuntime, WebRuntimeProvider } from '../runtime/context.js';
 import { prepareCloudRefresh } from './cloud-refresh.js';
+import { refreshRollingQueries } from './cloud-refresh.js';
 
 type CloudContextValue = { state: CloudPageState; online: boolean; source: CloudDataSource;
   refresh: (source?: 'local' | 'account') => Promise<void>; invalidateHistory: () => Promise<void>; };
@@ -35,13 +36,14 @@ function CloudSession({ source, children }: { source: CloudDataSource; children:
   const identity = source.identity;
   const state = useSyncExternalStore(source.subscribe, source.state, source.state);
   const [online, setOnline] = useState(isOnline);
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
+  const previousRead = useRef<{ revision: string; at: number | null } | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
   const settings = useSyncExternalStore(listener => client.getQueryCache().subscribe(listener),
     () => client.getQueryData<ApiResponse<Settings>>(['settings'])?.data, () => undefined);
   const revision = source.revision();
   const refresh = async (kind: 'local' | 'account' = 'local') => {
     await source.mutate('refresh', { source: kind });
-    await client.invalidateQueries({ queryKey: [kind] });
   };
   const clearHistory = async () => {
     source.invalidate();
@@ -57,13 +59,19 @@ function CloudSession({ source, children }: { source: CloudDataSource; children:
     if (isOnline()) void source.refresh().catch(() => {});
   }, [source]);
   useEffect(() => {
-    if (state.read) void client.invalidateQueries({ predicate: query => ['local', 'settings', 'status'].includes(String(query.queryKey[0])) });
+    const previous = previousRead.current;
+    previousRead.current = { revision, at: state.viewAt };
+    // New cuts were prepared atomically; only advancing live time needs a second read.
+    if (state.read && previous?.revision === revision && previous.at !== state.viewAt)
+      void refreshRollingQueries(client);
   }, [revision, state.viewAt, client]);
   useEffect(() => {
-    const changed = () => { setOnline(isOnline()); if (isOnline()) void source.refresh().catch(() => {}); };
+    const changed = () => { setOnline(isOnline()); if (isOnline() && document.visibilityState === 'visible') void source.refresh().catch(() => {}); };
     const focused = () => { if (isOnline() && document.visibilityState === 'visible') void source.refresh().catch(() => {}); };
+    const visibility = () => { setVisible(document.visibilityState === 'visible'); focused(); };
     window.addEventListener('online', changed); window.addEventListener('offline', changed); window.addEventListener('focus', focused);
-    return () => { window.removeEventListener('online', changed); window.removeEventListener('offline', changed); window.removeEventListener('focus', focused); };
+    document.addEventListener('visibilitychange', visibility);
+    return () => { window.removeEventListener('online', changed); window.removeEventListener('offline', changed); window.removeEventListener('focus', focused); document.removeEventListener('visibilitychange', visibility); };
   }, [source]);
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return;
@@ -76,18 +84,18 @@ function CloudSession({ source, children }: { source: CloudDataSource; children:
   }, [source, client, identity.userId]);
   useEffect(() => {
     const seconds = settings?.localInterval ?? 60;
-    if (!online || seconds <= 0) return;
+    if (!online || !visible || seconds <= 0) return;
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void source.refresh().catch(() => {}); }, seconds * 1000);
     return () => window.clearInterval(timer);
-  }, [online, settings?.localInterval, source]);
+  }, [online, visible, settings?.localInterval, source]);
   useEffect(() => {
     const seconds = settings?.accountInterval ?? 300;
-    if (!online || seconds <= 0) return;
+    if (!online || !visible || seconds <= 0) return;
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') { source.invalidateAccounts(); void client.invalidateQueries({ queryKey: ['account'] }); }
+      if (document.visibilityState === 'visible') source.invalidateAccounts();
     }, seconds * 1000);
     return () => window.clearInterval(timer);
-  }, [online, settings?.accountInterval, source, client]);
+  }, [online, visible, settings?.accountInterval, source]);
   const runtime = useMemo(() => createWebRuntime(source, { deviceScope: true, multipleAccounts: true, remotePolling: true }), [source]);
   return <WebRuntimeProvider runtime={runtime}><Context.Provider value={{ state, online, source, refresh, invalidateHistory }}>
     {!online && <div className="notice" role="status">网络已断开，当前显示内容可能不是最新数据。联网后可继续查询。</div>}

@@ -16,7 +16,7 @@ export type ChartProps = {
         totalTokens: string;
     }[];
     account?: boolean;
-    bucket?: "day" | "hour";
+    bucket?: import('../../foundation/time-range.js').TrendBucket;
     change: ResultMotion;
 };
 
@@ -41,7 +41,7 @@ export const ChartCanvas = memo(function ChartCanvas({ rows, account = false, bu
           </defs>
           <CartesianGrid stroke="var(--line)" strokeDasharray="3 5" vertical={false}/>
           <XAxis dataKey="time" tickLine={false} axisLine={false} minTickGap={32} tickFormatter={(v) => v.length <= 10
-            ? v.slice(5)
+            ? bucket === "month" ? v.slice(0, 7) : v.slice(5)
             : DateTime.fromISO(v)
                 .setZone(zone)
                 .toFormat(bucket === "hour" ? "HH:mm" : "MM-dd HH:mm")}/>

@@ -7,7 +7,7 @@ import { Workspace } from "../data/workspace.js";
 export const sessionTitle = (
   row: Pick<ThreadRow, "title" | "project" | "id">,
   projectName: (id: string | null) => string,
-) => row.title || `${projectName(row.project)} · ${row.id.slice(0, 8)}`;
+) => row.title?.trim() || `会话 ${row.id.slice(0, 8)}`;
 
 // Keep the integer portion exact even for amounts beyond Number.MAX_SAFE_INTEGER.
 export function formatCostAmount(amount: string) {

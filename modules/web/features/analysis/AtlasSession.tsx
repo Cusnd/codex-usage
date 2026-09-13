@@ -1,3 +1,4 @@
+import { ProjectIcon, ProjectIdentity } from '../../widgets/ProjectIdentity.js';
 import { useProjectLabels } from '../../runtime/context.js';
 import { navigationSearch } from '../../data/navigation.js';
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy } from "lucide-react";
@@ -36,7 +37,7 @@ export function TurnTable({
   threadId?: string;
   global?: boolean;
 }) {
-  const { projectName } = useProjectLabels();
+  const { projectName, projectKind } = useProjectLabels();
   const [search] = useSearchParams();
   const patch = useUrlPatch();
   const location = useLocation();
@@ -163,10 +164,10 @@ export function TurnTable({
                         to={`/threads/${encodeURIComponent(row.threadId)}?${navigationSearch(search,{ scope: "filtered", returnTo: location.pathname + location.search })}`}
                         state={{ from: location.pathname + location.search }}
                       >
-                        {sessionTitle({ ...row, id: row.threadId }, projectName)}
+                        <ProjectIcon id={row.project} />{sessionTitle({ ...row, id: row.threadId }, projectName)}
                       </Link>
                       <small className="block">
-                        {projectName(row.project)} · {shortId(row.threadId)}
+                        {projectKind(row.project) !== "session" && <><ProjectIdentity id={row.project} /> · </>}{shortId(row.threadId)}
                       </small>
                     </td>
                   )}
@@ -285,7 +286,7 @@ export function SessionPanel({
   full?: boolean;
   onBack?: () => void;
 }) {
-  const { projectName, projectDescription } = useProjectLabels();
+  const { projectName, projectDescription, projectKind } = useProjectLabels();
   const detail = useData<ThreadDetail>(
     `local/threads/${encodeURIComponent(id)}`,
   );
@@ -300,6 +301,7 @@ export function SessionPanel({
   const title = detail.data?.data.thread
     ? sessionTitle(detail.data.data.thread, projectName)
     : shortId(id);
+  const project = detail.data?.data.thread.project || null;
   return (
     <div className="session-panel" ref={panelMotion}>
       {onBack && (
@@ -311,9 +313,9 @@ export function SessionPanel({
       <div className="detail-breadcrumb">Session / {title}</div>
       <div className="atlas-detail-heading">
         <div>
-          <h2>{title}</h2>
+          <h2 className="project-identity"><ProjectIcon id={project} />{title}</h2>
           <p title={projectDescription(detail.data?.data.thread.project || null)}>
-            {projectName(detail.data?.data.thread.project || null)} ·{" "}
+            {projectKind(project) !== "session" && <><ProjectIdentity id={project} /> · </>}
             <span className="mono">{shortId(id)}</span>
             <button
               className="icon-button"
@@ -375,7 +377,7 @@ export function SessionPanel({
                   unknown: "关系待识别",
                 }[row.relation]
               }{" "}
-              · {projectName(row.project)} · {shortId(row.id)}
+              · <ProjectIdentity id={row.project} /> · {shortId(row.id)}
             </Link>
           ))}
         </MotionDetails>

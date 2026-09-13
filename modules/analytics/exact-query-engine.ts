@@ -1,8 +1,9 @@
 import { DateTime } from 'luxon';
 import type { Settings } from '../contracts/settings.js';
+import type { CompactUsageScope } from '../contracts/query.js';
 import { estimateCost, pricingCatalog } from '../settings/pricing.js';
 import { tokenFields } from '../foundation/query-values.js';
-import type { QueryStore, SQLInputValue, Statement } from './plan.js';
+import type { ProjectKindsPlan, QueryStore, SQLInputValue, Statement } from './plan.js';
 
 export const EXACT_EVENT_PAGE_SIZE = 512;
 const I64_MAX = 9223372036854775807n;
@@ -35,28 +36,62 @@ export function bigintMetrics(row: AggregateRow): AggregateRow {
 /** Reject noncanonical token values before selecting an exact aggregation path. */
 export const invalidTokenStorageSql = tokenFields.map(k => `(${k} IS NOT NULL AND (typeof(${k}) NOT IN ('integer','text') OR NOT (CAST(${k} AS TEXT)='0' OR (substr(CAST(${k} AS TEXT),1,1) BETWEEN '1' AND '9' AND CAST(${k} AS TEXT) NOT GLOB '*[^0-9]*'))))`).join(' OR ');
 
+export type ScopeQueryPlan = { projectKinds?: ProjectKindsPlan };
+export type AggregationProof = { sqlSafe: boolean; scope?: CompactUsageScope };
+function scopeColumns(plan: ScopeQueryPlan): string {
+  const known = plan.projectKinds ? "project IN(SELECT project FROM usage_project_kinds WHERE kind='project')" : 'project IS NOT NULL';
+  const session = plan.projectKinds ? "project IN(SELECT project FROM usage_project_kinds WHERE kind='session')" : '0';
+  const unknown = plan.projectKinds ? "project IS NULL OR project NOT IN(SELECT project FROM usage_project_kinds WHERE kind IN('project','session'))" : 'project IS NULL';
+  return `MIN(at) scope_first_at,MAX(at) scope_last_at,
+    COUNT(DISTINCT CASE WHEN ${known} THEN project END) scope_projects,
+    COUNT(DISTINCT CASE WHEN ${session} THEN json_array(project,thread_id) END) scope_chats,
+    COUNT(DISTINCT CASE WHEN ${unknown} THEN json_array(project,thread_id) END) scope_unknown`;
+}
+function readScope(row: AggregateRow): CompactUsageScope {
+  return { firstAt: row.scope_first_at ?? null, lastAt: row.scope_last_at ?? null,
+    projectCount: Number(row.scope_projects), projectlessChatCount: Number(row.scope_chats), unresolvedChatCount: Number(row.scope_unknown) };
+}
+function scopeStatement(sql: string, params: SQLInputValue[], plan: ScopeQueryPlan): Statement {
+  return { sql: plan.projectKinds ? `WITH usage_project_kinds AS MATERIALIZED (${plan.projectKinds.sql}) ${sql}` : sql,
+    params: [...(plan.projectKinds?.params ?? []), ...params], one: true };
+}
+
+/** Compact identity counts do not need token validation or token aggregation. */
+export function* compactScope(store: QueryStore, where: SqlWhere, plan: ScopeQueryPlan = {}): Generator<Statement, CompactUsageScope, any> {
+  const statement = scopeStatement(`SELECT ${scopeColumns(plan)} FROM
+    (SELECT project,thread_id,at FROM effective_events ${where.sql} LIMIT -1) scoped_events`, where.params, plan);
+  return readScope((yield* store.one(statement.sql, statement.params))!);
+}
+
 export function* canAggregateInSql(store: QueryStore, where: SqlWhere): Generator<Statement, boolean, any> {
+  return (yield* aggregationProof(store, where)).sqlSafe;
+}
+
+/** One optional projection captures coverage/counts while proving exact SQL arithmetic. */
+export function* aggregationProof(store: QueryStore, where: SqlWhere, scope?: ScopeQueryPlan): Generator<Statement, AggregationProof, any> {
   // A non-flattened, streaming projection evaluates JSON-backed token columns once
   // per filtered row. LIMIT -1 preserves every row while retaining filter indexes;
   // the outer proof still validates storage and every exact integer bound.
-  const row = (yield* store.one(`SELECT CAST(COUNT(*) AS TEXT) n,COALESCE(MAX(CASE WHEN ${invalidTokenStorageSql} THEN 1 ELSE 0 END),0) invalid,
-    ${tokenFields.map(k => `MAX(length(CAST(${k} AS TEXT))) ${k}_digits,MAX(CASE WHEN length(CAST(${k} AS TEXT))<=19 THEN printf('%019s',CAST(${k} AS TEXT)) END) ${k}_max`).join(',')}
-    FROM (SELECT ${tokenFields.join(',')} FROM effective_events ${where.sql} LIMIT -1) checked`, where.params))!;
+  const statement = scopeStatement(`SELECT CAST(COUNT(*) AS TEXT) n,COALESCE(MAX(CASE WHEN ${invalidTokenStorageSql} THEN 1 ELSE 0 END),0) invalid,
+    ${tokenFields.map(k => `MAX(length(CAST(${k} AS TEXT))) ${k}_digits,MAX(CASE WHEN length(CAST(${k} AS TEXT))<=19 THEN printf('%019s',CAST(${k} AS TEXT)) END) ${k}_max`).join(',')}${scope ? ',' + scopeColumns(scope) : ''}
+    FROM (SELECT ${scope ? 'project,thread_id,at,' : ''}${tokenFields.join(',')} FROM effective_events ${where.sql} LIMIT -1) checked`, where.params, scope ?? {});
+  const row = (yield* store.one(statement.sql, statement.params))!;
   if (Number(row.invalid)) throw Object.assign(new Error('Token storage contains a noncanonical value or a previously rounded REAL; exact statistics require reimporting that source.'), { code: 'INVALID_TOKEN_STORAGE' });
   const n = BigInt(exactText(row.n)), maxima = new Map<string, bigint>();
+  const result = (sqlSafe: boolean): AggregationProof => ({ sqlSafe, ...(scope ? { scope: readScope(row) } : {}) });
   for (const k of tokenFields) {
-    if (Number(row[k + '_digits'] ?? 0) > 19) return false;
+    if (Number(row[k + '_digits'] ?? 0) > 19) return result(false);
     const value = row[k + '_max'] == null ? 0n : BigInt(String(row[k + '_max']).trim());
-    if (value > I64_MAX || n * value > I64_MAX) return false;
+    if (value > I64_MAX || n * value > I64_MAX) return result(false);
     maxima.set(k, value);
   }
   // SQL evaluates cached+write before comparing it with input, even when its result is invalid usage.
-  if (maxima.get('cached_input_tokens')! + maxima.get('cache_write_input_tokens')! > I64_MAX) return false;
-  return true;
+  if (maxima.get('cached_input_tokens')! + maxima.get('cache_write_input_tokens')! > I64_MAX) return result(false);
+  return result(true);
 }
 
-export function* timeBucketPlan(store: QueryStore, where: SqlWhere, unit: 'hour' | 'day'): Generator<Statement, BucketPlan, any> {
-  const range = (yield* store.one(`SELECT MIN(at) lo,MAX(at) hi FROM effective_events ${where.sql}`, where.params))!;
+export function* timeBucketPlan(store: QueryStore, where: SqlWhere, unit: import('../foundation/time-range.js').TrendBucket, coverage?: Pick<CompactUsageScope, 'firstAt' | 'lastAt'>): Generator<Statement, BucketPlan, any> {
+  const range = coverage ? { lo: coverage.firstAt, hi: coverage.lastAt } : (yield* store.one(`SELECT MIN(at) lo,MAX(at) hi FROM effective_events ${where.sql}`, where.params))!;
   const buckets: { s: string; e: string; label: string }[] = [];
   if (range.lo != null) {
     const zone = store.settings().timezone;
@@ -64,7 +99,7 @@ export function* timeBucketPlan(store: QueryStore, where: SqlWhere, unit: 'hour'
     const stop = Date.parse(range.hi);
     if (!at.isValid) throw new Error('Invalid timezone or timestamp');
     while (at.toMillis() <= stop) {
-      const end = at.plus(unit === 'hour' ? { hours: 1 } : { days: 1 });
+      const end = at.plus({ [unit + 's']: 1 });
       buckets.push({ s: at.toUTC().toISO()!, e: end.toUTC().toISO()!, label: unit === 'hour' ? at.toISO()! : at.toISODate()! }); at = end;
       if (buckets.length > 20000) throw Object.assign(new Error('Please narrow the hourly trend range or use daily buckets.'), { code: 'RANGE_TOO_WIDE' });
     }

@@ -1,11 +1,12 @@
-import type { Filter, Metrics, GroupRow, ThreadRow, Comparison, TurnRow, TrendRow, Filters, ThreadDetail, AgentUsage } from '../contracts/query.js';
+import type { Filter, Metrics, GroupRow, ThreadRow, Comparison, TurnRow, TrendRow, Filters, ThreadDetail, AgentUsage, CompactUsageScope, UsageOverview } from '../contracts/query.js';
 import type { Page } from '../contracts/responses.js';
 import { label, ratio } from "../foundation/query-values.js";
 import { estimateCost, pricingCatalog } from "../settings/pricing.js";
-import { aggregatePage, bigintMetrics, bucketedEvents, canAggregateInSql, compareAggregate, exactInteger, numericEvents, scanAggregates, timeBucketPlan, type BucketPlan, type SqlWhere } from "./exact-query-engine.js";
-import { type QueryStore, type Statement } from './plan.js';
+import { aggregatePage, aggregationProof, bigintMetrics, bucketedEvents, compactScope, compareAggregate, exactInteger, numericEvents, scanAggregates, timeBucketPlan, type AggregationProof, type BucketPlan, type SqlWhere } from "./exact-query-engine.js";
+import { type QueryEngineOptions, type QueryStore, type Statement } from './plan.js';
 import { type QueryFilter, where, fieldMap } from './filter.js';
 import { metricsSql, metrics } from './metrics.js';
+import { resolveTrendBucket, type TrendBucket } from '../foundation/time-range.js';
 
 type SelectedTurn = { thread: string; turn: string | null };
 /** Materialize page keys once; JSON tuples distinguish nulls and arbitrary string IDs. */
@@ -17,12 +18,42 @@ function selectedTurnsWhere(w: SqlWhere, turns: SelectedTurn[]): SqlWhere {
 }
 
 export class QueryEngine {
-    private readonly sqlSafety = new Map<string, boolean>();
-    constructor(private store: QueryStore) { }
-    private *safe(f: QueryFilter): Generator<Statement, boolean, any> {
+    private readonly proofs = new Map<string, AggregationProof>();
+    constructor(private store: QueryStore, private options: QueryEngineOptions = {}) { }
+    *scope(f: QueryFilter = {}): Generator<Statement, import('../contracts/query.js').UsageScope, any> {
+        const w = where(f);
+        const rows = yield* this.store.all(`SELECT project,COUNT(DISTINCT thread_id) thread_count,MIN(at) first_at,MAX(at) last_at FROM effective_events ${w.sql} GROUP BY project`, w.params);
+        return {
+            firstAt: rows.reduce<string | null>((first, row) => first === null || row.first_at < first ? row.first_at : first, null),
+            lastAt: rows.reduce<string | null>((last, row) => last === null || row.last_at > last ? row.last_at : last, null),
+            groups: rows.map(row => ({ project: row.project, threadCount: Number(row.thread_count) })),
+        };
+    }
+    *scopeSummary(f: QueryFilter = {}): Generator<Statement, CompactUsageScope, any> {
+        const w = where(f), proof = this.proofs.get(JSON.stringify(w));
+        if (proof?.scope) return proof.scope;
+        const scope = yield* compactScope(this.store, w, { projectKinds: this.options.projectKinds?.(f) });
+        if (proof) proof.scope = scope;
+        return scope;
+    }
+    private *proof(f: QueryFilter, withScope = false): Generator<Statement, AggregationProof, any> {
         const w = where(f), key = JSON.stringify(w);
-        if (!this.sqlSafety.has(key)) this.sqlSafety.set(key, yield* canAggregateInSql(this.store, w));
-        return this.sqlSafety.get(key)!;
+        let proof = this.proofs.get(key);
+        if (!proof) {
+            proof = yield* aggregationProof(this.store, w, withScope ? { projectKinds: this.options.projectKinds?.(f) } : undefined);
+            this.proofs.set(key, proof);
+        } else if (withScope && !proof.scope) proof.scope = yield* this.scopeSummary(f);
+        return proof;
+    }
+    private *safe(f: QueryFilter): Generator<Statement, boolean, any> {
+        return (yield* this.proof(f)).sqlSafe;
+    }
+    *overview(f: QueryFilter = {}, requested: TrendBucket | 'auto' = 'auto'): Generator<Statement, UsageOverview, any> {
+        const proof = yield* this.proof(f, true), scope = proof.scope!;
+        const to = f.to ?? scope.lastAt ?? new Date().toISOString();
+        const from = f.from ?? scope.firstAt ?? to;
+        const bucket = resolveTrendBucket(requested, f.from ? 'custom' : 'all', from, to, this.store.settings().timezone);
+        return { metrics: yield* this.summary(f), scope, trend: yield* this.trend(f, bucket), bucket };
     }
     private *costs(f: QueryFilter, expressions: string[] = [], bucket?: BucketPlan, selectedTurns?: SelectedTurn[]): Generator<Statement, Map<string, ReturnType<typeof estimateCost>>, any> {
         const settings = this.store.settings();
@@ -68,8 +99,8 @@ export class QueryEngine {
         value.cost = (yield* this.costs(f)).get("[]") ?? null;
         return value;
     }
-    *trend(f: Filter, bucket: "hour" | "day"): Generator<Statement, TrendRow[], any> {
-        const safe = yield* this.safe(f), plan = yield* timeBucketPlan(this.store, where(f), bucket);
+    *trend(f: Filter, bucket: import('../foundation/time-range.js').TrendBucket): Generator<Statement, TrendRow[], any> {
+        const proof = yield* this.proof(f), safe = proof.sqlSafe, plan = yield* timeBucketPlan(this.store, where(f), bucket, proof.scope);
         const w = where(f, { bucketed: true });
         if (!safe) {
             const rows: TrendRow[] = [];
@@ -267,10 +298,11 @@ export class QueryEngine {
             offset,
         };
     }
-    *filters(f: Filter): Generator<Statement, Filters, any> {
+    *filters(f: Filter, options: { projects?: boolean } = {}): Generator<Statement, Filters, any> {
         const w = where(f);
         const result: Filters = { projects: [], models: [], efforts: [] };
         for (const column of ['project', 'model', 'effort'] as const) {
+            if (column === 'project' && options.projects === false) continue;
             const rows = (yield* this.store.all(`SELECT DISTINCT ${column} value FROM effective_events ${w.sql} ORDER BY value`, w.params));
             result[(column + 's') as keyof Filters] = rows.map(r => r.value as string | null);
         }
@@ -314,5 +346,5 @@ export class QueryEngine {
     }
 }
 
-export { queryStore, type Statement, type QueryStore, type QueryResult, type SQLInputValue } from './plan.js';
+export { queryStore, type Statement, type QueryStore, type QueryResult, type SQLInputValue, type ProjectKindsPlan, type QueryEngineOptions } from './plan.js';
 export { where, type QueryFilter } from './filter.js';

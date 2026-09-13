@@ -4,9 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { DateTime } from "luxon";
 import type { Settings } from '../../contracts/settings.js';
 import type { Status } from '../../contracts/status.js';
-import type { Filter } from '../../contracts/query.js';
+import type { Filter, CompactUsageScope } from '../../contracts/query.js';
+import type { ApiResponse } from '../../contracts/responses.js';
 import { dataQuery } from "./data-query.js";
-import { resolveTrendBucket } from "../../foundation/time-range.js";
+import { resolveTrendBucket, resolveUsageRange } from "../../foundation/time-range.js";
 import { USAGE_QUERY_REVISION } from "../../analytics/revision.js";
 import { markQueryMotion } from "../motion/motion-state.js";
 import { useResultMotion } from "../motion/motion-data.js";
@@ -54,31 +55,15 @@ export function useData<T>(
   const change = useResultMotion(query, search, route.startsWith("account") ? "account" : "local");
   return { ...query, motion: change };
 }
-export function useRange() {
+// Overview supplies its coverage from the same response as metrics and trend.
+export const RangeCoverage = createContext<{ data: ApiResponse<CompactUsageScope> | undefined; error: Error | null } | undefined>(undefined);
+export function useRange(includeCoverage = true) {
   const [search, setSearch] = useSearchParams();
   const { settings, now } = useContext(Workspace);
-  const range = search.get("range") || "7";
-  const resolved = useMemo(() => {
-    const end = DateTime.fromMillis(now, { zone: settings.timezone });
-    const from =
-      range === "custom"
-        ? DateTime.fromISO(search.get("from") || "", {
-            zone: settings.timezone,
-          })
-        : end
-            .startOf("day")
-            .minus({ days: range === "today" ? 0 : Number(range) - 1 });
-    const to =
-      range === "custom"
-        ? DateTime.fromISO(search.get("to") || "", { zone: settings.timezone })
-        : end;
-    const valid = from.isValid && to.isValid && from < to;
-    return {
-      from: valid ? from.toUTC().toISO()! : end.startOf("day").toUTC().toISO()!,
-      to: valid ? to.toUTC().toISO()! : end.toUTC().toISO()!,
-      valid,
-    };
-  }, [range, search.toString(), settings.timezone, now]);
+  const requestedRange = search.get("range") || "7";
+  const range = ['today', '7', '30', 'all', 'custom'].includes(requestedRange) ? requestedRange : '7';
+  const resolved = useMemo(() => resolveUsageRange(range, settings.timezone, now, search.get('from'), search.get('to')),
+    [range, search.toString(), settings.timezone, now]);
   const filters: Filter = {
     from: resolved.from,
     to: resolved.to,
@@ -87,6 +72,11 @@ export function useRange() {
     effort: search.get("effort") || undefined,
     unknown: (search.get("unknown") as Filter["unknown"]) || undefined,
   };
+  const supplied = useContext(RangeCoverage);
+  const query = useData<CompactUsageScope>('local/scope-summary', filters, includeCoverage && supplied === undefined && range === 'all');
+  const coverage = supplied ?? query;
+  // The chart needs a finite domain; the actual all-time query has no lower bound.
+  const from = resolved.from ?? coverage.data?.data.firstAt ?? resolved.to;
   const update = (patch: Record<string, string | undefined>) =>
     setSearch((previous) => {
       const next = new URLSearchParams(previous);
@@ -111,10 +101,13 @@ export function useRange() {
     });
   return {
     range,
+    from,
+    to: resolved.to,
+    coverage,
     bucket: resolveTrendBucket(
       search.get("bucket"),
       range,
-      resolved.from,
+      from,
       resolved.to,
       settings.timezone,
     ),

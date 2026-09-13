@@ -3,6 +3,7 @@ import path from "node:path";
 import { Store } from "../../modules/storage/sqlite.js";
 import { Queries } from "../../modules/analytics/sqlite.js";
 import { StreamingImporter } from "../../modules/collection/importer.js";
+import { localAnalyticsStore, localProjectKinds } from '../../modules/collection/analytics.js';
 import { V3Uploader } from "../../modules/sync/upload/uploader.js";
 import { AccountReader } from "../../modules/accounts/reader.js";
 import { Refresh } from "../../modules/accounts/refresh.js";
@@ -15,7 +16,7 @@ export function createLocalServices(options: LocalAppOptions) {
   const store = new Store(
     options.database || path.join(dataRoot, "usage.sqlite"),
   );
-  const queries = new Queries(store);
+  const queries = new Queries(localAnalyticsStore(store), {projectKinds:localProjectKinds});
   const importer = new StreamingImporter(store,
     options.codexHome || process.env.CODEX_HOME || path.join(homedir(), '.codex'),
     {stateRoot:options.database === ':memory:' ? undefined : path.dirname(options.database || path.join(dataRoot, 'usage.sqlite')),

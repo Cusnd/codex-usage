@@ -14,6 +14,7 @@ export type WebRuntime = {
   capabilities: WebCapabilities;
   clock: () => number;
   projectName: (id: string | null) => string;
+  projectKind: (id: string | null) => NonNullable<ReturnType<NonNullable<UsageDataSource['projectKind']>>>;
   projectDescription: (id: string | null) => string;
 };
 export const localProjectName = (id: string | null) => !id ? '未知' : id.split(/[\\/]/).filter(Boolean).at(-1) || '未知';
@@ -21,9 +22,10 @@ export function createWebRuntime(source: UsageDataSource, capabilities: Partial<
   const caps = { deviceScope: false, multipleAccounts: false, remotePolling: false, demoPreview: false, ...capabilities };
   const projectName = caps.deviceScope
     ? (id: string | null) => !id ? '未知' : source.projectName?.(id) || '项目名称未缓存'
-    : localProjectName;
+    : (id: string | null) => id ? source.projectName?.(id) || localProjectName(id) : '未知';
   return { source, capabilities: caps, clock, projectName,
-    projectDescription: id => !id ? '未知项目' : caps.deviceScope ? projectName(id) : id };
+    projectKind: id => !id ? 'unknown' : source.projectKind?.(id) || (caps.deviceScope ? 'unknown' : 'project'),
+    projectDescription: id => !id ? '归属待识别' : source.projectKind?.(id) === 'session' ? 'Projectless chat' : caps.deviceScope ? projectName(id) : id };
 }
 // The immutable local default also supports isolated presentation tests. No session is installed globally.
 const Context = createContext<WebRuntime>(createWebRuntime(localDataSource));
@@ -33,8 +35,8 @@ export function WebRuntimeProvider({ runtime, children }: { runtime: WebRuntime;
 export const useWebRuntime = () => useContext(Context);
 export const useCapabilities = () => useWebRuntime().capabilities;
 export const useProjectLabels = () => {
-  const { projectName, projectDescription } = useWebRuntime();
-  return { projectName, projectDescription };
+  const { projectName, projectDescription, projectKind } = useWebRuntime();
+  return { projectName, projectDescription, projectKind };
 };
 export function useApi() {
   const { source } = useWebRuntime();

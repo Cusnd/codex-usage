@@ -14,9 +14,10 @@ export function ComparisonSection() {
   const comparison = useData<Comparison>("local/compare", {
     ...r.filters,
     groupBy: comparisonGroup,
-  });
+  }, r.range !== "all");
   const summary = useData<Metrics>("local/summary", r.filters);
   const rows = useReveal<HTMLTableSectionElement>(`${comparison.motion.revision}:${r.search.get("compareOffset") || 0}`, { ready: !!comparison.data && !comparison.motion.pending, initial: true });
+  if (r.range === "all") return <p className="footnote">全部时间没有对应的上一时段；选择具体时间范围后可比较。</p>;
   return (
     <section className="comparison-body">
       <div className="panel-heading">

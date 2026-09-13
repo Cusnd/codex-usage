@@ -2,6 +2,15 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { CloudDataSource } from '../adapters/cloud.js';
 import { DateTime } from 'luxon';
 
+/** A new lease for the same cut does not invalidate fixed historical queries. */
+export function refreshRollingQueries(client: QueryClient) {
+  return client.invalidateQueries({ predicate: query => {
+    if (query.queryKey[0] !== 'local') return false;
+    const params = query.queryKey[2] as Record<string, unknown> | undefined;
+    return !!params?.to && typeof params.to === 'object';
+  } });
+}
+
 /** Stage only currently displayed queries. Failed refreshes never publish half a page. */
 export async function prepareCloudRefresh(client: QueryClient, candidate: CloudDataSource, signal: AbortSignal, previous?: CloudDataSource) {
   const visible = client.getQueryCache().findAll({ type: 'active', predicate: query =>

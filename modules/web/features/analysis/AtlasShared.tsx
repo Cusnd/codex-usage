@@ -1,3 +1,4 @@
+import { ProjectIdentity } from '../../widgets/ProjectIdentity.js';
 import { useProjectLabels, useCapabilities } from '../../runtime/context.js';
 
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
@@ -153,7 +154,7 @@ export function ActiveScope() {
             {unknown
               ? "未知"
               : key === "project"
-                ? projectName(value!)
+                ? <ProjectIdentity id={value!} />
                 : value}
             <X size={12} />
           </button>
@@ -176,6 +177,7 @@ export function RangeControls() {
           ? "自定义时间"
           : r.range === "today"
             ? "今天"
+            : r.range === "all" ? "全部时间"
             : `最近 ${r.range} 天`}
         <ChevronDown size={14} />
       </>}

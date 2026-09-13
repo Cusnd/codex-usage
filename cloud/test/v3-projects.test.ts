@@ -4,7 +4,7 @@ import { initialContext } from '../../modules/usage/normalize.js';
 import { normalizeRemote } from '../../modules/organization/projects.js';
 import type { UploadBatch } from '../../modules/contracts/sync.js';
 import { stableJson } from '../../modules/contracts/sync.js';
-import { advanceHead,domain,endGuard,entityStatements,guard } from '../../modules/sync/publication/store.js';
+import { advanceHead,domain,endGuard,entityStatements,guard, type EntityMutation } from '../../modules/sync/publication/store.js';
 import { cloudSourceProjectId,performProjectOperation,prepareProjectDeletion,prepareProjectMetadata,projectView } from '../../modules/organization/worker/projects.js';
 import { createRead } from '../../modules/sync/reads/snapshots.js';
 import { queryUsage } from '../../modules/analytics/worker/queries.js';
@@ -20,6 +20,31 @@ async function metadata(a:Actor,id:string,value:Record<string,unknown>,options:{
   return projectView(env.DB,a.user);
 }
 const operation=(user:string,body:Record<string,unknown>)=>performProjectOperation(env.DB,user,{operation_id:crypto.randomUUID(),...body});
+
+it('uses session titles at the pinned cut and all-time scope counts a shared session once across devices', async()=>{
+  const a=await actor(),b=await actor(a.user);
+  await metadata(a,'chat-a',{kind:'session',name:null},{thread:'shared-chat'});
+  await metadata(b,'chat-b',{kind:'session',name:null},{thread:'shared-chat'});
+  const sourceA=await cloudSourceProjectId(a.collector,'chat-a'),sourceB=await cloudSourceProjectId(b.collector,'chat-b');
+  const publish=async(changes:EntityMutation[])=>{const h=await domain(env.DB,a.user),op=crypto.randomUUID();await env.DB.batch([guard(env.DB,h,op),...await entityStatements(env.DB,h,changes),advanceHead(env.DB,h,true),endGuard(env.DB,a.user,op)]);};
+  const thread=(title:string,revision:number):EntityMutation=>({kind:'thread',id:'shared-chat',revision,value:{id:'shared-chat',title,source_project_id:sourceA}});
+  const event=(id:string,at:string,device:string,source:string,n:string):EntityMutation=>({kind:'event',id,revision:1,at,thread_id:'shared-chat',origin_device_id:device,
+    value:{event_id:id,thread_id:'shared-chat',turn_id:id,at,source_project_id:source,model:'gpt-test',kind:'record',input_tokens:n,cached_input_tokens:'0',cache_write_input_tokens:'0',output_tokens:'0',reasoning_output_tokens:'0',total_tokens:n}});
+  await publish([thread('原会话标题',1),event('old','2020-01-01T00:00:00Z',a.device,sourceA,'9007199254740993'),event('recent','2026-09-13T00:00:00Z',b.device,sourceB,'7')]);
+  const frozen=await createRead(env.DB,a.user,'full',[]);
+  await publish([thread('更新后的标题',2)]);
+  const before=await projectView(env.DB,a.user,frozen.lease_id),current=await projectView(env.DB,a.user);
+  expect(before.projects[0].display).toEqual({kind:'session',name:'原会话标题'});
+  expect(current.projects[0].display).toEqual({kind:'session',name:'更新后的标题'});
+  const query=async(route:string,params:Record<string,string>={})=>queryUsage(env.DB,a.user,new URL('https://quota.esoren.com/api/v3/usage/'+route+'?'+new URLSearchParams(params)),route);
+  expect((await query('local/summary')).data).toMatchObject({totalTokens:'9007199254741000'});
+  expect((await query('local/scope')).data).toMatchObject({firstAt:'2020-01-01T00:00:00Z',groups:[{project:current.projects[0].id,threadCount:1}]});
+  expect((await query('local/scope',{deviceIds:b.device})).data).toMatchObject({firstAt:'2026-09-13T00:00:00Z',groups:[{threadCount:1}]});
+  expect((await query('local/scope',{model:'missing'})).data).toEqual({firstAt:null,lastAt:null,groups:[]});
+  expect((await query('local/breakdown',{groupBy:'project',lease_id:frozen.lease_id})).data).toMatchObject({items:[{label:'原会话标题'}]});
+  const monthly=(await query('local/trend',{bucket:'month'})).data as {totalTokens:string}[];
+  expect(monthly.reduce((sum,row)=>sum+BigInt(row.totalTokens),0n)).toBe(9007199254741000n);
+});
 
 it('namespaces repeated local IDs and merges only confirmed primary repositories across collectors',async()=>{
   const a=await actor(),b=await actor(a.user);await metadata(a,'same',{kind:'git',name:'A',root:'/a',repository:repo('org/repo'),confidence:'confirmed'});let view=await metadata(b,'same',{kind:'git',name:'B',root:'/b',repository:repo('org/other'),confidence:'confirmed'});

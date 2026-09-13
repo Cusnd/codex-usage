@@ -40,7 +40,7 @@ it.each([null,'Named project'])('project breakdown and comparison label an exist
   for(const route of ['breakdown','compare']){
     const response=await call(a,'/api/v3/usage/local/'+route+'?groupBy=project&from=2026-09-01T00:00:00Z&to=2026-09-20T00:00:00Z');
     expect(response.status).toBe(200);const result=await response.json<any>();expect(result.data.items).toHaveLength(1);
-    expect(result.data.items[0].key).toMatch(/^lp1:/);expect(result.data.items[0].label).toBe(name||'未命名项目');
+    expect(result.data.items[0].key).toMatch(/^lp1:/);expect(result.data.items[0].label).toBe(name||'会话 thread');
   }
 });
 async function assignOrigins(a:Actor,lease:string,device?:string,id=crypto.randomUUID()){const body={operation_id:id,lease_id:lease,action:device?'assign':'revoke',thread_ids:['thread'],...device?{device_id:device}:{}};return {body,response:await call(a,'/api/v3/origins/operations','POST',body)};}

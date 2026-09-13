@@ -1,4 +1,4 @@
-import { useContext, useEffect, useId, useRef, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import { OverlayScope, usePresence } from "../motion/MotionPrimitives.js";
@@ -6,6 +6,7 @@ export type ChoiceOption = {
   value: string;
   label: string;
   description?: string;
+  icon?: ReactNode;
 };
 
 /** A DOM-rendered listbox: no OS popup, including inside the Codex in-app browser. */
@@ -18,6 +19,11 @@ export function Choice({
   disabled = false,
   allowCustom = false,
   placeholder = "请选择",
+  remote,
+  selection,
+  footer,
+  onSearch,
+  onOpenChange,
 }: {
   label: string;
   value: string;
@@ -27,6 +33,11 @@ export function Choice({
   disabled?: boolean;
   allowCustom?: boolean | ((value: string) => boolean);
   placeholder?: string;
+  remote?: boolean;
+  selection?: ChoiceOption;
+  footer?: ReactNode;
+  onSearch?: (value: string) => void;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false),
     [search, setSearch] = useState("");
@@ -45,8 +56,8 @@ export function Choice({
     input = useRef<HTMLInputElement>(null);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
-  const selected = options.find((x) => x.value === value);
-  let filtered = options.filter((x) =>
+  const selected = options.find((x) => x.value === value) ?? selection;
+  let filtered = remote ? options : options.filter((x) =>
     (x.label + " " + (x.description || ""))
       .toLowerCase()
       .includes(search.toLowerCase()),
@@ -82,6 +93,7 @@ export function Choice({
       maxHeight: height,
     });
     setSearch("");
+    onSearch?.('');
     setOpen(true);
   };
   useEffect(() => {
@@ -118,6 +130,7 @@ export function Choice({
     };
   }, [visible]);
   useEffect(() => { if (!scope.active) setOpen(false); }, [scope.active]);
+  useEffect(() => { onOpenChange?.(visible); }, [visible, onOpenChange]);
   const choose = (next: string) => {
     onChange(next);
     close(true);
@@ -142,7 +155,7 @@ export function Choice({
           }
         }}
       >
-        <span>{selected?.label || value || placeholder}</span>
+        <span className="choice-label">{selected?.icon}{selected?.label || value || placeholder}</span>
         <ChevronDown
           className="choice-caret"
           size={16}
@@ -194,7 +207,7 @@ export function Choice({
                 aria-label={"搜索" + label}
                 placeholder={"搜索" + label}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); onSearch?.(e.target.value); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && filtered.length) {
                     e.preventDefault();
@@ -223,7 +236,7 @@ export function Choice({
                   onClick={() => choose(option.value)}
                 >
                   <span>
-                    <b>{option.label}</b>
+                    <b className="choice-label">{option.icon}{option.label}</b>
                     {option.description && <small>{option.description}</small>}
                   </span>
                   {option.value === value && (
@@ -235,6 +248,7 @@ export function Choice({
                 <div className="choice-empty">没有匹配选项</div>
               )}
             </div>
+            {footer}
           </div>,
           document.body,
         )}

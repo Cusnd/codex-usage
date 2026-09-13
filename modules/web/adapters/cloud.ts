@@ -1,11 +1,10 @@
-import type { ApiResponse } from '../../contracts/responses.js';
+import type { ApiResponse, ProjectLabel } from '../../contracts/responses.js';
 import type { PageRead } from '../../contracts/read-lease.js';
 import type { UsageDataSource, QueryView } from '../../contracts/data-source.js';
 import { stableJson, type SyncCut } from '../../contracts/sync.js';
 import { USAGE_QUERY_REVISION } from '../../analytics/revision.js';
 import { queryParameters } from '../../foundation/query-parameters.js';
 import { jsonRequest, RequestError } from './http.js';
-import { namesFromProjects, referencedProjectIds, type ProjectLabelView } from './project-labels.js';
 
 export type CloudIdentity = { origin: string; userId: string; deviceIds: string[] };
 export type CloudPageState = { read: PageRead | null; refreshing: boolean; error: string | null; viewAt: number | null };
@@ -25,7 +24,7 @@ export class CloudDataSource implements UsageDataSource {
   private viewFlight: { abort: AbortController; promise: Promise<PageRead> } | null = null;
   private renewal: { id: string; abort: AbortController; promise: Promise<PageRead> } | null = null;
   private reads = new Map<string, Flight>();
-  private labels: { cut: SyncCut; names: Record<string, string> } | null = null;
+  private labels: { cut: SyncCut; names: Record<string, string>; kinds: Record<string, ProjectLabel['kind']> } | null = null;
   private readonly openedAt: number;
   // The page can prepare active queries in React Query before exposing a new cut.
   prepareRefresh?: (candidate: CloudDataSource, signal: AbortSignal) => Promise<() => void>;
@@ -116,15 +115,18 @@ export class CloudDataSource implements UsageDataSource {
     }).finally(() => { if (this.renewal === flight) this.renewal = null; });
     this.renewal = flight; return flight.promise;
   }
-  /** Share in-flight GETs without keeping a second result cache. */
-  private get<T>(url: string, signal?: AbortSignal, scope = 'usage'): Promise<T> {
+  /** Share identical reads, including normalized POST bodies, without a second result cache. */
+  private get<T>(url: string, signal?: AbortSignal, scope = 'usage', body?: Record<string, unknown>): Promise<T> {
     signal?.throwIfAborted();
     const [path, query] = url.split('?'), search = new URLSearchParams(query); search.sort();
-    const key = stableJson([this.generation, scope, path, search.toString()]);
+    const serialized = body === undefined ? undefined : stableJson(JSON.parse(JSON.stringify(body)));
+    const key = stableJson([this.generation, scope, path, search.toString(), serialized ?? null]);
     let flight = this.reads.get(key);
     if (!flight || flight.abort.signal.aborted) {
       const created: Flight = { abort: new AbortController(), readers: 0, settled: false, promise: Promise.resolve() };
-      created.promise = Promise.resolve().then(() => this.request(url, { signal: created.abort.signal })).finally(() => {
+      created.promise = Promise.resolve().then(() => this.request(url, { signal: created.abort.signal,
+        ...(serialized === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: serialized }),
+      })).finally(() => {
         created.settled = true; if (this.reads.get(key) === created) this.reads.delete(key);
       });
       this.reads.set(key, created); flight = created;
@@ -144,14 +146,13 @@ export class CloudDataSource implements UsageDataSource {
     });
   }
   projectName(id: string) { return sameCut(this.labels?.cut, this.current.read?.cut) ? this.labels?.names[id] : undefined; }
-  private async loadLabels(read: PageRead, ids: string[], generation: number, signal?: AbortSignal) {
-    if (!ids.length || sameCut(this.labels?.cut, read.cut) && ids.every(id => Object.hasOwn(this.labels!.names, id))) return;
-    const result = await this.get<ProjectLabelView>('/api/v3/projects?lease_id=' + encodeURIComponent(read.lease_id), signal);
-    this.assertCurrent(generation, read);
-    if (!sameCut(result.cut, read.cut) || result.lease_id !== read.lease_id || !Array.isArray(result.projects) || !result.aliases) {
-      throw new RequestError('项目名称不属于当前页面版本。', 'PROJECT_CUT_MISMATCH');
+  projectKind(id: string) { return sameCut(this.labels?.cut, this.current.read?.cut) ? this.labels?.kinds[id] : undefined; }
+  private loadLabels(read: PageRead, labels: ProjectLabel[]) {
+    if (!sameCut(this.labels?.cut, read.cut)) this.labels = { cut: read.cut, names: Object.create(null), kinds: Object.create(null) };
+    for (const label of labels) {
+      this.labels!.names[label.id] = label.name;
+      this.labels!.kinds[label.id] = label.kind;
     }
-    this.labels = { cut: read.cut, names: namesFromProjects(result.projects, result.aliases, result.sources) };
   }
   invalidateAccounts() { this.accountRevision++; this.set({ ...this.current }); }
   async query<T>(route: string, input: Record<string, unknown> = {}, signal?: AbortSignal, view?: QueryView): Promise<ApiResponse<T>> {
@@ -180,11 +181,10 @@ export class CloudDataSource implements UsageDataSource {
         meta: { source: 'cloud', updatedAt: null, timezone: this.timezone(read), warnings: [], cut: read.cut } } as ApiResponse<T>;
       const params = { ...input, timezone: captured.timezone };
       if (view?.rolling && typeof input.to === 'string') Object.assign(params, { to: new Date(this.clock()).toISOString() });
-      const search = queryParameters(params); search.set('lease_id', read.lease_id);
-      const result = await this.get<ApiResponse<T>>('/api/v3/usage/' + route + '?' + search, signal);
+      const result = await this.get<ApiResponse<T>>('/api/v3/usage/query?route=' + encodeURIComponent(route), signal, 'usage', { ...params, lease_id: read.lease_id });
       this.assertCurrent(generation, read, captured);
       if (!sameCut((result.meta as unknown as { cut?: SyncCut }).cut, read.cut)) throw new RequestError('统计结果不属于当前页面版本。', 'QUERY_CUT_MISMATCH');
-      await this.loadLabels(read, referencedProjectIds(result.data, input.project), generation, signal);
+      this.loadLabels(read, result.meta.projectLabels ?? []);
       signal?.throwIfAborted(); this.assertCurrent(generation, read, captured); return result;
     } catch (error) {
       if (error instanceof RequestError && error.code === 'BASELINE_REQUIRED') {

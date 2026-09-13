@@ -1,5 +1,5 @@
-import type { Filter } from '../contracts/query.js';
-import { type SQLInputValue } from './plan.js';
+import type { SQLInputValue, QueryFilter } from './plan.js';
+export type { QueryFilter } from './plan.js';
 
 export const fieldMap = {
     project: "project",
@@ -8,14 +8,6 @@ export const fieldMap = {
     thread: "thread_id",
 } as const;
 
-export type QueryFilter = Filter & {
-    threadIds?: string[];
-    q?: string;
-    /** Additional project IDs whose display names match q in the caller's fixed view. */
-    qProjects?: string[];
-    turnId?: string | null;
-    searchTurns?: boolean;
-};
 
 export function where(f: QueryFilter, options: { bucketed?: boolean } = {}) {
     const conditions: string[] = [];

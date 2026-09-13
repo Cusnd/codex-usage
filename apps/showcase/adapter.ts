@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import { Value } from '@sinclair/typebox/value';
 import { SettingsSchema, type Settings } from '../../modules/contracts/settings.js';
 import { type Filter } from '../../modules/contracts/query.js';
-import { type ApiResponse } from '../../modules/contracts/responses.js';
+import { type ApiResponse, type ProjectLabel } from '../../modules/contracts/responses.js';
 import { type Status } from '../../modules/contracts/status.js';
 import { Queries } from '../../modules/analytics/sqlite.js';
 import { officialPrices, pricingSource, pricingCheckedAt } from '../../modules/settings/catalog.js';
@@ -37,8 +37,23 @@ export function createExampleAdapter(store: ExampleStore, storage?: SettingsStor
       timezone: store.settings().timezone, warnings: ['合成示例数据；设置仅影响当前浏览器。'],
       ...(source === 'account' ? {provider: 'app-server', accountId: 'example', identityConfirmed: true, stale: false} : {})}});
   async function request(route: string, params: Record<string, unknown> = {}, method = 'GET', body?: unknown): Promise<ApiResponse<unknown>> {
+    if(route==='local/query'&&method==='POST')return request('local/'+String(params.route),body as Record<string,unknown>,'GET');
     const p = Object.fromEntries(Object.entries(params).filter(([,v]) => v !== undefined && v !== null && v !== ''));
     const f: Filter = Object.fromEntries(['from','to','project','model','effort','threadId','unknown','unknowns'].filter(k => p[k] !== undefined).map(k => [k,p[k]]));
+    const projectLabel=(id:string):ProjectLabel=>({id,name:id.split(/[\\/]/).filter(Boolean).at(-1)||'归属待识别',kind:'project'});
+    const respond=(data:unknown):ApiResponse<unknown>=>{
+      const ids=new Set<string>(f.project===undefined?[]:[f.project]);
+      const visit=(value:unknown):void=>{
+        if(!value||typeof value!=='object')return;
+        if(Array.isArray(value)){for(const row of value)visit(row);return;}
+        const row=value as Record<string,unknown>;
+        if(typeof row.project==='string')ids.add(row.project);
+        if((route==='local/breakdown'&&p.groupBy==='project'||route==='local/compare'&&(!p.groupBy||p.groupBy==='project'))&&typeof row.key==='string')ids.add(row.key);
+        for(const child of Object.values(row))visit(child);
+      };
+      if(!['local/scope','local/scope-summary','local/overview','local/filters','local/project-options'].includes(route))visit(data);
+      const response=wrap(data);response.meta.projectLabels=[...ids].map(projectLabel);return response;
+    };
     for (const date of [f.from, f.to]) if (date && !Number.isFinite(Date.parse(date))) throw new Error('日期格式无效。');
     if (f.from && f.to && Date.parse(f.from) >= Date.parse(f.to)) throw new Error('开始时间必须早于结束时间。');
     if ([...(f.unknown ? [f.unknown] : []), ...(f.unknowns || [])].some(k => p[k] !== undefined)) throw new Error('同一维度不能同时选择具体值和未知。');
@@ -61,21 +76,30 @@ export function createExampleAdapter(store: ExampleStore, storage?: SettingsStor
     if (route === 'pricing') return wrap({prices: officialPrices, source: pricingSource, checkedAt: pricingCheckedAt, currency: 'USD', tier: 'Standard API reference'}, 'settings');
     if (route === 'account/limits') return wrap((await account.readLimits()).data, 'account');
     if (route === 'account/usage') return wrap((await account.readUsage()).data, 'account');
-    if (route === 'local/summary') return wrap(queries.summary(f));
-    if (route === 'local/filters') return wrap(queries.filters(f));
-    if (route === 'local/trend') return wrap(queries.trend(f, p.bucket === 'hour' ? 'hour' : 'day'));
+    if (route === 'local/project-options') {
+      const scope={...f,project:undefined,unknown:f.unknown==='project'?undefined:f.unknown,unknowns:f.unknowns?.filter(k=>k!=='project')};
+      const needle=String(p.q??'').toLowerCase();
+      const rows=queries.filters(scope).projects.filter((id):id is string=>id!==null).map(projectLabel).filter(row=>row.id.toLowerCase().includes(needle)||row.name.toLowerCase().includes(needle));
+      return respond({items:rows.slice(offset,offset+limit),total:rows.length,limit,offset});
+    }
+    if (route === 'local/scope') return respond(queries.scope(f));
+    if (route === 'local/scope-summary') return respond(queries.scopeSummary(f));
+    if (route === 'local/overview') return respond(queries.overview(f,p.bucket==='hour'||p.bucket==='day'||p.bucket==='week'||p.bucket==='month'?p.bucket:'auto'));
+    if (route === 'local/summary') return respond(queries.summary(f));
+    if (route === 'local/filters') return respond(queries.filters(f,{projects:false}));
+    if (route === 'local/trend') return respond(queries.trend(f, p.bucket === 'hour' || p.bucket === 'week' || p.bucket === 'month' ? p.bucket : 'day'));
     if (route === 'local/breakdown') {
       if (!['project','model','effort'].includes(String(p.groupBy))) throw new Error('分组维度无效。');
-      return wrap(queries.breakdown(f, p.groupBy as 'project'|'model'|'effort', limit, offset));
+      return respond(queries.breakdown(f, p.groupBy as 'project'|'model'|'effort', limit, offset));
     }
-    if (route === 'local/threads') return wrap(queries.threads(f, limit, offset, sort, p.cacheBelow === undefined ? undefined : Number(p.cacheBelow), p.q as string));
-    if (route === 'local/turns') return wrap(queries.allTurns({...f, turnId: p.missingTurn === true || p.missingTurn === 'true' ? null : p.turnId as string}, limit, offset, sort, p.q as string));
+    if (route === 'local/threads') return respond(queries.threads(f, limit, offset, sort, p.cacheBelow === undefined ? undefined : Number(p.cacheBelow), p.q as string));
+    if (route === 'local/turns') return respond(queries.allTurns({...f, turnId: p.missingTurn === true || p.missingTurn === 'true' ? null : p.turnId as string}, limit, offset, sort, p.q as string));
     if (route === 'local/compare') {
       const group = String(p.groupBy || 'project');
       if (!['project','model','effort','thread'].includes(group)) throw new Error('分组维度无效。');
       if (!!p.baselineFrom !== !!p.baselineTo) throw new Error('基准开始与结束时间需要同时提供。');
       if (p.baselineFrom && p.baselineTo && !(Date.parse(String(p.baselineFrom)) < Date.parse(String(p.baselineTo)))) throw new Error('开始时间必须早于结束时间。');
-      return wrap(queries.compare({...f, to: f.to || EXAMPLE_NOW}, group as 'project'|'model'|'effort'|'thread', p.baselineFrom as string, p.baselineTo as string));
+      return respond(queries.compare({...f, to: f.to || EXAMPLE_NOW}, group as 'project'|'model'|'effort'|'thread', p.baselineFrom as string, p.baselineTo as string));
     }
     const match = /^local\/threads\/([^/]+)(?:\/(agents|turns))?$/.exec(route);
     if (match) {
@@ -83,7 +107,7 @@ export function createExampleAdapter(store: ExampleStore, storage?: SettingsStor
       const data = match[2] === 'agents' ? queries.agents(id, f) : match[2] === 'turns'
         ? queries.turns(id, f, limit, offset, sort) : queries.detail(id);
       if (!data) throw new Error('没有找到该任务。');
-      return wrap(data);
+      return respond(data);
     }
     throw new Error('接口不存在。');
   }

@@ -9,6 +9,7 @@ import { readUpload } from '../../modules/sync/apply/codec.js';
 import { advanceJobs } from '../../modules/sync/jobs/jobs.js';
 import { changes, createRead, createPageRead, renewPageRead, entities, getRead, manifest } from '../../modules/sync/reads/snapshots.js';
 import { queryUsage } from '../../modules/analytics/worker/queries.js';
+import { readUsageQuery } from '../../modules/analytics/worker/query-input.js';
 import { deviceViews } from '../../modules/accounts/worker/devices.js';
 import { projectRoute } from '../../modules/organization/worker/projects.js';
 import { updateSettings } from '../../modules/settings/worker/settings.js';
@@ -87,6 +88,9 @@ export async function v3Route(request:Request,env:Env,path:string,ctx?:Execution
       requireJson(request);const b=await readJson(request,65536);if(!ownKeys(b,['entities'],['entities']))fail(400,'INVALID_ENTITIES','实体请求无效。');const result=await entities(env.DB,user.id,id,(b as {entities:{kind:EntityKind;id:string;revision?:number;hash?:string}[]}).entities),r=await getRead(env.DB,user.id,id,'metadata'),expires=Math.min(r.max_expires_at,Date.now()+900000);await env.DB.prepare('UPDATE v3_read_leases SET expires_at=? WHERE user_id=? AND lease_id=?').bind(expires,user.id,id).run();return json({...result,expires_at:new Date(expires).toISOString()});}
   }
   if(path==='/api/v3/sync/changes'&&request.method==='GET')return json(await changes(env.DB,user.id,url.searchParams.get('dataset_epoch')||'',Number(url.searchParams.get('after')||0),Number(url.searchParams.get('limit')||20),url.searchParams.get('lease_id')||undefined));
+  if(path==='/api/v3/usage/query'&&request.method==='POST'){
+    requireSameOrigin(request,env);const query=await readUsageQuery(request);return json(await queryUsage(env.DB,user.id,query.url,query.route));
+  }
   if(path.startsWith('/api/v3/usage/')&&request.method==='GET')return json(await queryUsage(env.DB,user.id,url,path.slice('/api/v3/usage/'.length)));
   if(path==='/api/v3/accounts'&&request.method==='GET')return json({user_id:user.id,accounts:await accountViews(env,user.id,[])});
   if(path==='/api/v3/devices'&&request.method==='GET')return json({devices:await deviceViews(env.DB,user.id)});

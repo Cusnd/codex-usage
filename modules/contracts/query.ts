@@ -30,6 +30,30 @@ export const FilterSchema = Type.Object({
 
 export type Filter = Static<typeof FilterSchema>;
 
+export const ScopeSchema = Type.Object({
+  firstAt: NullableString,
+  lastAt: NullableString,
+  groups: Type.Array(Type.Object({ project: NullableString, threadCount: Type.Integer() })),
+});
+export type UsageScope = Static<typeof ScopeSchema>;
+
+export const CompactUsageScopeSchema = Type.Object({
+  firstAt: NullableString,
+  lastAt: NullableString,
+  projectCount: Type.Integer({ minimum: 0 }),
+  projectlessChatCount: Type.Integer({ minimum: 0 }),
+  unresolvedChatCount: Type.Integer({ minimum: 0 }),
+});
+export type CompactUsageScope = Static<typeof CompactUsageScopeSchema>;
+
+export const TrendBucketSchema = Type.Union([
+  Type.Literal('hour'), Type.Literal('day'), Type.Literal('week'), Type.Literal('month'),
+]);
+export const OverviewFilterSchema = Type.Object({
+  ...FilterSchema.properties,
+  bucket: Type.Optional(Type.Union([Type.Literal('auto'), TrendBucketSchema])),
+});
+
 export const Pagination = {
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200, default: 50 })),
   offset: Type.Optional(Type.Integer({ minimum: 0, default: 0 })),
@@ -127,6 +151,14 @@ export const TrendRowSchema = Type.Object({
 });
 
 export type TrendRow = Static<typeof TrendRowSchema>;
+
+export const OverviewSchema = Type.Object({
+  metrics: MetricsSchema,
+  scope: CompactUsageScopeSchema,
+  trend: Type.Array(TrendRowSchema),
+  bucket: TrendBucketSchema,
+});
+export type UsageOverview = Static<typeof OverviewSchema>;
 
 export const FiltersSchema = Type.Object({
   projects: Type.Array(NullableString),

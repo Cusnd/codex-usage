@@ -3,14 +3,16 @@ import { useCapabilities, useProjectLabels } from '../runtime/context.js';
 import { ChevronLeft, ChevronRight, Cloud, Database, X } from "lucide-react";
 import { DateTime } from "luxon";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ApiResponse } from '../../contracts/responses.js';
-import type { Filters, Metrics } from '../../contracts/query.js';
+import type { Filters, Metrics, CompactUsageScope } from '../../contracts/query.js';
+import { ProjectIcon, ProjectIdentity } from './ProjectIdentity.js';
 import { compact } from '../ui/format.js';
 import { Choice } from "../ui/Choice.js";
 import { UsageBreakdown } from "./Usage.js";
-import { useData, useRange } from "../data/workspace.js";
+import { RangeCoverage, useData, useRange } from "../data/workspace.js";
+import { ProjectChoice } from './ProjectChoice.js';
 import { Collapse, MotionDetails, PresenceList, Segmented } from "../motion/MotionPrimitives.js";
 import { markQueryMotion } from "../motion/motion-state.js";
 export function time(at: string | null | undefined, zone = "America/New_York") {
@@ -92,14 +94,12 @@ export function Notes({
 }
 
 export function FilterBar({ local = true }: { local?: boolean }) {
-  const { projectName, projectDescription } = useProjectLabels();
   const r = useRange();
-  const options = useData<Filters>("local/filters", {
-    from: r.filters.from,
-    to: r.filters.to,
-  });
   const [customOpen, setCustomOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const options = useData<Filters>("local/filters", {
+    from: r.filters.from, to: r.filters.to, projects: false,
+  }, local && advancedOpen);
   const advanced = useRef<HTMLDetailsElement>(null);
   const customTrigger = useRef<HTMLButtonElement>(null);
   const [draftFrom, setDraftFrom] = useState(""),
@@ -108,12 +108,12 @@ export function FilterBar({ local = true }: { local?: boolean }) {
   const beginCustom = () => {
     setError("");
     setDraftFrom(
-      DateTime.fromISO(r.filters.from!)
+      DateTime.fromISO(r.from)
         .setZone(r.timezone)
         .toFormat("yyyy-MM-dd HH:mm"),
     );
     setDraftTo(
-      DateTime.fromISO(r.filters.to!)
+      DateTime.fromISO(r.to)
         .setZone(r.timezone)
         .toFormat("yyyy-MM-dd HH:mm"),
     );
@@ -163,6 +163,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
               ["today", "今天"],
               ["7", "最近 7 天"],
               ["30", "最近 30 天"],
+              ["all", "全部"],
             ].map(([value, label]) => (
               <button
                 key={value}
@@ -225,7 +226,9 @@ export function FilterBar({ local = true }: { local?: boolean }) {
                 return (
                   <div className="field" key={key}>
                     <span className="field-label">{name}</span>
-                    <Choice
+                    {key === 'project' ? <ProjectChoice from={r.filters.from} to={r.to}
+                      value={r.filters.unknown === key ? 'unknown' : r.filters.project ? 'v:' + r.filters.project : ''}
+                      onChange={v => change('project', v)} /> : <Choice
                       label={name}
                       value={
                         r.filters.unknown === key
@@ -242,39 +245,45 @@ export function FilterBar({ local = true }: { local?: boolean }) {
                           label:
                             v === null
                               ? "未知"
-                              : key === "project"
-                                ? projectName(v)
-                                : v,
-                          description: key === "project" && v ? projectDescription(v) : undefined,
+                              : v,
                         })),
                       ]}
                       onChange={(v) => change(key, v)}
-                    />
+                    />}
                   </div>
                 );
               })}
           </MotionDetails>
         )}
         <MotionDetails className="range-summary" popup contentClassName="range-description" summary={<>
-            {DateTime.fromISO(r.filters.from!)
+            {r.range === 'all' ? '全部记录' : <>{DateTime.fromISO(r.from)
               .setZone(r.timezone)
               .toFormat("MM-dd")}{" "}
             —{" "}
-            {DateTime.fromISO(r.filters.to!)
+            {DateTime.fromISO(r.to)
               .setZone(r.timezone)
-              .toFormat("MM-dd")}
+              .toFormat("MM-dd")}</>}
           </>}>
-            {DateTime.fromISO(r.filters.from!)
+            {r.range === 'all' ? <>
+              {r.coverage.error ? '记录范围读取失败' : !r.coverage.data ? '正在读取记录范围…'
+                : r.coverage.data.data.firstAt ? <>记录起点：{DateTime.fromISO(r.coverage.data.data.firstAt).setZone(r.timezone).toFormat('yyyy-MM-dd HH:mm')}<br />
+                  最近记录：{DateTime.fromISO(r.coverage.data.data.lastAt!).setZone(r.timezone).toFormat('yyyy-MM-dd HH:mm')}</>
+                : '当前筛选下暂无记录'}
+              <br />统计当前所选来源的全部已保留记录
+            </> : <>{DateTime.fromISO(r.from)
               .setZone(r.timezone)
               .toFormat("yyyy-MM-dd HH:mm")}{" "}
             至{" "}
-            {DateTime.fromISO(r.filters.to!)
+            {DateTime.fromISO(r.to)
               .setZone(r.timezone)
-              .toFormat("yyyy-MM-dd HH:mm")}
+              .toFormat("yyyy-MM-dd HH:mm")}</>}
             <br />
             {r.timezone} · 以此时区重新统计
         </MotionDetails>
       </div>
+      {r.range === 'all' && r.coverage.data?.data.firstAt && <p className="all-time-coverage">
+        全部已保留记录 · {DateTime.fromISO(r.coverage.data.data.firstAt).setZone(r.timezone).toFormat('yyyy-MM-dd')} 起
+      </p>}
       <Collapse open={customOpen}>
         <form className="custom-range-form" onSubmit={applyCustom}>
           <label>
@@ -329,7 +338,7 @@ export function FilterBar({ local = true }: { local?: boolean }) {
                 {unknown
                   ? "未知"
                   : k === "project"
-                    ? projectName(value!)
+                    ? <ProjectIdentity id={value!} />
                     : value}{" "}
                 <X size={13} aria-hidden="true" />
               </button>
@@ -354,12 +363,25 @@ export function FilterBar({ local = true }: { local?: boolean }) {
   );
 }
 export function MetricsCards({ data }: { data: Metrics | undefined }) {
+  const { range, filters } = useRange();
+  const supplied = useContext(RangeCoverage);
+  const query = useData<CompactUsageScope>('local/scope-summary', filters, supplied === undefined);
+  const scope = supplied ?? query;
+  const projects = scope.data?.data.projectCount;
+  const chats = scope.data?.data.projectlessChatCount;
+  const unresolved = scope.data?.data.unresolvedChatCount;
   return (
     <section className="metrics-summary">
       <div className="metrics-total">
-        <span>总 Token</span>
+        <span>{range === "all" ? "累计 Token" : "总 Token"}</span>
         <strong>{compact(data?.totalTokens)}</strong>
       </div>
+      <div className="metrics-counts">
+        <span>项目 <strong>{projects ?? '—'}</strong></span>
+        <span>独立会话 <strong>{chats ?? '—'}</strong></span>
+        {!!unresolved && <span>归属待识别 <strong>{unresolved}</strong> 个会话</span>}
+      </div>
+      <ErrorBox error={scope.error} />
       <UsageBreakdown data={data} counts />
     </section>
   );
